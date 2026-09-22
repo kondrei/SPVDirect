@@ -1,0 +1,152 @@
+# SPVDirect – ANAF SPV Accountant Portal
+
+**Language:** Romanian UI · **Stack:** NestJS 12 + React (planned) + PostgreSQL (Supabase) + TypeORM 1.x · **Author:** Andrei
+**Status:** Phase 1 backend scaffold done: accounts, ANAF OAuth, database schema
+
+SPVDirect is an accountant portal for ANAF SPV services: **e-Factura**, **e-Transport** and related tax documents.
+
+```
+SPVDirect/
+  backend/    NestJS API (this phase)
+  frontend/   React app (next phase)
+```
+
+---
+
+## How authentication works
+
+There are **two separate logins**. Don't confuse them:
+
+| | What | Who issues it | Where it lives |
+|---|---|---|---|
+| **SPVDirect session** | Accountant logs in to *our* app with email + password | SPVDirect (JWT signed with `JWT_SECRET`) | httpOnly cookie `spv_session`, 7 days |
+| **ANAF connection** | A qualified certificate authorizes SPVDirect to call api.anaf.ro | ANAF (OAuth 2.0, JWT tokens signed by ANAF) | `anaf_connections` table, AES-256-GCM encrypted |
+
+ANAF only offers OAuth 2.0. The access and refresh tokens it issues are JWTs, per `Oauth_procedura_inregistrare_aplicatii_portal_ANAF.pdf`.
+
+### The USB token / certificate is only used during authorization
+
+```
+Accountant (logged in to SPVDirect)
+  → "Conectează certificat ANAF"  (GET /anaf/connect)
+  → redirect to logincert.anaf.ro/anaf-oauth2/v1/authorize?...&token_content_type=jwt
+  → browser: "Select a certificate" + token PIN   (USB token or cloud certificate)
+  → ANAF checks the SPV PJ role (reprezentant legal / desemnat / împuternicit)
+  → GET /anaf/callback?code=…
+  → backend POST /token (Basic auth, token_content_type=jwt) → access + refresh JWT
+  → tokens encrypted and stored, keyed by the certificate serial
+  → the USB token is no longer needed until the refresh token expires (365 days)
+```
+
+An împuternicit certificate usually covers many CUIs, so one connection can serve many client companies.
+
+### Authorization links (the company's own certificate)
+
+When the certificate belongs to the client company's legal representative:
+
+1. The accountant calls `POST /companies/:id/authorization-links` and sends the returned URL (valid for 7 days, single use).
+2. The certificate holder opens it on their own PC. A Romanian explanation page appears, with the button **"Autorizează cu certificatul"**.
+3. They go through logincert on their machine. The connection is created under the accountant's account and attached to that company.
+
+### ANAF rules the code follows
+
+- Client credentials go in an **HTTP Basic** header. Scope is empty.
+- `token_content_type=jwt` goes on both the authorize query and the token body.
+- A refresh returns a **new access AND refresh token**. Both are saved.
+- Expiry is read from the JWT `exp` (documented as 90 days for access, 365 days for refresh).
+- There is a 60-second cooldown between token-endpoint calls. Refreshes are serialized per connection.
+- api.anaf.ro allows 1000 requests per minute and returns 403 when unauthorized and 429 when rate limited.
+- e-Factura and e-Transport use `/test/…` and `/prod/…` paths (`ANAF_ENV`). TestOAuth has no prefix.
+- Tokens, codes and Authorization headers are never logged. If tokens leak, ANAF must be told so it can block them.
+
+---
+
+## API (Phase 1)
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| GET | `/health` | none | Liveness |
+| POST | `/auth/register` · `/auth/login` | none | Create account / log in (sets cookie) |
+| POST | `/auth/logout` | none | Clear cookie |
+| GET | `/auth/me` | session | Current accountant |
+| GET/POST | `/companies` | session | List / add client company (CUI without RO) |
+| GET/PATCH/DELETE | `/companies/:id` | session | Read / rename / attach connection / delete |
+| POST | `/companies/:id/authorization-links` | session | One-time link for the certificate holder |
+| GET | `/anaf/connect` | session | Start OAuth with your own certificate |
+| GET | `/anaf/authorize/:token` | link | Landing page for authorization links |
+| GET | `/anaf/callback` | state cookie | ANAF redirect target |
+| GET | `/anaf/connections` | session | List certificates (no tokens returned) |
+| PATCH/DELETE | `/anaf/connections/:id` | session | Rename / remove |
+| GET | `/anaf/connections/:id/test` | session | Call ANAF TestOauth `hello` |
+
+`AnafApiService.request()` is the single gateway to api.anaf.ro. It handles ownership checks, proactive refresh, retry after a refresh on 401/403, 429 mapping and `api_logs` auditing. The e-Factura and e-Transport modules will build on it.
+
+---
+
+## Database schema
+
+The schema is managed by TypeORM migrations in `backend/src/database/migrations`. `synchronize` is off.
+
+| Table | Purpose |
+|---|---|
+| `accountants` | SPVDirect users (email is citext and unique, scrypt password hash) |
+| `anaf_connections` | One per authorized certificate: encrypted tokens, `cert_serial`, `roles`, expiries, status |
+| `companies` | Client CUIs per accountant, plus the connection used for each |
+| `authorization_links` | Delegated-authorization links (only the SHA-256 of the token is stored) |
+| `api_logs` | Audit of every api.anaf.ro call (service, endpoint, status, latency) |
+
+---
+
+## Getting started
+
+### Prerequisites
+- Node **24 LTS** (`.nvmrc`). Node 26 becomes LTS in Oct 2026, so there's no need to upgrade yet.
+- A Supabase project (free tier is fine).
+- An ANAF developer registration: anaf.ro → Servicii Online → Înregistrare utilizatori → **Dezvoltatori aplicații**. Then in SPV → **Editare profil Oauth**:
+  - Add an application with the services E-Factura and E-Transport.
+  - Set **Callback URL** to `http://localhost:3000/anaf/callback`. Add the production URL later as Callback URL 2.
+  - Copy the Client ID and Client Secret.
+
+### Setup
+```bash
+cd backend
+npm install
+cp .env.example .env        # fill in DATABASE_URL, secrets, ANAF credentials
+npm run migration:run       # creates the 5 tables in Supabase
+npm run start:dev           # http://localhost:3000
+```
+
+### Useful commands
+```bash
+npm test                    # unit tests (vitest)
+npm run test:e2e            # HTTP smoke test
+npm run lint                # oxlint (type-aware)
+npm run migration:show      # applied/pending migrations
+npm run migration:generate -- src/database/migrations/<Name>   # after entity changes
+```
+After generating or creating a migration, add its class to `src/database/migrations/index.ts`.
+
+### Manual end-to-end check
+```bash
+curl -c jar -H "Content-Type: application/json" \
+  -d '{"email":"andrei@example.com","password":"a-long-password","name":"Andrei"}' \
+  http://localhost:3000/auth/register
+curl -b jar http://localhost:3000/auth/me
+```
+Then open `http://localhost:3000/anaf/connect` in the browser where you're logged in, pick the certificate, and call `GET /anaf/connections/:id/test`. You should see a response starting with `Hello, SPVDirect`.
+
+---
+
+## Roadmap
+
+- [x] Phase 1: backend scaffold, accounts, ANAF OAuth (self + authorization links), schema
+- [ ] Phase 2: e-Factura (upload, stareMesaj, listaMesajeFactura, descarcare) and e-Transport modules
+- [ ] Phase 3: React frontend (Login, Dashboard, Companies, Connections, Invoices, Transport)
+- [ ] Phase 4: a background job for proactive token refresh and expiry notifications, plus rate limiting for ANAF calls (1000 per minute)
+- [ ] Phase 5: Azure deployment, CI/CD
+
+## References
+- ANAF OAuth procedure: `Oauth_procedura_inregistrare_aplicatii_portal_ANAF.pdf` (anaf.ro → Dezvoltatori aplicații → Instrucțiuni de utilizare)
+- e-Factura technical info: https://mfinante.gov.ro/ro/web/efactura/informatii-tehnice
+- e-Transport technical info: https://mfinante.gov.ro/ro/web/etransport/informatii-tehnice
+- ANAF support: Formular de contact → "Asistență tehnică servicii informatice" → "OAUTH"
