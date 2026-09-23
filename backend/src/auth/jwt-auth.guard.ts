@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
-import { SESSION_COOKIE, SessionPayload } from './session.js';
+import { SESSION_AUDIENCE, SESSION_COOKIE, SessionPayload } from './session.js';
 
 export interface AuthenticatedRequest extends Request {
   accountantId: string;
@@ -24,7 +24,12 @@ export class JwtAuthGuard implements CanActivate {
     ];
     if (!token) throw new UnauthorizedException();
     try {
-      const payload = await this.jwt.verifyAsync<SessionPayload>(token);
+      const payload = await this.jwt.verifyAsync<SessionPayload>(token, {
+        audience: SESSION_AUDIENCE,
+      });
+      if (typeof payload.sub !== 'string' || !payload.sub) {
+        throw new UnauthorizedException();
+      }
       req.accountantId = payload.sub;
       return true;
     } catch {

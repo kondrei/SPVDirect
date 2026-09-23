@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AnafConnection } from '../anaf/anaf-connection.entity.js';
+import { isUniqueViolation } from '../common/db-errors.js';
 import { Company } from './company.entity.js';
 import { CreateCompanyDto, UpdateCompanyDto } from './dto/company.dto.js';
 
@@ -36,9 +37,17 @@ export class CompaniesService {
     if (await this.companies.existsBy({ accountantId, cui: dto.cui })) {
       throw new ConflictException('Firma cu acest CUI există deja');
     }
-    return this.companies.save(
-      this.companies.create({ accountantId, cui: dto.cui, name: dto.name }),
-    );
+    try {
+      return await this.companies.save(
+        this.companies.create({ accountantId, cui: dto.cui, name: dto.name }),
+      );
+    } catch (err) {
+      // Lost a race with a concurrent insert of the same CUI.
+      if (isUniqueViolation(err)) {
+        throw new ConflictException('Firma cu acest CUI există deja');
+      }
+      throw err;
+    }
   }
 
   async update(

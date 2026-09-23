@@ -23,6 +23,7 @@ import {
   LinkLookup,
 } from './authorization-links/authorization-links.service.js';
 import {
+  OAUTH_STATE_AUDIENCE,
   OAUTH_STATE_COOKIE,
   OAUTH_STATE_TTL_SECONDS,
   OAuthStatePayload,
@@ -182,6 +183,7 @@ export class AnafOAuthController {
     const payload: OAuthStatePayload = { ...flow, state };
     const signed = await this.jwt.signAsync(payload, {
       expiresIn: OAUTH_STATE_TTL_SECONDS,
+      audience: OAUTH_STATE_AUDIENCE,
     });
     res.cookie(
       OAUTH_STATE_COOKIE,
@@ -197,7 +199,9 @@ export class AnafOAuthController {
     ];
     if (!raw) return null;
     try {
-      return await this.jwt.verifyAsync<OAuthStatePayload>(raw);
+      return await this.jwt.verifyAsync<OAuthStatePayload>(raw, {
+        audience: OAUTH_STATE_AUDIENCE,
+      });
     } catch {
       return null;
     }

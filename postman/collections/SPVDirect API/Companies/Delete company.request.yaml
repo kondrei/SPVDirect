@@ -1,0 +1,5 @@
+$kind: http-request
+description: Returns 204.
+url: "{{baseUrl}}/companies/{{companyId}}"
+method: DELETE
+order: 5000

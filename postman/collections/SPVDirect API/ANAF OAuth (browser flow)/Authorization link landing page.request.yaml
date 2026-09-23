@@ -1,0 +1,5 @@
+$kind: http-request
+description: Public HTML page for the certificate holder. 400 if the link is invalid, used or expired.
+url: "{{baseUrl}}/anaf/authorize/{{linkToken}}"
+method: GET
+order: 2000

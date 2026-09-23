@@ -1,0 +1,5 @@
+$kind: http-request
+description: 'Public. Returns `{ "status": "ok" }`.'
+url: "{{baseUrl}}/health"
+method: GET
+order: 1000

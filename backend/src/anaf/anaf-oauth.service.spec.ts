@@ -13,6 +13,7 @@ const env = {
   ANAF_REDIRECT_URI: 'http://localhost:3000/anaf/callback',
   ANAF_AUTH_ENDPOINT: 'https://logincert.anaf.ro/anaf-oauth2/v1/authorize',
   ANAF_TOKEN_ENDPOINT: 'https://logincert.anaf.ro/anaf-oauth2/v1/token',
+  ANAF_REVOKE_ENDPOINT: 'https://logincert.anaf.ro/anaf-oauth2/v1/revoke',
   TOKEN_ENCRYPTION_KEY: randomBytes(32).toString('base64'),
 };
 
@@ -37,6 +38,7 @@ function setup(connection?: Partial<AnafConnection>) {
   } as AnafConnection;
 
   const update = vi.fn().mockResolvedValue({ affected: 1 });
+  const getOne = vi.fn(() => Promise.resolve(structuredClone(stored)));
   const repo = {
     update,
     createQueryBuilder: () => ({
@@ -46,12 +48,12 @@ function setup(connection?: Partial<AnafConnection>) {
       where() {
         return this;
       },
-      getOne: () => Promise.resolve(structuredClone(stored)),
+      getOne,
     }),
   } as unknown as Repository<AnafConnection>;
 
   const service = new AnafOAuthService(config, http, cipher, repo);
-  return { service, post, update, cipher };
+  return { service, post, update, getOne, stored, cipher };
 }
 
 describe('AnafOAuthService', () => {
@@ -115,6 +117,63 @@ describe('AnafOAuthService', () => {
     expect(cipher.decrypt(saved.refreshTokenEnc)).toBe(newRefresh);
   });
 
+  it('does not refresh again from a stale row right after a successful refresh', async () => {
+    // The first load returns the pre-refresh row (old lastRefreshedAt), like a
+    // caller that loaded it before the first refresh was saved.
+    const { service, post, update, getOne, stored } = setup();
+    const newAccess = fakeAnafJwt();
+    post.mockResolvedValue({
+      data: { access_token: newAccess, refresh_token: fakeAnafJwt() },
+    });
+
+    await expect(service.getAccessToken('conn-1')).resolves.toBe(newAccess);
+    const saved = Object.assign(
+      structuredClone(stored),
+      update.mock.calls[0][1],
+    );
+    getOne
+      .mockResolvedValueOnce(structuredClone(stored))
+      .mockResolvedValueOnce(saved);
+
+    await expect(
+      service.getAccessToken('conn-1', { force: true }),
+    ).resolves.toBe(newAccess);
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not expire the connection on a bare 401 from the token endpoint', async () => {
+    // RFC 6749: a 401 means client authentication failed, not a bad grant.
+    const { service, post, update } = setup({
+      accessExpiresAt: new Date(Date.now() - 1000),
+    });
+    post.mockRejectedValue(
+      Object.assign(new Error('401'), {
+        isAxiosError: true,
+        response: { status: 401, data: undefined },
+      }),
+    );
+
+    await expect(service.getAccessToken('conn-1')).rejects.toThrow(/401/);
+    expect(update).not.toHaveBeenCalledWith('conn-1', { status: 'expired' });
+  });
+
+  it('does not expire the connection when ANAF rejects our client credentials', async () => {
+    const { service, post, update } = setup({
+      accessExpiresAt: new Date(Date.now() - 1000),
+    });
+    post.mockRejectedValue(
+      Object.assign(new Error('401'), {
+        isAxiosError: true,
+        response: { status: 401, data: { error: 'invalid_client' } },
+      }),
+    );
+
+    await expect(service.getAccessToken('conn-1')).rejects.toThrow(
+      /invalid_client/,
+    );
+    expect(update).not.toHaveBeenCalledWith('conn-1', { status: 'expired' });
+  });
+
   it('does not call the token endpoint within the 60 s cooldown', async () => {
     const { service, post } = setup({
       lastRefreshedAt: new Date(Date.now() - 10 * 1000),
@@ -157,5 +216,86 @@ describe('AnafOAuthService', () => {
       /Reautorizați/,
     );
     expect(update).toHaveBeenCalledWith('conn-1', { status: 'expired' });
+  });
+
+  describe('revokeConnection', () => {
+    it('revokes the refresh and access tokens with Basic auth', async () => {
+      const { service, post, update } = setup();
+      post.mockResolvedValue({ status: 200, data: '' });
+
+      await expect(service.revokeConnection('conn-1')).resolves.toBe(true);
+
+      expect(update).toHaveBeenCalledWith('conn-1', { status: 'revoked' });
+      expect(post).toHaveBeenCalledTimes(2);
+      const forms = post.mock.calls.map(([url, body, options]) => {
+        expect(url).toBe(env.ANAF_REVOKE_ENDPOINT);
+        expect(body).not.toContain('client-secret');
+        expect(options.headers.Authorization).toBe(
+          `Basic ${Buffer.from('client-id:client-secret').toString('base64')}`,
+        );
+        return Object.fromEntries(new URLSearchParams(body));
+      });
+      expect(forms).toEqual([
+        { token: 'old-refresh', token_type_hint: 'refresh_token' },
+        { token: 'old-access', token_type_hint: 'access_token' },
+      ]);
+    });
+
+    it('revokes the rotated token when a refresh is in flight', async () => {
+      const { service, post, stored, cipher } = setup();
+      let resolve!: (v: unknown) => void;
+      post.mockReturnValueOnce(new Promise((r) => (resolve = r)));
+      post.mockResolvedValue({ status: 200, data: '' });
+
+      const access = service.getAccessToken('conn-1');
+      await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+      const revoke = service.revokeConnection('conn-1');
+      // The refresh saves the rotated tokens before revoke reads the row.
+      stored.refreshTokenEnc = cipher.encrypt('new-refresh');
+      resolve({
+        data: { access_token: fakeAnafJwt(), refresh_token: fakeAnafJwt() },
+      });
+
+      await expect(access).resolves.toBeTruthy();
+      await expect(revoke).resolves.toBe(true);
+      expect(new URLSearchParams(post.mock.calls[1][1]).get('token')).toBe(
+        'new-refresh',
+      );
+    });
+
+    it('skips the access token once it has expired', async () => {
+      const { service, post } = setup({
+        accessExpiresAt: new Date(Date.now() - 1000),
+      });
+      post.mockResolvedValue({ status: 200, data: '' });
+
+      await service.revokeConnection('conn-1');
+
+      expect(post).toHaveBeenCalledTimes(1);
+      expect(new URLSearchParams(post.mock.calls[0][1]).get('token')).toBe(
+        'old-refresh',
+      );
+    });
+
+    it('does not call ANAF when the refresh token has expired', async () => {
+      const { service, post } = setup({
+        refreshExpiresAt: new Date(Date.now() - 1000),
+      });
+
+      await expect(service.revokeConnection('conn-1')).resolves.toBe(true);
+      expect(post).not.toHaveBeenCalled();
+    });
+
+    it('returns false instead of throwing when ANAF fails', async () => {
+      const { service, post } = setup();
+      post.mockRejectedValue(
+        Object.assign(new Error('503'), {
+          isAxiosError: true,
+          response: { status: 503, data: {} },
+        }),
+      );
+
+      await expect(service.revokeConnection('conn-1')).resolves.toBe(false);
+    });
   });
 });

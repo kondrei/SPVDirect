@@ -1,0 +1,12 @@
+$kind: http-request
+url: "{{baseUrl}}/anaf/connections/{{connectionId}}"
+method: PATCH
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "label": "Certificat Andrei"
+    }
+order: 2000

@@ -55,8 +55,15 @@ export class AnafOAuthService {
   private readonly logger = new Logger(AnafOAuthService.name);
   /** Per-connection in-flight refresh, so concurrent callers share one token call. */
   private readonly refreshes = new Map<string, Promise<string>>();
-  /** Last failed token-endpoint attempt per connection (for the 60 s cooldown). */
-  private readonly failedAttempts = new Map<string, number>();
+  /**
+   * Last token-endpoint call per connection, successful or not (for the 60 s
+   * cooldown). Covers callers holding a row loaded before a refresh finished,
+   * whose stale lastRefreshedAt would otherwise allow a second refresh with the
+   * already-rotated refresh token.
+   */
+  private readonly lastTokenCalls = new Map<string, number>();
+  /** lastRefreshedAt saved by our last successful refresh, to spot stale rows. */
+  private readonly lastRefreshes = new Map<string, number>();
 
   constructor(
     private readonly config: ConfigService,
@@ -92,6 +99,41 @@ export class AnafOAuthService {
       refresh_token: refreshToken,
       token_content_type: 'jwt',
     });
+  }
+
+  /**
+   * Revokes the connection's tokens at ANAF (RFC 7009) before it is deleted.
+   * Best-effort: returns false instead of throwing when ANAF rejects the call
+   * or can't be reached, so the caller can still remove the connection.
+   */
+  async revokeConnection(connectionId: string): Promise<boolean> {
+    // Stop getAccessToken() from starting new refreshes, then let one already
+    // in flight finish: it rotates the refresh token we have to revoke.
+    await this.connections.update(connectionId, { status: 'revoked' });
+    await this.refreshes.get(connectionId)?.catch(() => undefined);
+
+    const connection = await this.loadWithTokens(connectionId);
+    const now = Date.now();
+    if (connection.refreshExpiresAt.getTime() <= now) return true;
+    try {
+      // The refresh token first: it's the long-lived credential.
+      await this.revokeToken(
+        this.cipher.decrypt(connection.refreshTokenEnc),
+        'refresh_token',
+      );
+      if (connection.accessExpiresAt.getTime() > now) {
+        await this.revokeToken(
+          this.cipher.decrypt(connection.accessTokenEnc),
+          'access_token',
+        );
+      }
+      return true;
+    } catch (err) {
+      this.logger.warn(
+        `Revoking tokens failed for connection ${connectionId}: ${String(err)}`,
+      );
+      return false;
+    }
   }
 
   /** Creates or updates (same accountant + same certificate) the connection. */
@@ -138,7 +180,15 @@ export class AnafOAuthService {
     connectionId: string,
     { force = false }: { force?: boolean } = {},
   ): Promise<string> {
-    const connection = await this.loadWithTokens(connectionId);
+    let connection = await this.loadWithTokens(connectionId);
+    // Loaded before a concurrent refresh was saved: its tokens are already
+    // rotated, so read the row again instead of returning the old access token.
+    if (
+      (this.lastRefreshes.get(connectionId) ?? 0) >
+      (connection.lastRefreshedAt?.getTime() ?? 0)
+    ) {
+      connection = await this.loadWithTokens(connectionId);
+    }
     if (connection.status !== 'active') {
       throw new UnauthorizedException(
         'Conexiunea ANAF nu mai este activă. Reautorizați certificatul.',
@@ -155,11 +205,13 @@ export class AnafOAuthService {
     const accessValid = connection.accessExpiresAt.getTime() > now;
     const lastAttempt = Math.max(
       connection.lastRefreshedAt?.getTime() ?? 0,
-      this.failedAttempts.get(connectionId) ?? 0,
+      this.lastTokenCalls.get(connectionId) ?? 0,
     );
     const inCooldown = now - lastAttempt < TOKEN_COOLDOWN_MS;
+    // A refresh already in flight is joined even though it started the cooldown.
+    const canRefresh = !inCooldown || this.refreshes.has(connectionId);
 
-    if ((force || this.nearExpiry(connection, now)) && !inCooldown) {
+    if ((force || this.nearExpiry(connection, now)) && canRefresh) {
       try {
         return await this.refreshOnce(connection);
       } catch (err) {
@@ -194,19 +246,23 @@ export class AnafOAuthService {
     if (inFlight) return inFlight;
 
     const run = (async () => {
+      // Set before the call, so failures also respect the cooldown without
+      // touching lastRefreshedAt (which dates the current token).
+      this.lastTokenCalls.set(connection.id, Date.now());
       try {
         const tokens = await this.refreshTokens(
           this.cipher.decrypt(connection.refreshTokenEnc),
         );
+        const refreshedAt = new Date();
         await this.connections.update(connection.id, {
           roles: tokens.roles.length ? tokens.roles : connection.roles,
           accessTokenEnc: this.cipher.encrypt(tokens.accessToken),
           refreshTokenEnc: this.cipher.encrypt(tokens.refreshToken),
           accessExpiresAt: tokens.accessExpiresAt,
           refreshExpiresAt: tokens.refreshExpiresAt,
-          lastRefreshedAt: new Date(),
+          lastRefreshedAt: refreshedAt,
         });
-        this.failedAttempts.delete(connection.id);
+        this.lastRefreshes.set(connection.id, refreshedAt.getTime());
         return tokens.accessToken;
       } catch (err) {
         if (err instanceof AnafTokenError && err.invalidGrant) {
@@ -215,9 +271,6 @@ export class AnafOAuthService {
             'ANAF a refuzat reînnoirea tokenului. Reautorizați certificatul.',
           );
         }
-        // Respect the 60 s cooldown after failures too, without touching
-        // lastRefreshedAt (which dates the current token).
-        this.failedAttempts.set(connection.id, Date.now());
         throw err;
       } finally {
         this.refreshes.delete(connection.id);
@@ -237,34 +290,63 @@ export class AnafOAuthService {
     return connection;
   }
 
+  /** ANAF expects client credentials as HTTP Basic, not in the body. */
+  private clientAuthHeaders(): Record<string, string> {
+    const clientId = this.config.getOrThrow<string>('ANAF_CLIENT_ID');
+    const clientSecret = this.config.getOrThrow<string>('ANAF_CLIENT_SECRET');
+    return {
+      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Accept: 'application/json',
+    };
+  }
+
+  private async revokeToken(
+    token: string,
+    hint: 'access_token' | 'refresh_token',
+  ): Promise<void> {
+    try {
+      await this.http.axiosRef.post(
+        this.config.getOrThrow('ANAF_REVOKE_ENDPOINT'),
+        new URLSearchParams({ token, token_type_hint: hint }).toString(),
+        { headers: this.clientAuthHeaders(), timeout: 30_000 },
+      );
+    } catch (err) {
+      // Status or error code only: the request body carries the token.
+      throw new AnafTokenError(
+        isAxiosError(err) && err.response
+          ? `ANAF revoke endpoint returned ${err.response.status}`
+          : `ANAF revoke endpoint unreachable: ${isAxiosError(err) ? err.code : String(err)}`,
+        false,
+      );
+    }
+  }
+
   private async requestTokens(
     form: Record<string, string>,
   ): Promise<AnafTokenSet> {
-    const clientId = this.config.getOrThrow<string>('ANAF_CLIENT_ID');
-    const clientSecret = this.config.getOrThrow<string>('ANAF_CLIENT_SECRET');
     let data: TokenResponse;
     try {
       const res = await this.http.axiosRef.post<TokenResponse>(
         this.config.getOrThrow('ANAF_TOKEN_ENDPOINT'),
         new URLSearchParams(form).toString(),
-        {
-          headers: {
-            // ANAF expects client credentials as HTTP Basic, not in the body.
-            Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
-            'Content-Type': 'application/x-www-form-urlencoded',
-            Accept: 'application/json',
-          },
-          timeout: 30_000,
-        },
+        { headers: this.clientAuthHeaders(), timeout: 30_000 },
       );
       data = res.data;
     } catch (err) {
       if (isAxiosError(err) && err.response) {
         const body = err.response.data as { error?: string } | undefined;
+        // A client-credential error (RFC 6749: 401, or an explicit
+        // invalid_client) is our misconfiguration: it must not expire every
+        // connection. Only a 400 is taken as a rejected refresh token.
+        const clientError =
+          body?.error === 'invalid_client' ||
+          body?.error === 'unauthorized_client';
         const invalidGrant =
           body?.error === 'invalid_grant' ||
           (form.grant_type === 'refresh_token' &&
-            [400, 401].includes(err.response.status));
+            !clientError &&
+            err.response.status === 400);
         // Deliberately not logging the body: it may echo the code/refresh token.
         throw new AnafTokenError(
           `ANAF token endpoint returned ${err.response.status}${body?.error ? ` (${body.error})` : ''}`,

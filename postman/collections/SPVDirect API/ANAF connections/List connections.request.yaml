@@ -1,0 +1,13 @@
+$kind: http-request
+description: Saves the newest connection's id into `connectionId`.
+url: "{{baseUrl}}/anaf/connections"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      const list = pm.response.json();
+      if (Array.isArray(list) && list.length) {
+        pm.collectionVariables.set('connectionId', list[0].id);
+      }
+    language: text/javascript
+order: 1000

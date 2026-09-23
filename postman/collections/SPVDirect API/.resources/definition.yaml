@@ -1,0 +1,16 @@
+$kind: collection
+description: |-
+  All SPVDirect backend endpoints.
+
+  Auth: `POST /auth/login` (or `/auth/register`) sets the httpOnly cookie `spv_session`. Postman's cookie jar sends it back automatically for `localhost`, so run Login first.
+
+  Variables: `baseUrl` (default http://localhost:3000), `email`, `password`. `companyId`, `connectionId` and `linkToken` are filled in automatically by test scripts (Create company, List connections, Create authorization link).
+
+  The ANAF OAuth endpoints (`/anaf/connect`, `/anaf/authorize/:token/start`, `/anaf/callback`) are browser redirects that need the USB/cloud certificate at logincert.anaf.ro. They are included for reference; open them in a browser to complete the flow.
+variables:
+  baseUrl: http://localhost:3000
+  email: contabil@example.ro
+  password: parola-sigura-123
+  companyId: ""
+  connectionId: ""
+  linkToken: ""

@@ -1,0 +1,21 @@
+$kind: http-request
+description: CUI may include the `RO` prefix and spaces; it is stored as digits only (2-10). Saves the new id into `companyId`.
+url: "{{baseUrl}}/companies"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "cui": "RO12345678",
+      "name": "Firma Test SRL"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      if (pm.response.code === 201) {
+        pm.collectionVariables.set('companyId', pm.response.json().id);
+      }
+    language: text/javascript
+order: 2000
