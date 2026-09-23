@@ -23,8 +23,10 @@ import {
   SESSION_TTL_SECONDS,
 } from './session.js';
 
+/** Brute-force limit for endpoints that take a password. */
+const CREDENTIALS_THROTTLE = { default: { limit: 10, ttl: 60_000 } };
+
 @Controller('auth')
-@Throttle({ default: { limit: 10, ttl: 60_000 } })
 export class AuthController {
   private readonly production: boolean;
 
@@ -37,6 +39,7 @@ export class AuthController {
   }
 
   @Post('register')
+  @Throttle(CREDENTIALS_THROTTLE)
   async register(
     @Body() dto: RegisterDto,
     @Res({ passthrough: true }) res: Response,
@@ -47,6 +50,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @Throttle(CREDENTIALS_THROTTLE)
   @HttpCode(200)
   async login(
     @Body() dto: LoginDto,

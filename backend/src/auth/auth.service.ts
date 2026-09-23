@@ -7,8 +7,13 @@ import { JwtService } from '@nestjs/jwt';
 import { AccountantsService } from '../accountants/accountants.service.js';
 import { Accountant } from '../accountants/accountant.entity.js';
 import { hashPassword, verifyPassword } from '../common/crypto/password.js';
+import { isUniqueViolation } from '../common/db-errors.js';
 import { LoginDto, RegisterDto } from './dto/auth.dto.js';
-import { SESSION_TTL_SECONDS, SessionPayload } from './session.js';
+import {
+  SESSION_AUDIENCE,
+  SESSION_TTL_SECONDS,
+  SessionPayload,
+} from './session.js';
 
 @Injectable()
 export class AuthService {
@@ -21,11 +26,19 @@ export class AuthService {
     if (await this.accountants.existsByEmail(dto.email)) {
       throw new ConflictException('Există deja un cont cu acest email');
     }
-    return this.accountants.create({
-      email: dto.email,
-      passwordHash: await hashPassword(dto.password),
-      name: dto.name ?? null,
-    });
+    try {
+      return await this.accountants.create({
+        email: dto.email,
+        passwordHash: await hashPassword(dto.password),
+        name: dto.name ?? null,
+      });
+    } catch (err) {
+      // Lost a race with a concurrent registration of the same email.
+      if (isUniqueViolation(err)) {
+        throw new ConflictException('Există deja un cont cu acest email');
+      }
+      throw err;
+    }
   }
 
   async validateLogin(dto: LoginDto): Promise<Accountant> {
@@ -43,6 +56,9 @@ export class AuthService {
 
   signSession(accountantId: string): Promise<string> {
     const payload: SessionPayload = { sub: accountantId };
-    return this.jwt.signAsync(payload, { expiresIn: SESSION_TTL_SECONDS });
+    return this.jwt.signAsync(payload, {
+      expiresIn: SESSION_TTL_SECONDS,
+      audience: SESSION_AUDIENCE,
+    });
   }
 }

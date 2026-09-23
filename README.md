@@ -104,7 +104,7 @@ The schema is managed by TypeORM migrations in `backend/src/database/migrations`
 - A Supabase project (free tier is fine).
 - An ANAF developer registration: anaf.ro → Servicii Online → Înregistrare utilizatori → **Dezvoltatori aplicații**. Then in SPV → **Editare profil Oauth**:
   - Add an application with the services E-Factura and E-Transport.
-  - Set **Callback URL** to `http://localhost:3000/anaf/callback`. Add the production URL later as Callback URL 2.
+  - Set **Callback URL** to `https://localhost:3000/anaf/callback` (it must match `ANAF_REDIRECT_URI` exactly). Add the production URL later as Callback URL 2.
   - Copy the Client ID and Client Secret.
 
 ### Setup
@@ -113,7 +113,8 @@ cd backend
 npm install
 cp .env.example .env        # fill in DATABASE_URL, secrets, ANAF credentials
 npm run migration:run       # creates the 5 tables in Supabase
-npm run start:dev           # http://localhost:3000
+npm run cert:dev            # self-signed cert for https://localhost (certs/, git-ignored)
+npm run dev                 # https://localhost:3000
 ```
 
 ### Useful commands
@@ -128,12 +129,12 @@ After generating or creating a migration, add its class to `src/database/migrati
 
 ### Manual end-to-end check
 ```bash
-curl -c jar -H "Content-Type: application/json" \
+curl -k -c jar -H "Content-Type: application/json" \
   -d '{"email":"andrei@example.com","password":"a-long-password","name":"Andrei"}' \
-  http://localhost:3000/auth/register
-curl -b jar http://localhost:3000/auth/me
+  https://localhost:3000/auth/register
+curl -k -b jar https://localhost:3000/auth/me
 ```
-Then open `http://localhost:3000/anaf/connect` in the browser where you're logged in, pick the certificate, and call `GET /anaf/connections/:id/test`. You should see a response starting with `Hello, SPVDirect`.
+Then open `https://localhost:3000/anaf/connect` in the browser where you're logged in (accept the self-signed certificate warning once), pick the certificate, and call `GET /anaf/connections/:id/test`. You should see a response starting with `Hello, SPVDirect`.
 
 ---
 

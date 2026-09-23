@@ -1,0 +1,7 @@
+$kind: http-request
+description: Requires session. 302 to ANAF authorize and sets the `spv_anaf_oauth` state cookie.
+url: "{{baseUrl}}/anaf/connect"
+method: GET
+settings:
+  followRedirects: false
+order: 1000

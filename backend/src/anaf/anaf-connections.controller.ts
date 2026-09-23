@@ -17,6 +17,7 @@ import { CurrentAccountantId } from '../auth/current-accountant.decorator.js';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { AnafApiService } from './anaf-api.service.js';
 import { AnafConnection } from './anaf-connection.entity.js';
+import { AnafOAuthService } from './anaf-oauth.service.js';
 
 class UpdateConnectionDto {
   @IsString()
@@ -30,6 +31,7 @@ class UpdateConnectionDto {
 export class AnafConnectionsController {
   constructor(
     private readonly api: AnafApiService,
+    private readonly oauth: AnafOAuthService,
     @InjectRepository(AnafConnection)
     private readonly connections: Repository<AnafConnection>,
   ) {}
@@ -54,13 +56,16 @@ export class AnafConnectionsController {
     return this.connections.save(connection);
   }
 
+  /** Revokes the tokens at ANAF (best-effort), then deletes the connection. */
   @Delete(':id')
   @HttpCode(204)
   async remove(
     @CurrentAccountantId() accountantId: string,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    await this.connections.remove(await this.get(accountantId, id));
+    const connection = await this.get(accountantId, id);
+    await this.oauth.revokeConnection(connection.id);
+    await this.connections.remove(connection);
   }
 
   /** Calls ANAF's TestOauth "hello" service with this connection's token. */

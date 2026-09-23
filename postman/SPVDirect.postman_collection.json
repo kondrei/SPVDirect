@@ -1,0 +1,275 @@
+{
+  "info": {
+    "name": "SPVDirect API",
+    "description": "All SPVDirect backend endpoints.\n\nAuth: `POST /auth/login` (or `/auth/register`) sets the httpOnly cookie `spv_session`. Postman's cookie jar sends it back automatically for `localhost`, so run Login first.\n\nVariables: `baseUrl` (default http://localhost:3000), `email`, `password`. `companyId`, `connectionId` and `linkToken` are filled in automatically by test scripts (Create company, List connections, Create authorization link).\n\nThe ANAF OAuth endpoints (`/anaf/connect`, `/anaf/authorize/:token/start`, `/anaf/callback`) are browser redirects that need the USB/cloud certificate at logincert.anaf.ro. They are included for reference; open them in a browser to complete the flow.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "email", "value": "contabil@example.ro" },
+    { "key": "password", "value": "parola-sigura-123" },
+    { "key": "companyId", "value": "" },
+    { "key": "connectionId", "value": "" },
+    { "key": "linkToken", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health",
+            "description": "Public. Returns `{ \"status\": \"ok\" }`."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"name\": \"Contabil Test\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Public, throttled (10/min). Password 10-200 chars, name optional. Sets the `spv_session` cookie."
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Public, throttled (10/min). Returns 200 and sets the `spv_session` cookie."
+          }
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/auth/me",
+            "description": "Requires session. Returns the current accountant."
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/logout",
+            "description": "Clears the session cookie. Returns 204."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Companies",
+      "item": [
+        {
+          "name": "List companies",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/companies"
+          }
+        },
+        {
+          "name": "Create company",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set('companyId', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/companies",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cui\": \"RO12345678\",\n  \"name\": \"Firma Test SRL\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "CUI may include the `RO` prefix and spaces; it is stored as digits only (2-10). Saves the new id into `companyId`."
+          }
+        },
+        {
+          "name": "Get company",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/companies/{{companyId}}"
+          }
+        },
+        {
+          "name": "Update company",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/companies/{{companyId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Firma Test SRL (redenumit)\",\n  \"anafConnectionId\": \"{{connectionId}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Both fields optional. `anafConnectionId: null` detaches the certificate."
+          }
+        },
+        {
+          "name": "Delete company",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/companies/{{companyId}}",
+            "description": "Returns 204."
+          }
+        },
+        {
+          "name": "Create authorization link",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const url = pm.response.json().url;",
+                  "  pm.collectionVariables.set('linkToken', url.split('/').pop());",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/companies/{{companyId}}/authorization-links",
+            "description": "Returns `{ id, url, expiresAt }`: a one-time link (7 days) for the company's certificate holder. Saves the token into `linkToken`."
+          }
+        }
+      ]
+    },
+    {
+      "name": "ANAF connections",
+      "item": [
+        {
+          "name": "List connections",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const list = pm.response.json();",
+                  "if (Array.isArray(list) && list.length) {",
+                  "  pm.collectionVariables.set('connectionId', list[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/anaf/connections",
+            "description": "Saves the newest connection's id into `connectionId`."
+          }
+        },
+        {
+          "name": "Update connection label",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/anaf/connections/{{connectionId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Certificat Andrei\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          }
+        },
+        {
+          "name": "Test connection (ANAF hello)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/anaf/connections/{{connectionId}}/test",
+            "description": "Calls ANAF `/TestOauth/jaxrs/hello` with this connection's token. Returns `{ status, body }`."
+          }
+        },
+        {
+          "name": "Delete connection",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/anaf/connections/{{connectionId}}",
+            "description": "Returns 204."
+          }
+        }
+      ]
+    },
+    {
+      "name": "ANAF OAuth (browser flow)",
+      "description": "These endpoints redirect to logincert.anaf.ro or render HTML. Postman can show the first response, but the certificate login only works in a browser.",
+      "item": [
+        {
+          "name": "Connect own certificate",
+          "protocolProfileBehavior": { "followRedirects": false },
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/anaf/connect",
+            "description": "Requires session. 302 to ANAF authorize and sets the `spv_anaf_oauth` state cookie."
+          }
+        },
+        {
+          "name": "Authorization link landing page",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/anaf/authorize/{{linkToken}}",
+            "description": "Public HTML page for the certificate holder. 400 if the link is invalid, used or expired."
+          }
+        },
+        {
+          "name": "Authorization link start",
+          "protocolProfileBehavior": { "followRedirects": false },
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/anaf/authorize/{{linkToken}}/start",
+            "description": "Public. 302 to ANAF authorize for the link flow."
+          }
+        },
+        {
+          "name": "OAuth callback",
+          "protocolProfileBehavior": { "followRedirects": false },
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/anaf/callback?code=&state=",
+              "host": ["{{baseUrl}}"],
+              "path": ["anaf", "callback"],
+              "query": [
+                { "key": "code", "value": "" },
+                { "key": "state", "value": "" },
+                { "key": "error", "value": "", "disabled": true }
+              ]
+            },
+            "description": "ANAF redirect target. Needs the `spv_anaf_oauth` cookie; without it returns a 400 'Sesiune expirată' page."
+          }
+        }
+      ]
+    }
+  ]
+}

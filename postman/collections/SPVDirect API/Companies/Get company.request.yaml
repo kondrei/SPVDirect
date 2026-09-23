@@ -1,0 +1,4 @@
+$kind: http-request
+url: "{{baseUrl}}/companies/{{companyId}}"
+method: GET
+order: 3000

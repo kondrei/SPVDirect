@@ -26,9 +26,16 @@ export const envValidationSchema = Joi.object({
   ANAF_TOKEN_ENDPOINT: Joi.string()
     .uri()
     .default('https://logincert.anaf.ro/anaf-oauth2/v1/token'),
+  ANAF_REVOKE_ENDPOINT: Joi.string()
+    .uri()
+    .default('https://logincert.anaf.ro/anaf-oauth2/v1/revoke'),
   ANAF_API_ENDPOINT: Joi.string().uri().default('https://api.anaf.ro'),
   ANAF_ENV: Joi.string().valid('test', 'prod').default('test'),
-});
+
+  // PEM files; set both to serve HTTPS directly (see `npm run cert:dev`).
+  HTTPS_KEY_FILE: Joi.string(),
+  HTTPS_CERT_FILE: Joi.string(),
+}).and('HTTPS_KEY_FILE', 'HTTPS_CERT_FILE');
 
 export interface Env {
   NODE_ENV: 'development' | 'test' | 'production';
@@ -44,6 +51,9 @@ export interface Env {
   ANAF_REDIRECT_URI: string;
   ANAF_AUTH_ENDPOINT: string;
   ANAF_TOKEN_ENDPOINT: string;
+  ANAF_REVOKE_ENDPOINT: string;
   ANAF_API_ENDPOINT: string;
   ANAF_ENV: 'test' | 'prod';
+  HTTPS_KEY_FILE?: string;
+  HTTPS_CERT_FILE?: string;
 }

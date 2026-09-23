@@ -1,0 +1,7 @@
+$kind: http-request
+description: Public. 302 to ANAF authorize for the link flow.
+url: "{{baseUrl}}/anaf/authorize/{{linkToken}}/start"
+method: GET
+settings:
+  followRedirects: false
+order: 3000

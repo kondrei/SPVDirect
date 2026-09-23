@@ -1,0 +1,5 @@
+$kind: http-request
+description: Calls ANAF `/TestOauth/jaxrs/hello` with this connection's token. Returns `{ status, body }`.
+url: "{{baseUrl}}/anaf/connections/{{connectionId}}/test"
+method: GET
+order: 3000

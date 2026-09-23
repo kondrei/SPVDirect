@@ -1,0 +1,13 @@
+$kind: http-request
+description: "Returns `{ id, url, expiresAt }`: a one-time link (7 days) for the company's certificate holder. Saves the token into `linkToken`."
+url: "{{baseUrl}}/companies/{{companyId}}/authorization-links"
+method: POST
+scripts:
+  - type: afterResponse
+    code: |-
+      if (pm.response.code === 201) {
+        const url = pm.response.json().url;
+        pm.collectionVariables.set('linkToken', url.split('/').pop());
+      }
+    language: text/javascript
+order: 6000

@@ -1,0 +1,13 @@
+# Use this workspace to collaborate
+workspace:
+  id: 28ace151-5136-4136-85f6-6e1b346872f1
+
+cloudResources:
+  collections:
+    ../postman/collections/SPVDirect API: a53eebf4-593b-4f83-9374-70bc1a2ad3cf
+
+# All resources in the `postman/` folder are automatically registered in Local View.
+# Point to additional files outside the `postman/` folder to register them individually. Example:
+#localResources:
+#  collections:
+#    - ../tests/E2E Test Collection/

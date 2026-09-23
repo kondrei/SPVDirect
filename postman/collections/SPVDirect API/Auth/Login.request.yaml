@@ -1,0 +1,14 @@
+$kind: http-request
+description: Public, throttled (10/min). Returns 200 and sets the `spv_session` cookie.
+url: "{{baseUrl}}/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "{{email}}",
+      "password": "{{password}}"
+    }
+order: 2000

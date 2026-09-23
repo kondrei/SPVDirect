@@ -1,0 +1,14 @@
+$kind: http-request
+description: "Both fields optional. `anafConnectionId: null` detaches the certificate."
+url: "{{baseUrl}}/companies/{{companyId}}"
+method: PATCH
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "Firma Test SRL (redenumit)",
+      "anafConnectionId": "{{connectionId}}"
+    }
+order: 4000

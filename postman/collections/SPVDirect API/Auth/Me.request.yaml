@@ -1,0 +1,5 @@
+$kind: http-request
+description: Requires session. Returns the current accountant.
+url: "{{baseUrl}}/auth/me"
+method: GET
+order: 3000

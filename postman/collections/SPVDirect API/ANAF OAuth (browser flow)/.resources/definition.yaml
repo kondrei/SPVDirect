@@ -1,0 +1,3 @@
+$kind: collection
+description: These endpoints redirect to logincert.anaf.ro or render HTML. Postman can show the first response, but the certificate login only works in a browser.
+order: 5000
