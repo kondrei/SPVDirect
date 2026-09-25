@@ -15,7 +15,7 @@ export interface AuthenticatedRequest extends Request {
 /** Authenticates SPVDirect's own session cookie (not ANAF tokens). */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  constructor(private readonly jwt: JwtService) {}
+  constructor(private readonly jwt: JwtService) { }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<AuthenticatedRequest>();
