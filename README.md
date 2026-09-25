@@ -8,7 +8,7 @@ SPVDirect is an accountant portal for ANAF SPV services: **e-Factura**, **e-Tran
 ```
 SPVDirect/
   backend/    NestJS API (this phase)
-  frontend/   React app (next phase)
+  frontend/   React app (Vite + React 19, see frontend/README.md)
 ```
 
 ---
@@ -142,7 +142,7 @@ Then open `https://localhost:3000/anaf/connect` in the browser where you're logg
 
 - [x] Phase 1: backend scaffold, accounts, ANAF OAuth (self + authorization links), schema
 - [ ] Phase 2: e-Factura (upload, stareMesaj, listaMesajeFactura, descarcare) and e-Transport modules
-- [ ] Phase 3: React frontend (Login, Dashboard, Companies, Connections, Invoices, Transport)
+- [ ] Phase 3: React frontend. Done: Login, Dashboard, Companies, Connections. Still to do: Invoices and Transport, which wait for Phase 2.
 - [ ] Phase 4: a background job for proactive token refresh and expiry notifications, plus rate limiting for ANAF calls (1000 per minute)
 - [ ] Phase 5: Azure deployment, CI/CD
 

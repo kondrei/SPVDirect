@@ -18,10 +18,11 @@ import { CreateCompanyDto, UpdateCompanyDto } from './dto/company.dto.js';
 @Controller('companies')
 @UseGuards(JwtAuthGuard)
 export class CompaniesController {
-  constructor(private readonly companies: CompaniesService) {}
+  constructor(private readonly companies: CompaniesService) { }
 
   @Get()
   list(@CurrentAccountantId() accountantId: string) {
+    console.log('accountantId', accountantId);
     return this.companies.list(accountantId);
   }
 

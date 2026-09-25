@@ -4,7 +4,7 @@ SPVDirect is an accountant portal for ANAF SPV services (e-Factura, e-Transport)
 
 ## Layout
 - `backend/`: NestJS 12 API. Phase 1 is done: accounts, ANAF OAuth, schema.
-- `frontend/`: React app, not created yet (Phase 3). Plain folders, no npm workspaces.
+- `frontend/`: React 19 + Vite app (Phase 3 in progress): login, dashboard, companies, ANAF certificates. See `frontend/README.md`. Plain folders, no npm workspaces.
 
 ## Commands (run in `backend/`)
 - `npm run dev`: dev server on :3000. Needs `backend/.env` (copy from `.env.example`).
@@ -12,6 +12,11 @@ SPVDirect is an accountant portal for ANAF SPV services (e-Factura, e-Transport)
 - `npm run lint` (oxlint, type-aware) · `npm run format` (prettier) · `npm run build`
 - `npm run migration:run | migration:revert | migration:show | migration:generate -- src/database/migrations/<Name>`
   - These build first, then run the TypeORM CLI against `dist/database/data-source.js`.
+
+## Commands (run in `frontend/`)
+- `npm run dev`: http://localhost:5173. It proxies `/api/*` to the backend at https://localhost:3000, so start the backend first.
+- `npm test` (Vitest + Testing Library, no backend needed) · `npm run typecheck` · `npm run lint` · `npm run build`
+- Frontend conventions: design-system tokens only (`src/styles/tokens.css`), `StatusBadge` for every status, Romanian copy. Details in `frontend/README.md`.
 
 ## MANDATORY workflow after every code change
 This rule always applies:
@@ -69,7 +74,7 @@ A Stop hook (`.claude/settings.json` → `.claude/hooks/verify-backend.sh`) bloc
 
 ## Roadmap
 - Phase 2: e-Factura (upload, stareMesaj, listaMesajeFactura, descarcare) and e-Transport modules, built on AnafApiService.
-- Phase 3: React frontend in `frontend/`. The backend expects it at `FRONTEND_URL` (default `http://localhost:5173`) and redirects to `/connections?status=ok|error`.
+- Phase 3: React frontend in `frontend/` (scaffolded: auth, dashboard, companies, certificates; e-Factura/e-Transport pages wait for Phase 2). The backend expects it at `FRONTEND_URL` (default `http://localhost:5173`) and redirects to `/connections?status=ok|error`.
 - Phase 4: background token refresh and expiry notifications, plus rate limiting for ANAF calls.
 - Phase 5: Azure deployment and CI/CD.
 
