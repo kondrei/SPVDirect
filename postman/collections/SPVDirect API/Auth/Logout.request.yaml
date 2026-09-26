@@ -1,5 +1,0 @@
-$kind: http-request
-description: Clears the session cookie. Returns 204.
-url: "{{baseUrl}}/auth/logout"
-method: POST
-order: 4000

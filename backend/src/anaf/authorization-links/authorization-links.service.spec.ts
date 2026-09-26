@@ -17,7 +17,7 @@ function setup(link: Partial<AuthorizationLink> | null) {
     update: vi.fn().mockResolvedValue({ affected: 0 }),
   };
   const companies = {
-    get: vi.fn().mockResolvedValue({ id: 'co-1', name: 'Firma SRL' }),
+    get: vi.fn().mockResolvedValue({ id: 7, name: 'Firma SRL' }),
   } as unknown as CompaniesService;
   const service = new AuthorizationLinksService(
     new ConfigService({ API_URL: 'https://api.spvdirect.ro' }),
@@ -32,7 +32,7 @@ const future = () => new Date(Date.now() + 3600 * 1000);
 describe('AuthorizationLinksService', () => {
   it('creates a link whose token is stored only as a hash', async () => {
     const { service, repo } = setup(null);
-    const { url } = await service.create('acc-1', 'co-1');
+    const { url } = await service.create(1, 7);
     const token = url.split('/').pop()!;
     expect(url).toMatch(/^https:\/\/api\.spvdirect\.ro\/anaf\/authorize\//);
     const saved = repo.save.mock.calls[0][0] as AuthorizationLink;

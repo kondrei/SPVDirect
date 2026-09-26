@@ -28,7 +28,7 @@ ANAF only offers OAuth 2.0. The access and refresh tokens it issues are JWTs, pe
 
 ```
 Accountant (logged in to SPVDirect)
-  → "Conectează certificat ANAF"  (GET /anaf/connect)
+  → "Conectează certificat ANAF"  (GET /accountants/:accountantId/anaf/connect)
   → redirect to logincert.anaf.ro/anaf-oauth2/v1/authorize?...&token_content_type=jwt
   → browser: "Select a certificate" + token PIN   (USB token or cloud certificate)
   → ANAF checks the SPV PJ role (reprezentant legal / desemnat / împuternicit)
@@ -44,7 +44,7 @@ An împuternicit certificate usually covers many CUIs, so one connection can ser
 
 When the certificate belongs to the client company's legal representative:
 
-1. The accountant calls `POST /companies/:id/authorization-links` and sends the returned URL (valid for 7 days, single use).
+1. The accountant calls `POST /accountants/:accountantId/companies/:id/authorization-links` and sends the returned URL (valid for 7 days, single use).
 2. The certificate holder opens it on their own PC. A Romanian explanation page appears, with the button **"Autorizează cu certificatul"**.
 3. They go through logincert on their machine. The connection is created under the accountant's account and attached to that company.
 
@@ -69,16 +69,16 @@ When the certificate belongs to the client company's legal representative:
 | POST | `/auth/register` · `/auth/login` | none | Create account / log in (sets cookie) |
 | POST | `/auth/logout` | none | Clear cookie |
 | GET | `/auth/me` | session | Current accountant |
-| GET/POST | `/companies` | session | List / add client company by CUI (without RO); name and details come from ANAF's VAT registry, 400 if the CUI is unknown |
-| POST | `/companies/:id/anaf-refresh` | session | Re-read the company's data from ANAF's VAT registry |
-| GET/PATCH/DELETE | `/companies/:id` | session | Read / rename / attach connection / delete |
-| POST | `/companies/:id/authorization-links` | session | One-time link for the certificate holder |
-| GET | `/anaf/connect` | session | Start OAuth with your own certificate |
+| GET/POST | `/accountants/:accountantId/companies` | session | List / add client company by CUI (without RO); name and details come from ANAF's VAT registry, 400 if the CUI is unknown |
+| POST | `/accountants/:accountantId/companies/:id/anaf-refresh` | session | Re-read the company's data from ANAF's VAT registry |
+| GET/PATCH/DELETE | `/accountants/:accountantId/companies/:id` | session | Read / rename / attach connection / delete |
+| POST | `/accountants/:accountantId/companies/:id/authorization-links` | session | One-time link for the certificate holder |
+| GET | `/accountants/:accountantId/anaf/connect` | session | Start OAuth with your own certificate |
 | GET | `/anaf/authorize/:token` | link | Landing page for authorization links |
 | GET | `/anaf/callback` | state cookie | ANAF redirect target |
-| GET | `/anaf/connections` | session | List certificates (no tokens returned) |
-| PATCH/DELETE | `/anaf/connections/:id` | session | Rename / remove |
-| GET | `/anaf/connections/:id/test` | session | Call ANAF TestOauth `hello` |
+| GET | `/accountants/:accountantId/anaf/connections` | session | List certificates (no tokens returned) |
+| PATCH/DELETE | `/accountants/:accountantId/anaf/connections/:id` | session | Rename / remove |
+| GET | `/accountants/:accountantId/anaf/connections/:id/test` | session | Call ANAF TestOauth `hello` |
 
 `AnafApiService.request()` is the single gateway to api.anaf.ro. It handles ownership checks, proactive refresh, retry after a refresh on 401/403, 429 mapping and `api_logs` auditing. The e-Factura and e-Transport modules will build on it.
 
@@ -90,9 +90,9 @@ The schema is managed by TypeORM migrations in `backend/src/database/migrations`
 
 | Table | Purpose |
 |---|---|
-| `accountants` | SPVDirect users (email is citext and unique, scrypt password hash) |
+| `accountants` | SPVDirect users (integer id from 1, email is citext and unique, scrypt password hash) |
 | `anaf_connections` | One per authorized certificate: encrypted tokens, `cert_serial`, `roles`, expiries, status |
-| `companies` | Client CUIs per accountant, the connection used for each, and ANAF VAT-registry data (typed columns + full record in `anaf_data` jsonb) |
+| `companies` | Client CUIs per accountant (integer id from 1), the connection used for each, and ANAF VAT-registry data (typed columns + full record in `anaf_data` jsonb) |
 | `authorization_links` | Delegated-authorization links (only the SHA-256 of the token is stored) |
 | `api_logs` | Audit of every api.anaf.ro call and every VAT-registry lookup (service, endpoint, status, latency) |
 
@@ -135,7 +135,7 @@ curl -k -c jar -H "Content-Type: application/json" \
   https://localhost:3000/auth/register
 curl -k -b jar https://localhost:3000/auth/me
 ```
-Then open `https://localhost:3000/anaf/connect` in the browser where you're logged in (accept the self-signed certificate warning once), pick the certificate, and call `GET /anaf/connections/:id/test`. You should see a response starting with `Hello, SPVDirect`.
+Then open `https://localhost:3000/accountants/<your id>/anaf/connect` in the browser where you're logged in (the id is in the `/auth/me` response; accept the self-signed certificate warning once), pick the certificate, and call `GET /accountants/<your id>/anaf/connections/:id/test`. You should see a response starting with `Hello, SPVDirect`.
 
 ---
 

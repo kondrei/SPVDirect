@@ -2,4 +2,18 @@ $kind: http-request
 description: Requires session. Returns the current accountant.
 url: "{{baseUrl}}/auth/me"
 method: GET
-order: 3000
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status 200', () => pm.response.to.have.status(200));
+
+      const a = pm.response.json();
+      if (a.id !== undefined) pm.collectionVariables.set('accountantId', a.id);
+      pm.test('Returns the public accountant', () => {
+        pm.expect(a.id).to.be.a('number').and.to.be.above(0);
+        pm.expect(a.email.toLowerCase()).to.eql(pm.collectionVariables.get('email').toLowerCase());
+        pm.expect(a).to.have.property('createdAt');
+        pm.expect(a).to.not.have.any.keys('password', 'passwordHash');
+      });
+    language: text/javascript
+order: 5000

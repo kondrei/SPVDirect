@@ -1,6 +1,7 @@
 import { PageHead } from '../components/PageHead';
 import { EmptyState } from '../components/EmptyState';
 import { ButtonLink, Card, type IconName } from '../components/ui';
+import { useAppPath } from '../hooks/useAppPath';
 
 export function ComingSoonPage({
   title,
@@ -11,6 +12,7 @@ export function ComingSoonPage({
   icon: IconName;
   what: string;
 }) {
+  const appPath = useAppPath();
   return (
     <>
       <PageHead title={title} />
@@ -19,7 +21,7 @@ export function ComingSoonPage({
           icon={icon}
           title={`${title} este în lucru.`}
           actions={
-            <ButtonLink to="/connections" icon="certificate">
+            <ButtonLink to={appPath('/connections')} icon="certificate">
               Pregătește certificatele
             </ButtonLink>
           }

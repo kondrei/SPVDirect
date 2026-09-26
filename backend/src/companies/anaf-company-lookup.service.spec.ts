@@ -31,7 +31,7 @@ describe('AnafCompanyLookupService', () => {
     const { service, post } = setup();
     post.mockResolvedValue({ status: 200, data: { found: [], notFound: [] } });
 
-    await service.lookup('acc-1', '12345678');
+    await service.lookup(1, '12345678');
 
     expect(post).toHaveBeenCalledWith(
       ENDPOINT,
@@ -46,7 +46,7 @@ describe('AnafCompanyLookupService', () => {
       status: 200,
       data: { found: [anafTvaRecord(12345678)], notFound: [] },
     });
-    await expect(service.lookup('acc-1', '12345678')).resolves.toEqual(
+    await expect(service.lookup(1, '12345678')).resolves.toEqual(
       anafTvaRecord(12345678),
     );
   });
@@ -57,7 +57,7 @@ describe('AnafCompanyLookupService', () => {
       status: 200,
       data: { found: [anafTvaRecord(123)], notFound: [] },
     });
-    await expect(service.lookup('acc-1', '0123')).resolves.toEqual(
+    await expect(service.lookup(1, '0123')).resolves.toEqual(
       anafTvaRecord(123),
     );
   });
@@ -68,18 +68,18 @@ describe('AnafCompanyLookupService', () => {
       status: 200,
       data: { found: [], notFound: [12345678] },
     });
-    await expect(service.lookup('acc-1', '12345678')).resolves.toBeNull();
+    await expect(service.lookup(1, '12345678')).resolves.toBeNull();
   });
 
   it('audits the call in api_logs without a connection', async () => {
     const { service, post, record } = setup();
     post.mockResolvedValue({ status: 200, data: { found: [], notFound: [] } });
-    await service.lookup('acc-1', '12345678', 'co-1');
+    await service.lookup(1, '12345678', 7);
     expect(record).toHaveBeenCalledWith(
       expect.objectContaining({
-        accountantId: 'acc-1',
+        accountantId: 1,
         anafConnectionId: null,
-        companyId: 'co-1',
+        companyId: 7,
         service: 'PlatitorTva',
         method: 'POST',
         endpoint: '/api/PlatitorTvaRest/v9/tva',
@@ -92,7 +92,7 @@ describe('AnafCompanyLookupService', () => {
   it('maps an HTTP error to 502 and logs it', async () => {
     const { service, post, record } = setup();
     post.mockResolvedValue({ status: 500, data: 'oops' });
-    await expect(service.lookup('acc-1', '12345678')).rejects.toBeInstanceOf(
+    await expect(service.lookup(1, '12345678')).rejects.toBeInstanceOf(
       BadGatewayException,
     );
     expect(record).toHaveBeenCalledWith(
@@ -103,7 +103,7 @@ describe('AnafCompanyLookupService', () => {
   it('maps a 200 without found[] to 502', async () => {
     const { service, post } = setup();
     post.mockResolvedValue({ status: 200, data: '<html>maintenance</html>' });
-    await expect(service.lookup('acc-1', '12345678')).rejects.toBeInstanceOf(
+    await expect(service.lookup(1, '12345678')).rejects.toBeInstanceOf(
       BadGatewayException,
     );
   });
@@ -111,9 +111,7 @@ describe('AnafCompanyLookupService', () => {
   it('maps a network failure to 502', async () => {
     const { service, post, record } = setup();
     post.mockRejectedValue(new AxiosError('timeout', 'ECONNABORTED'));
-    await expect(service.lookup('acc-1', '12345678')).rejects.toThrow(
-      /nu răspunde/,
-    );
+    await expect(service.lookup(1, '12345678')).rejects.toThrow(/nu răspunde/);
     expect(record).toHaveBeenCalledWith(
       expect.objectContaining({ statusCode: null, error: 'ECONNABORTED' }),
     );
@@ -129,9 +127,9 @@ describe('AnafCompanyLookupService', () => {
     });
 
     const all = Promise.all([
-      service.lookup('acc-1', '11'),
-      service.lookup('acc-1', '22'),
-      service.lookup('acc-1', '33'),
+      service.lookup(1, '11'),
+      service.lookup(1, '22'),
+      service.lookup(1, '33'),
     ]);
     await vi.runAllTimersAsync();
     await all;
@@ -148,8 +146,8 @@ describe('AnafCompanyLookupService', () => {
       .mockRejectedValueOnce(new Error('boom'))
       .mockResolvedValueOnce({ status: 200, data: { found: [] } });
 
-    const first = service.lookup('acc-1', '11').catch((e: unknown) => e);
-    const second = service.lookup('acc-1', '22');
+    const first = service.lookup(1, '11').catch((e: unknown) => e);
+    const second = service.lookup(1, '22');
     await vi.runAllTimersAsync();
     expect(await first).toBeInstanceOf(BadGatewayException);
     await expect(second).resolves.toBeNull();

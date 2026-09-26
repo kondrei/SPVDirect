@@ -42,8 +42,9 @@ A Stop hook (`.claude/settings.json` → `.claude/hooks/verify-backend.sh`) bloc
 
 ## Two separate auth systems (don't mix them)
 1. **The SPVDirect session.** Email and password, hashed with scrypt (`common/crypto/password.ts`). A JWT signed with `JWT_SECRET` goes into the httpOnly cookie `spv_session`.
-   - Protect routes with `@UseGuards(JwtAuthGuard)`.
-   - Get the current accountant's id with `@CurrentAccountantId()`.
+   - Accountant ids are integers (identity, from 1). The JWT `sub` is the id as a string; `JwtAuthGuard` rejects anything else (old UUID sessions get 401).
+   - Accountant-scoped routes live under `/accountants/:accountantId/...` so the accountant shows up in URLs and logs. Protect them with `@UseGuards(JwtAuthGuard, AccountantParamGuard)` and read the id with `@Param('accountantId', ParseIdPipe)`. `AccountantParamGuard` returns 403 unless the URL accountant is the session accountant.
+   - Only `/auth/me` reads the id from the session (`@CurrentAccountantId()`); the frontend needs it to build URLs.
 2. **ANAF connections.** These are OAuth 2.0 grants from ANAF. The access and refresh tokens ANAF issues are JWTs signed by ANAF, and we only decode them.
    - One `anaf_connections` row per certificate per accountant, unique on `cert_serial`.
    - Tokens are AES-256-GCM encrypted with `TOKEN_ENCRYPTION_KEY` (`TokenCipher`). The token columns are `select: false`.
@@ -54,7 +55,7 @@ A Stop hook (`.claude/settings.json` → `.claude/hooks/verify-backend.sh`) bloc
   - Client credentials go in an **HTTP Basic header**, never in the body.
   - Include `token_content_type=jwt` in the body.
 - A refresh returns a new access token **and** a new refresh token. Save both.
-- Revoke: `POST .../v1/revoke` (RFC 7009: `token`, `token_type_hint`, Basic auth). `DELETE /anaf/connections/:id` revokes both tokens (best-effort), then deletes the row.
+- Revoke: `POST .../v1/revoke` (RFC 7009: `token`, `token_type_hint`, Basic auth). `DELETE /accountants/:accountantId/anaf/connections/:id` revokes both tokens (best-effort), then deletes the row.
 - Read expiry from the JWT `exp` claim (docs say 90 days for access, 365 for refresh; don't hard-code).
 - Use the JWT claims `serial` (certificate serial) and `role` (e.g. `HELLO,EFACTURA,ETRANSPORT`).
 - The token endpoint has a 60 s cooldown. `AnafOAuthService` serializes refreshes per connection and remembers every token call (success or failure).
@@ -67,14 +68,15 @@ A Stop hook (`.claude/settings.json` → `.claude/hooks/verify-backend.sh`) bloc
 ## Key code paths
 - `src/anaf/anaf-oauth.service.ts`: authorize URL, code exchange, refresh, `getAccessToken()`.
 - `src/anaf/anaf-api.service.ts`: **the single gateway to api.anaf.ro**. It handles the ownership check, retry after a refresh on 401/403, and `api_logs` auditing. New ANAF features (e-Factura, e-Transport) must call `AnafApiService.request()`, never axios directly.
-- `src/anaf/anaf-oauth.controller.ts`: `/anaf/connect` (self), `/anaf/authorize/:token[/start]` (public authorization-link pages), `/anaf/callback`.
+- `src/anaf/anaf-oauth.controller.ts`: `/accountants/:accountantId/anaf/connect` (self), `/anaf/authorize/:token[/start]` (public authorization-link pages), `/anaf/callback`.
   - A signed short-lived cookie `spv_anaf_oauth` carries the OAuth state and the mode (`self` or `link`).
 - `src/anaf/authorization-links/`: one-time links (7 days) that let a company's certificate holder authorize for an accountant. Only the SHA-256 hash of the link token is stored.
 - `src/companies/`: client CUIs, stored as digits without `RO`. `anafConnectionId` says which certificate to use for that company.
+  - Company ids are integers (identity, from 1). Parse route ids with `ParseIdPipe`.
 
 ## Roadmap
 - Phase 2: e-Factura (upload, stareMesaj, listaMesajeFactura, descarcare) and e-Transport modules, built on AnafApiService.
-- Phase 3: React frontend in `frontend/` (scaffolded: auth, dashboard, companies, certificates; e-Factura/e-Transport pages wait for Phase 2). The backend expects it at `FRONTEND_URL` (default `http://localhost:5173`) and redirects to `/connections?status=ok|error`.
+- Phase 3: React frontend in `frontend/` (scaffolded: auth, dashboard, companies, certificates; e-Factura/e-Transport pages wait for Phase 2). The backend expects it at `FRONTEND_URL` (default `http://localhost:5173`) and redirects to `/accountants/:accountantId/connections?status=ok|error`. Every app page lives under `/accountants/:accountantId/`; other paths redirect there for the signed-in accountant.
 - Phase 4: background token refresh and expiry notifications, plus rate limiting for ANAF calls.
 - Phase 5: Azure deployment and CI/CD.
 

@@ -11,11 +11,15 @@ import type { AnafTvaRecord } from './anaf-company-info.js';
 @Entity('companies')
 @Unique('uq_companies_accountant_cui', ['accountantId', 'cui'])
 export class Company {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryGeneratedColumn('identity', {
+    type: 'integer',
+    generatedIdentity: 'ALWAYS',
+    primaryKeyConstraintName: 'companies_pkey',
+  })
+  id: number;
 
-  @Column({ name: 'accountant_id', type: 'uuid' })
-  accountantId: string;
+  @Column({ name: 'accountant_id', type: 'integer' })
+  accountantId: number;
 
   @Column({ type: 'varchar', length: 20 })
   cui: string;

@@ -6,10 +6,15 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
-import { SESSION_AUDIENCE, SESSION_COOKIE, SessionPayload } from './session.js';
+import {
+  parseSessionSubject,
+  SESSION_AUDIENCE,
+  SESSION_COOKIE,
+  SessionPayload,
+} from './session.js';
 
 export interface AuthenticatedRequest extends Request {
-  accountantId: string;
+  accountantId: number;
 }
 
 @Injectable()
@@ -26,10 +31,9 @@ export class JwtAuthGuard implements CanActivate {
       const payload = await this.jwt.verifyAsync<SessionPayload>(token, {
         audience: SESSION_AUDIENCE,
       });
-      if (typeof payload.sub !== 'string' || !payload.sub) {
-        throw new UnauthorizedException();
-      }
-      req.accountantId = payload.sub;
+      const accountantId = parseSessionSubject(payload.sub);
+      if (accountantId === null) throw new UnauthorizedException();
+      req.accountantId = accountantId;
       return true;
     } catch {
       throw new UnauthorizedException();

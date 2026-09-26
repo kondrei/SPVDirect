@@ -1,0 +1,15 @@
+$kind: http-request
+description: "`AccountantParamGuard`: the URL accountant must be the session accountant."
+url: "{{baseUrl}}/accountants/2147483647/companies"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      const errorMessage = () => {
+        const m = pm.response.json().message;
+        return Array.isArray(m) ? m.join(' | ') : m;
+      };
+      pm.test('Status 403', () => pm.response.to.have.status(403));
+      pm.test('Message is "Acces interzis pentru acest contabil"', () => pm.expect(errorMessage()).to.eql('Acces interzis pentru acest contabil'));
+    language: text/javascript
+order: 8000

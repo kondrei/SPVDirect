@@ -1,6 +1,6 @@
 $kind: http-request
-description: CUI may include the `RO` prefix and spaces; it is stored as digits only (2-10). Saves the new id into `companyId`.
-url: "{{baseUrl}}/companies"
+description: Throttled (20/min). CUI may include `RO` and spaces; it is stored as digits (2-10). Name and details come from the ANAF VAT registry. 409 if the CUI already exists for this accountant (the test then picks the existing company). 400 if ANAF does not know the CUI, 502 if ANAF is unreachable. Saves `companyId`.
+url: "{{baseUrl}}/accountants/{{accountantId}}/companies"
 method: POST
 headers:
   Content-Type: application/json
@@ -8,14 +8,37 @@ body:
   type: json
   content: |-
     {
-      "cui": "RO12345678",
-      "name": "Firma Test SRL"
+      "cui": "{{cui}}"
     }
 scripts:
   - type: afterResponse
     code: |-
+      pm.test('Status 201 (created) or 409 (already exists)', () => {
+        pm.expect(pm.response.code).to.be.oneOf([201, 409]);
+      });
+      const cui = pm.collectionVariables.get('cui').replace(/\s+/g, '').replace(/^RO/i, '');
       if (pm.response.code === 201) {
         pm.collectionVariables.set('companyId', pm.response.json().id);
+        pm.collectionVariables.set('companyCreatedByRun', 'true');
+        pm.test('CUI is stored as digits only', () => pm.expect(pm.response.json().cui).to.eql(cui));
+        pm.test('Filled in from ANAF', () => pm.expect(pm.response.json().anafSyncedAt).to.be.a('string'));
+        pm.test('Company has the expected shape', () => {
+          const c = pm.response.json();
+          pm.expect(c.id).to.be.a('number').and.to.be.above(0);
+          pm.expect(c.accountantId).to.eql(Number(pm.collectionVariables.get('accountantId')));
+          pm.expect(c.cui).to.match(/^\d{2,10}$/);
+          pm.expect(c.name).to.be.a('string').and.not.empty;
+          pm.expect(c).to.have.property('anafConnectionId');
+          pm.expect(c).to.include.keys('regCom', 'address', 'caenCode', 'registrationStatus', 'vatPayer', 'vatOnCollection', 'splitVat', 'eFactura', 'inactive', 'anafSyncedAt', 'createdAt', 'updatedAt');
+        });
+      } else {
+        pm.collectionVariables.set('companyCreatedByRun', '');
+        pm.test('Conflict message is Romanian', () => pm.expect(pm.response.json().message).to.eql('Firma cu acest CUI există deja'));
+        pm.sendRequest({ url: pm.variables.replaceIn('{{baseUrl}}/accountants/{{accountantId}}/companies'), method: 'GET' }, (err, res) => {
+          const existing = !err && res.json().find((c) => c.cui === cui);
+          pm.test('Existing company found in the list', () => pm.expect(existing).to.be.ok);
+          if (existing) pm.collectionVariables.set('companyId', existing.id);
+        });
       }
     language: text/javascript
 order: 2000

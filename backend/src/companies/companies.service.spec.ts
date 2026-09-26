@@ -39,11 +39,11 @@ function setup({
 describe('CompaniesService.create', () => {
   it('fills the company from the ANAF record', async () => {
     const { service, anaf } = setup();
-    const company = await service.create('acc-1', { cui: '12345678' });
+    const company = await service.create(1, { cui: '12345678' });
 
-    expect(anaf.lookup).toHaveBeenCalledWith('acc-1', '12345678');
+    expect(anaf.lookup).toHaveBeenCalledWith(1, '12345678');
     expect(company).toMatchObject({
-      accountantId: 'acc-1',
+      accountantId: 1,
       cui: '12345678',
       name: 'AGRO VEST SRL',
       regCom: 'J35/100/2010',
@@ -67,7 +67,7 @@ describe('CompaniesService.create', () => {
           anafTvaRecord(12345678, { nrRegCom: '', cod_CAEN: '  ' }),
         ),
     });
-    const company = await service.create('acc-1', { cui: '12345678' });
+    const company = await service.create(1, { cui: '12345678' });
     expect(company.regCom).toBeNull();
     expect(company.caenCode).toBeNull();
   });
@@ -77,7 +77,7 @@ describe('CompaniesService.create', () => {
       lookup: () => Promise.resolve(null),
     });
     const err = await service
-      .create('acc-1', { cui: '12345678' })
+      .create(1, { cui: '12345678' })
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(BadRequestException);
     expect((err as Error).message).toMatch(/CUI incorect/);
@@ -86,9 +86,9 @@ describe('CompaniesService.create', () => {
 
   it('rejects a duplicate before calling ANAF', async () => {
     const { service, anaf } = setup({ exists: true });
-    await expect(
-      service.create('acc-1', { cui: '12345678' }),
-    ).rejects.toBeInstanceOf(ConflictException);
+    await expect(service.create(1, { cui: '12345678' })).rejects.toBeInstanceOf(
+      ConflictException,
+    );
     expect(anaf.lookup).not.toHaveBeenCalled();
   });
 
@@ -96,9 +96,9 @@ describe('CompaniesService.create', () => {
     const { service } = setup({
       lookup: () => Promise.reject(new BadGatewayException('down')),
     });
-    await expect(
-      service.create('acc-1', { cui: '12345678' }),
-    ).rejects.toBeInstanceOf(BadGatewayException);
+    await expect(service.create(1, { cui: '12345678' })).rejects.toBeInstanceOf(
+      BadGatewayException,
+    );
   });
 
   it('maps a concurrent duplicate CUI to 409', async () => {
@@ -112,16 +112,16 @@ describe('CompaniesService.create', () => {
           ),
         ),
     });
-    await expect(
-      service.create('acc-1', { cui: '12345678' }),
-    ).rejects.toBeInstanceOf(ConflictException);
+    await expect(service.create(1, { cui: '12345678' })).rejects.toBeInstanceOf(
+      ConflictException,
+    );
   });
 
   it('rethrows other database errors', async () => {
     const { service } = setup({
       save: () => Promise.reject(new Error('connection lost')),
     });
-    await expect(service.create('acc-1', { cui: '12345678' })).rejects.toThrow(
+    await expect(service.create(1, { cui: '12345678' })).rejects.toThrow(
       'connection lost',
     );
   });
@@ -129,8 +129,8 @@ describe('CompaniesService.create', () => {
 
 describe('CompaniesService.refreshFromAnaf', () => {
   const stored = {
-    id: 'co-1',
-    accountantId: 'acc-1',
+    id: 7,
+    accountantId: 1,
     cui: '12345678',
     name: 'Agro Vest (client vechi)',
     vatPayer: null,
@@ -140,13 +140,13 @@ describe('CompaniesService.refreshFromAnaf', () => {
 
   it('updates the ANAF fields but keeps the name the accountant chose', async () => {
     const { service, companies, anaf } = setup({ stored: { ...stored } });
-    const company = await service.refreshFromAnaf('acc-1', 'co-1');
+    const company = await service.refreshFromAnaf(1, 7);
 
     expect(companies.findOneBy).toHaveBeenCalledWith({
-      id: 'co-1',
-      accountantId: 'acc-1',
+      id: 7,
+      accountantId: 1,
     });
-    expect(anaf.lookup).toHaveBeenCalledWith('acc-1', '12345678', 'co-1');
+    expect(anaf.lookup).toHaveBeenCalledWith(1, '12345678', 7);
     expect(company.name).toBe('Agro Vest (client vechi)');
     expect(company.vatPayer).toBe(true);
     expect(company.anafData).toEqual(anafTvaRecord());
@@ -158,9 +158,9 @@ describe('CompaniesService.refreshFromAnaf', () => {
       stored: { ...stored },
       lookup: () => Promise.resolve(null),
     });
-    await expect(
-      service.refreshFromAnaf('acc-1', 'co-1'),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.refreshFromAnaf(1, 7)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
     expect(companies.save).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,6 @@
 $kind: http-request
-url: "{{baseUrl}}/anaf/connections/{{connectionId}}"
+description: "`label` 1-120 chars."
+url: "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/{{connectionId}}"
 method: PATCH
 headers:
   Content-Type: application/json
@@ -9,4 +10,24 @@ body:
     {
       "label": "Certificat Andrei"
     }
+scripts:
+  - type: beforeRequest
+    code: |-
+      if (!pm.collectionVariables.get('connectionId')) {
+        console.log('No ANAF connection yet: connect a certificate in the browser first.');
+        pm.execution.skipRequest();
+      }
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('Status 200', () => pm.response.to.have.status(200));
+      pm.test('Label updated', () => pm.expect(pm.response.json().label).to.eql('Certificat Andrei'));
+
+      pm.test('Tokens are never exposed', () => {
+        const list = [].concat(pm.response.json());
+        list.forEach((c) => {
+          pm.expect(c).to.not.have.any.keys('accessTokenEnc', 'refreshTokenEnc', 'accessToken', 'refreshToken');
+        });
+      });
+    language: text/javascript
 order: 2000

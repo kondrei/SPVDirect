@@ -1,5 +1,10 @@
 import { Link } from 'react-router';
-import { useCompanies, useConnections, useMe } from '../api/hooks';
+import {
+  useCompanies,
+  useConnections,
+  useConnectUrl,
+  useMe,
+} from '../api/hooks';
 import type { AnafConnection } from '../api/types';
 import { EmptyState } from '../components/EmptyState';
 import { PageHead } from '../components/PageHead';
@@ -13,7 +18,7 @@ import {
   Stat,
   StatusBadge,
 } from '../components/ui';
-import { API_URL } from '../api/client';
+import { useAppPath } from '../hooks/useAppPath';
 import {
   connectionStatus,
   daysUntil,
@@ -39,6 +44,8 @@ export function DashboardPage() {
   const me = useMe();
   const companies = useCompanies();
   const connections = useConnections();
+  const appPath = useAppPath();
+  const connectUrl = useConnectUrl();
   const today = todayFmt.format(new Date());
 
   const conns = connections.data ?? [];
@@ -66,11 +73,11 @@ export function DashboardPage() {
         context={today.charAt(0).toUpperCase() + today.slice(1)}
         actions={
           <>
-            <ButtonLink to="/companies?add=1" icon="plus">
+            <ButtonLink to={appPath('/companies?add=1')} icon="plus">
               Adaugă firmă
             </ButtonLink>
             <ButtonAnchor
-              href={`${API_URL}/anaf/connect`}
+              href={connectUrl}
               variant="primary"
               icon="certificate"
             >
@@ -95,7 +102,7 @@ export function DashboardPage() {
           tone="warning"
           title={`Certificatul „${expiring[0].label}” expiră în ${pluralZile(Math.max(0, daysUntil(expiring[0].refreshExpiresAt)))}.`}
           action={
-            <ButtonLink size="sm" to="/connections">
+            <ButtonLink size="sm" to={appPath('/connections')}>
               Vezi certificatele
             </ButtonLink>
           }
@@ -111,7 +118,7 @@ export function DashboardPage() {
           tone="danger"
           title={`${dead.length === 1 ? 'Un certificat nu mai este valid' : `${dead.length} certificate nu mai sunt valide`}.`}
           action={
-            <ButtonLink size="sm" to="/connections">
+            <ButtonLink size="sm" to={appPath('/connections')}>
               Rezolvă
             </ButtonLink>
           }
@@ -162,7 +169,7 @@ export function DashboardPage() {
           title="Firme fără certificat"
           subtitle="Nu pot trimite sau primi documente prin SPV"
           actions={
-            <ButtonLink size="sm" variant="ghost" to="/companies">
+            <ButtonLink size="sm" variant="ghost" to={appPath('/companies')}>
               Toate firmele
             </ButtonLink>
           }
@@ -192,7 +199,7 @@ export function DashboardPage() {
                   key: 'name',
                   header: 'Firmă',
                   render: (r) => (
-                    <Link className="row-link" to={`/companies/${r.id}`}>
+                    <Link className="row-link" to={appPath(`/companies/${r.id}`)}>
                       {r.name}
                     </Link>
                   ),
@@ -216,7 +223,7 @@ export function DashboardPage() {
                       size="sm"
                       variant="ghost"
                       icon="link"
-                      to={`/companies/${r.id}`}
+                      to={appPath(`/companies/${r.id}`)}
                     >
                       Leagă certificat
                     </ButtonLink>
@@ -234,7 +241,7 @@ export function DashboardPage() {
               size="sm"
               variant="ghost"
               icon="plus"
-              href={`${API_URL}/anaf/connect`}
+              href={connectUrl}
             >
               Adaugă
             </ButtonAnchor>
@@ -264,7 +271,7 @@ export function DashboardPage() {
             </div>
           )}
           {byId.size > 5 ? (
-            <Link to="/connections">Toate certificatele</Link>
+            <Link to={appPath('/connections')}>Toate certificatele</Link>
           ) : null}
         </Card>
       </div>

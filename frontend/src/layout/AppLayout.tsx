@@ -5,9 +5,19 @@ import {
   Outlet,
   useLocation,
   useNavigate,
+  useParams,
 } from 'react-router';
 import { useCompanies, useConnections, useLogout, useMe } from '../api/hooks';
-import { Button, Icon, Wordmark, type IconName } from '../components/ui';
+import { EmptyState } from '../components/EmptyState';
+import {
+  Button,
+  ButtonLink,
+  Card,
+  Icon,
+  Wordmark,
+  type IconName,
+} from '../components/ui';
+import { accountantPath } from '../hooks/useAppPath';
 import { useTheme } from '../hooks/useTheme';
 import { connectionStatus, initials } from '../lib/format';
 
@@ -60,6 +70,7 @@ export function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const logout = useLogout();
+  const { accountantId = '' } = useParams();
   const { theme, toggle } = useTheme();
   const [navOpen, setNavOpen] = useState(false);
   const signedIn = Boolean(me.data);
@@ -79,6 +90,8 @@ export function AppLayout() {
     0;
   const user = me.data;
   const close = () => setNavOpen(false);
+  const own = accountantId === String(user.id);
+  const path = (p = '') => accountantPath(user.id, p);
 
   return (
     <div className={navOpen ? 'app nav-open' : 'app'}>
@@ -101,15 +114,15 @@ export function AppLayout() {
         <NavGroup
           onNavigate={close}
           items={[
-            { to: '/', label: 'Panou', icon: 'home', end: true },
+            { to: path(), label: 'Panou', icon: 'home', end: true },
             {
-              to: '/companies',
+              to: path('/companies'),
               label: 'Firme',
               icon: 'building',
               count: withoutCert,
             },
             {
-              to: '/connections',
+              to: path('/connections'),
               label: 'Certificate ANAF',
               icon: 'certificate',
               count: certsNeedingAction,
@@ -120,8 +133,8 @@ export function AppLayout() {
           title="Servicii SPV"
           onNavigate={close}
           items={[
-            { to: '/efactura', label: 'e-Factura', icon: 'invoice' },
-            { to: '/etransport', label: 'e-Transport', icon: 'truck' },
+            { to: path('/efactura'), label: 'e-Factura', icon: 'invoice' },
+            { to: path('/etransport'), label: 'e-Transport', icon: 'truck' },
           ]}
         />
         <div className="spv-side-foot">
@@ -157,7 +170,21 @@ export function AppLayout() {
         </div>
       </nav>
       <main className="app-main">
-        <Outlet />
+        {own ? (
+          <Outlet />
+        ) : (
+          <Card>
+            <EmptyState
+              icon="search"
+              title="Nu aveți acces la acest cont."
+              actions={
+                <ButtonLink to={path()}>Mergi la contul dvs.</ButtonLink>
+              }
+            >
+              Adresa aparține altui contabil.
+            </EmptyState>
+          </Card>
+        )}
       </main>
     </div>
   );

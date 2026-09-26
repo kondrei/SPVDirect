@@ -16,8 +16,8 @@ export class AnafConnection {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'accountant_id', type: 'uuid' })
-  accountantId: string;
+  @Column({ name: 'accountant_id', type: 'integer' })
+  accountantId: number;
 
   @Column({ type: 'text' })
   label: string;

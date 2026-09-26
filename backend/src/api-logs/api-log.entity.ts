@@ -10,14 +10,14 @@ export class ApiLog {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'accountant_id', type: 'uuid' })
-  accountantId: string;
+  @Column({ name: 'accountant_id', type: 'integer' })
+  accountantId: number;
 
   @Column({ name: 'anaf_connection_id', type: 'uuid', nullable: true })
   anafConnectionId: string | null;
 
-  @Column({ name: 'company_id', type: 'uuid', nullable: true })
-  companyId: string | null;
+  @Column({ name: 'company_id', type: 'integer', nullable: true })
+  companyId: number | null;
 
   @Column({ type: 'text' })
   service: string;

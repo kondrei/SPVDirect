@@ -1,7 +1,22 @@
 $kind: http-request
-description: Requires session. 302 to ANAF authorize and sets the `spv_anaf_oauth` state cookie.
-url: "{{baseUrl}}/anaf/connect"
+description: Requires session. 302 to ANAF authorize and sets the `spv_anaf_oauth` state cookie. Open it in a browser to finish the flow.
+url: "{{baseUrl}}/accountants/{{accountantId}}/anaf/connect"
 method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status 302', () => pm.response.to.have.status(302));
+      const location = pm.response.headers.get('Location') || '';
+      const [locationPath, locationQuery = ''] = location.split('?');
+      const q = {};
+      locationQuery.split('&').filter(Boolean).forEach((p) => { const [k, v = ''] = p.split('='); q[decodeURIComponent(k)] = decodeURIComponent(v.split('+').join(' ')); });
+      pm.test('Redirects to ANAF authorize without scope', () => {
+        pm.expect(locationPath).to.include('/anaf-oauth2/v1/authorize');
+        pm.expect(q.token_content_type).to.eql('jwt');
+        pm.expect('scope' in q).to.be.false;
+      });
+      pm.test('Sets the spv_anaf_oauth cookie', () => pm.expect(pm.cookies.has('spv_anaf_oauth')).to.be.true);
+    language: text/javascript
 settings:
   followRedirects: false
-order: 1000
+order: 7000

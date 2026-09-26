@@ -1,0 +1,22 @@
+$kind: http-request
+url: "{{baseUrl}}/accountants/{{accountantId}}/companies"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "cui": "RO12AB"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      const errorMessage = () => {
+        const m = pm.response.json().message;
+        return Array.isArray(m) ? m.join(' | ') : m;
+      };
+      pm.test('Status 400', () => pm.response.to.have.status(400));
+      pm.test('Message is "CUI invalid"', () => pm.expect(errorMessage()).to.include('CUI invalid'));
+    language: text/javascript
+order: 3000

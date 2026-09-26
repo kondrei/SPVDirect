@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useRegister } from '../api/hooks';
 import { Alert, Button, TextField } from '../components/ui';
+import { accountantPath } from '../hooks/useAppPath';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 export const MIN_PASSWORD = 10;
@@ -22,7 +23,10 @@ export function RegisterPage() {
     if (password.length < MIN_PASSWORD) return;
     register.mutate(
       { email: email.trim(), password, name: name.trim() || undefined },
-      { onSuccess: () => navigate('/connections', { replace: true }) },
+      {
+        onSuccess: (me) =>
+          navigate(accountantPath(me.id, '/connections'), { replace: true }),
+      },
     );
   };
 

@@ -21,13 +21,13 @@ function contextWithCookie(token?: string) {
 describe('JwtAuthGuard', () => {
   it('accepts a session token and exposes the accountant id', async () => {
     const token = await jwt.signAsync(
-      { sub: 'acc-1' },
+      { sub: '1' },
       { audience: SESSION_AUDIENCE },
     );
     const { req, context } = contextWithCookie(token);
 
     await expect(guard.canActivate(context)).resolves.toBe(true);
-    expect(req.accountantId).toBe('acc-1');
+    expect(req.accountantId).toBe(1);
   });
 
   it('rejects a request without the session cookie', async () => {
@@ -38,7 +38,7 @@ describe('JwtAuthGuard', () => {
 
   it('rejects an OAuth state token signed with the same secret', async () => {
     const stateToken = await jwt.signAsync(
-      { state: 's', mode: 'self', accountantId: 'acc-1' },
+      { state: 's', mode: 'self', accountantId: 1 },
       { audience: OAUTH_STATE_AUDIENCE },
     );
     await expect(
@@ -52,4 +52,23 @@ describe('JwtAuthGuard', () => {
       guard.canActivate(contextWithCookie(token).context),
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
+
+  it.each([
+    '0f8fad5b-d9cb-469f-a165-70867728950e',
+    '0',
+    '01',
+    '2147483648',
+    'abc',
+  ])(
+    'rejects a session subject %j that is not an accountant id',
+    async (sub) => {
+      const token = await jwt.signAsync(
+        { sub },
+        { audience: SESSION_AUDIENCE },
+      );
+      await expect(
+        guard.canActivate(contextWithCookie(token).context),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    },
+  );
 });

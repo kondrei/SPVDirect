@@ -1,23 +1,85 @@
 {
   "info": {
     "name": "SPVDirect API",
-    "description": "All SPVDirect backend endpoints.\n\nAuth: `POST /auth/login` (or `/auth/register`) sets the httpOnly cookie `spv_session`. Postman's cookie jar sends it back automatically for `localhost`, so run Login first.\n\nVariables: `baseUrl` (default http://localhost:3000), `email`, `password`. `companyId`, `connectionId` and `linkToken` are filled in automatically by test scripts (Create company, List connections, Create authorization link).\n\nThe ANAF OAuth endpoints (`/anaf/connect`, `/anaf/authorize/:token/start`, `/anaf/callback`) are browser redirects that need the USB/cloud certificate at logincert.anaf.ro. They are included for reference; open them in a browser to complete the flow.",
+    "description": "All SPVDirect backend endpoints, with Postman tests. Run the whole collection with the Collection Runner (in order) against a running backend (`npm run dev` in `backend/`).\n\nSetup: the dev server uses HTTPS with a self-signed certificate (`npm run cert:dev`), so turn off *Settings → SSL certificate verification* in Postman. Cookies (`spv_session`, `spv_anaf_oauth`) are kept by Postman's cookie jar for `localhost`.\n\nVariables: `baseUrl`, `email`, `password`, `cui` (a real CUI; creating a company looks it up at ANAF). `accountantId`, `companyId`, `connectionId` and `linkToken` are filled in by the test scripts.\n\nSafety: the run deletes only a company it created itself (`companyCreatedByRun`). *Delete connection* revokes the certificate's tokens at ANAF, so it is skipped unless you set `allowConnectionDelete` to `true`. Requests that need an ANAF connection are skipped until one exists: connect a certificate in the browser (`/accountants/:accountantId/anaf/connect`) and run again.\n\nRegister and Login are throttled to 10 requests per minute; creating or refreshing a company to 20 per minute.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:3000" },
-    { "key": "email", "value": "contabil@example.ro" },
-    { "key": "password", "value": "parola-sigura-123" },
-    { "key": "companyId", "value": "" },
-    { "key": "connectionId", "value": "" },
-    { "key": "linkToken", "value": "" }
+    {
+      "key": "baseUrl",
+      "value": "https://localhost:3000"
+    },
+    {
+      "key": "email",
+      "value": "contabil@example.ro"
+    },
+    {
+      "key": "password",
+      "value": "parola-sigura-123"
+    },
+    {
+      "key": "cui",
+      "value": "RO14399840"
+    },
+    {
+      "key": "accountantId",
+      "value": ""
+    },
+    {
+      "key": "companyId",
+      "value": ""
+    },
+    {
+      "key": "companyCreatedByRun",
+      "value": ""
+    },
+    {
+      "key": "connectionId",
+      "value": ""
+    },
+    {
+      "key": "linkToken",
+      "value": ""
+    },
+    {
+      "key": "allowConnectionDelete",
+      "value": "false"
+    }
+  ],
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('Responds within 15s', () => {",
+          "  pm.expect(pm.response.responseTime).to.be.below(15000);",
+          "});"
+        ]
+      }
+    }
   ],
   "item": [
     {
       "name": "Health",
+      "description": "Public liveness check.",
       "item": [
         {
           "name": "Health check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Body is { status: ok }', () => {",
+                  "  pm.expect(pm.response.json()).to.eql({ status: 'ok' });",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "url": "{{baseUrl}}/health",
@@ -28,61 +90,241 @@
     },
     {
       "name": "Auth",
+      "description": "SPVDirect session: email + password, JWT in the httpOnly cookie `spv_session`.",
       "item": [
         {
           "name": "Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errorMessage = () => {",
+                  "  const m = pm.response.json().message;",
+                  "  return Array.isArray(m) ? m.join(' | ') : m;",
+                  "};",
+                  "pm.test('Status 201 (new) or 409 (already registered)', () => {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([201, 409]);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  pm.test('Sets the spv_session cookie', () => pm.expect(pm.cookies.has('spv_session')).to.be.true);",
+                  "  const a = pm.response.json();",
+                  "  if (a.id !== undefined) pm.collectionVariables.set('accountantId', a.id);",
+                  "  pm.test('Returns the public accountant', () => {",
+                  "    pm.expect(a.id).to.be.a('number').and.to.be.above(0);",
+                  "    pm.expect(a.email.toLowerCase()).to.eql(pm.collectionVariables.get('email').toLowerCase());",
+                  "    pm.expect(a).to.have.property('createdAt');",
+                  "    pm.expect(a).to.not.have.any.keys('password', 'passwordHash');",
+                  "  });",
+                  "} else {",
+                  "  pm.test('Conflict message is Romanian', () => pm.expect(errorMessage()).to.eql('Există deja un cont cu acest email'));",
+                  "}"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "url": "{{baseUrl}}/auth/register",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"name\": \"Contabil Test\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
-            "description": "Public, throttled (10/min). Password 10-200 chars, name optional. Sets the `spv_session` cookie."
+            "description": "Public, throttled (10/min). Password 10-200 chars, name optional. Returns 201 with the accountant and sets `spv_session`. Returns 409 if the email is taken; the test accepts both so the collection can be re-run."
+          }
+        },
+        {
+          "name": "Register - invalid body (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errorMessage = () => {",
+                  "  const m = pm.response.json().message;",
+                  "  return Array.isArray(m) ? m.join(' | ') : m;",
+                  "};",
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Reports the email and password errors', () => {",
+                  "  const msg = errorMessage();",
+                  "  pm.expect(msg).to.include('email');",
+                  "  pm.expect(msg).to.include('password');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/register",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"not-an-email\",\n  \"password\": \"scurta\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Validation: bad email and a password shorter than 10 chars."
+          }
+        },
+        {
+          "name": "Login - wrong password (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errorMessage = () => {",
+                  "  const m = pm.response.json().message;",
+                  "  return Array.isArray(m) ? m.join(' | ') : m;",
+                  "};",
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Generic Romanian message', () => pm.expect(errorMessage()).to.eql('Email sau parolă incorectă'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/login",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"parola-gresita-000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         },
         {
           "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Sets the spv_session cookie', () => pm.expect(pm.cookies.has('spv_session')).to.be.true);",
+                  "",
+                  "const a = pm.response.json();",
+                  "if (a.id !== undefined) pm.collectionVariables.set('accountantId', a.id);",
+                  "pm.test('Returns the public accountant', () => {",
+                  "  pm.expect(a.id).to.be.a('number').and.to.be.above(0);",
+                  "  pm.expect(a.email.toLowerCase()).to.eql(pm.collectionVariables.get('email').toLowerCase());",
+                  "  pm.expect(a).to.have.property('createdAt');",
+                  "  pm.expect(a).to.not.have.any.keys('password', 'passwordHash');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "url": "{{baseUrl}}/auth/login",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
-            "description": "Public, throttled (10/min). Returns 200 and sets the `spv_session` cookie."
+            "description": "Public, throttled (10/min). Returns 200 with the accountant, sets `spv_session` and saves `accountantId`."
           }
         },
         {
           "name": "Me",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const a = pm.response.json();",
+                  "if (a.id !== undefined) pm.collectionVariables.set('accountantId', a.id);",
+                  "pm.test('Returns the public accountant', () => {",
+                  "  pm.expect(a.id).to.be.a('number').and.to.be.above(0);",
+                  "  pm.expect(a.email.toLowerCase()).to.eql(pm.collectionVariables.get('email').toLowerCase());",
+                  "  pm.expect(a).to.have.property('createdAt');",
+                  "  pm.expect(a).to.not.have.any.keys('password', 'passwordHash');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "url": "{{baseUrl}}/auth/me",
             "description": "Requires session. Returns the current accountant."
-          }
-        },
-        {
-          "name": "Logout",
-          "request": {
-            "method": "POST",
-            "url": "{{baseUrl}}/auth/logout",
-            "description": "Clears the session cookie. Returns 204."
           }
         }
       ]
     },
     {
       "name": "Companies",
+      "description": "Client companies of the logged-in accountant, under `/accountants/:accountantId/companies`. The URL accountant must equal the session accountant (403 otherwise). Company ids are integers.",
       "item": [
         {
           "name": "List companies",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns an array of own companies', () => {",
+                  "  const list = pm.response.json();",
+                  "  pm.expect(list).to.be.an('array');",
+                  "  list.forEach((c) => pm.expect(c.accountantId).to.eql(Number(pm.collectionVariables.get('accountantId'))));",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/companies"
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/companies"
           }
         },
         {
@@ -93,8 +335,32 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "pm.test('Status 201 (created) or 409 (already exists)', () => {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([201, 409]);",
+                  "});",
+                  "const cui = pm.collectionVariables.get('cui').replace(/\\s+/g, '').replace(/^RO/i, '');",
                   "if (pm.response.code === 201) {",
                   "  pm.collectionVariables.set('companyId', pm.response.json().id);",
+                  "  pm.collectionVariables.set('companyCreatedByRun', 'true');",
+                  "  pm.test('CUI is stored as digits only', () => pm.expect(pm.response.json().cui).to.eql(cui));",
+                  "  pm.test('Filled in from ANAF', () => pm.expect(pm.response.json().anafSyncedAt).to.be.a('string'));",
+                  "  pm.test('Company has the expected shape', () => {",
+                  "    const c = pm.response.json();",
+                  "    pm.expect(c.id).to.be.a('number').and.to.be.above(0);",
+                  "    pm.expect(c.accountantId).to.eql(Number(pm.collectionVariables.get('accountantId')));",
+                  "    pm.expect(c.cui).to.match(/^\\d{2,10}$/);",
+                  "    pm.expect(c.name).to.be.a('string').and.not.empty;",
+                  "    pm.expect(c).to.have.property('anafConnectionId');",
+                  "    pm.expect(c).to.include.keys('regCom', 'address', 'caenCode', 'registrationStatus', 'vatPayer', 'vatOnCollection', 'splitVat', 'eFactura', 'inactive', 'anafSyncedAt', 'createdAt', 'updatedAt');",
+                  "  });",
+                  "} else {",
+                  "  pm.collectionVariables.set('companyCreatedByRun', '');",
+                  "  pm.test('Conflict message is Romanian', () => pm.expect(pm.response.json().message).to.eql('Firma cu acest CUI există deja'));",
+                  "  pm.sendRequest({ url: pm.variables.replaceIn('{{baseUrl}}/accountants/{{accountantId}}/companies'), method: 'GET' }, (err, res) => {",
+                  "    const existing = !err && res.json().find((c) => c.cui === cui);",
+                  "    pm.test('Existing company found in the list', () => pm.expect(existing).to.be.ok);",
+                  "    if (existing) pm.collectionVariables.set('companyId', existing.id);",
+                  "  });",
                   "}"
                 ]
               }
@@ -102,43 +368,354 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": "{{baseUrl}}/companies",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/companies",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"cui\": \"RO12345678\",\n  \"name\": \"Firma Test SRL\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "raw": "{\n  \"cui\": \"{{cui}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
-            "description": "CUI may include the `RO` prefix and spaces; it is stored as digits only (2-10). Saves the new id into `companyId`."
+            "description": "Throttled (20/min). CUI may include `RO` and spaces; it is stored as digits (2-10). Name and details come from the ANAF VAT registry. 409 if the CUI already exists for this accountant (the test then picks the existing company). 400 if ANAF does not know the CUI, 502 if ANAF is unreachable. Saves `companyId`."
+          }
+        },
+        {
+          "name": "Create company - invalid CUI (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errorMessage = () => {",
+                  "  const m = pm.response.json().message;",
+                  "  return Array.isArray(m) ? m.join(' | ') : m;",
+                  "};",
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Message is \"CUI invalid\"', () => pm.expect(errorMessage()).to.include('CUI invalid'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/companies",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cui\": \"RO12AB\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         },
         {
           "name": "Get company",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns the requested company', () => pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get('companyId'))));",
+                  "",
+                  "pm.test('Company has the expected shape', () => {",
+                  "  const c = pm.response.json();",
+                  "  pm.expect(c.id).to.be.a('number').and.to.be.above(0);",
+                  "  pm.expect(c.accountantId).to.eql(Number(pm.collectionVariables.get('accountantId')));",
+                  "  pm.expect(c.cui).to.match(/^\\d{2,10}$/);",
+                  "  pm.expect(c.name).to.be.a('string').and.not.empty;",
+                  "  pm.expect(c).to.have.property('anafConnectionId');",
+                  "  pm.expect(c).to.include.keys('regCom', 'address', 'caenCode', 'registrationStatus', 'vatPayer', 'vatOnCollection', 'splitVat', 'eFactura', 'inactive', 'anafSyncedAt', 'createdAt', 'updatedAt');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/companies/{{companyId}}"
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/companies/{{companyId}}"
+          }
+        },
+        {
+          "name": "Get company - invalid id (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errorMessage = () => {",
+                  "  const m = pm.response.json().message;",
+                  "  return Array.isArray(m) ? m.join(' | ') : m;",
+                  "};",
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Message is \"Identificator invalid\"', () => pm.expect(errorMessage()).to.eql('Identificator invalid'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/companies/abc",
+            "description": "`ParseIdPipe` accepts only positive int4 ids."
+          }
+        },
+        {
+          "name": "Get company - not found (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errorMessage = () => {",
+                  "  const m = pm.response.json().message;",
+                  "  return Array.isArray(m) ? m.join(' | ') : m;",
+                  "};",
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Message is \"Firma nu a fost găsită\"', () => pm.expect(errorMessage()).to.eql('Firma nu a fost găsită'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/companies/2147483647"
+          }
+        },
+        {
+          "name": "List companies - invalid accountant id (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/abc/companies",
+            "description": "The guard runs before `ParseIdPipe`, so any id other than the session accountant is 403."
+          }
+        },
+        {
+          "name": "List companies - other accountant (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errorMessage = () => {",
+                  "  const m = pm.response.json().message;",
+                  "  return Array.isArray(m) ? m.join(' | ') : m;",
+                  "};",
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Message is \"Acces interzis pentru acest contabil\"', () => pm.expect(errorMessage()).to.eql('Acces interzis pentru acest contabil'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/2147483647/companies",
+            "description": "`AccountantParamGuard`: the URL accountant must be the session accountant."
+          }
+        },
+        {
+          "name": "Refresh company from ANAF",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('anafSyncedAt is recent', () => {",
+                  "  const synced = new Date(pm.response.json().anafSyncedAt).getTime();",
+                  "  pm.expect(Date.now() - synced).to.be.below(5 * 60 * 1000);",
+                  "});",
+                  "",
+                  "pm.test('Company has the expected shape', () => {",
+                  "  const c = pm.response.json();",
+                  "  pm.expect(c.id).to.be.a('number').and.to.be.above(0);",
+                  "  pm.expect(c.accountantId).to.eql(Number(pm.collectionVariables.get('accountantId')));",
+                  "  pm.expect(c.cui).to.match(/^\\d{2,10}$/);",
+                  "  pm.expect(c.name).to.be.a('string').and.not.empty;",
+                  "  pm.expect(c).to.have.property('anafConnectionId');",
+                  "  pm.expect(c).to.include.keys('regCom', 'address', 'caenCode', 'registrationStatus', 'vatPayer', 'vatOnCollection', 'splitVat', 'eFactura', 'inactive', 'anafSyncedAt', 'createdAt', 'updatedAt');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/companies/{{companyId}}/anaf-refresh",
+            "description": "Throttled (20/min). Re-reads the company from the ANAF VAT registry and keeps the current name. Returns 200 with the company."
           }
         },
         {
           "name": "Update company",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = { name: 'Firma Test SRL (redenumit)' };",
+                  "const connectionId = pm.collectionVariables.get('connectionId');",
+                  "if (connectionId) body.anafConnectionId = connectionId;",
+                  "pm.request.body.update(JSON.stringify(body, null, 2));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Name updated', () => pm.expect(pm.response.json().name).to.eql('Firma Test SRL (redenumit)'));",
+                  "const connectionId = pm.collectionVariables.get('connectionId');",
+                  "if (connectionId) {",
+                  "  pm.test('Certificate attached', () => pm.expect(pm.response.json().anafConnectionId).to.eql(connectionId));",
+                  "}",
+                  "",
+                  "pm.test('Company has the expected shape', () => {",
+                  "  const c = pm.response.json();",
+                  "  pm.expect(c.id).to.be.a('number').and.to.be.above(0);",
+                  "  pm.expect(c.accountantId).to.eql(Number(pm.collectionVariables.get('accountantId')));",
+                  "  pm.expect(c.cui).to.match(/^\\d{2,10}$/);",
+                  "  pm.expect(c.name).to.be.a('string').and.not.empty;",
+                  "  pm.expect(c).to.have.property('anafConnectionId');",
+                  "  pm.expect(c).to.include.keys('regCom', 'address', 'caenCode', 'registrationStatus', 'vatPayer', 'vatOnCollection', 'splitVat', 'eFactura', 'inactive', 'anafSyncedAt', 'createdAt', 'updatedAt');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": "{{baseUrl}}/companies/{{companyId}}",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/companies/{{companyId}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Firma Test SRL (redenumit)\",\n  \"anafConnectionId\": \"{{connectionId}}\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "raw": "{\n  \"name\": \"Firma Test SRL (redenumit)\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
-            "description": "Both fields optional. `anafConnectionId: null` detaches the certificate."
+            "description": "Both fields optional: `name` (1-255 chars) and `anafConnectionId` (uuid of an own connection, or `null` to detach). The pre-request script adds `anafConnectionId` when `connectionId` is set."
           }
         },
         {
-          "name": "Delete company",
+          "name": "Update company - unknown certificate (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errorMessage = () => {",
+                  "  const m = pm.response.json().message;",
+                  "  return Array.isArray(m) ? m.join(' | ') : m;",
+                  "};",
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Message is \"Certificat ANAF necunoscut\"', () => pm.expect(errorMessage()).to.eql('Certificat ANAF necunoscut'));"
+                ]
+              }
+            }
+          ],
           "request": {
-            "method": "DELETE",
-            "url": "{{baseUrl}}/companies/{{companyId}}",
-            "description": "Returns 204."
+            "method": "PATCH",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/companies/{{companyId}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"anafConnectionId\": \"00000000-0000-4000-8000-000000000000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Update company - invalid body (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errorMessage = () => {",
+                  "  const m = pm.response.json().message;",
+                  "  return Array.isArray(m) ? m.join(' | ') : m;",
+                  "};",
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Reports both fields', () => {",
+                  "  const msg = errorMessage();",
+                  "  pm.expect(msg).to.include('name');",
+                  "  pm.expect(msg).to.include('anafConnectionId');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/companies/{{companyId}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"anafConnectionId\": \"not-a-uuid\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         },
         {
@@ -149,24 +726,50 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "if (pm.response.code === 201) {",
-                  "  const url = pm.response.json().url;",
-                  "  pm.collectionVariables.set('linkToken', url.split('/').pop());",
-                  "}"
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const link = pm.response.json();",
+                  "pm.test('Returns id, url and expiresAt', () => {",
+                  "  pm.expect(link.id).to.match(/^[0-9a-f-]{36}$/);",
+                  "  pm.expect(link.url).to.match(/\\/anaf\\/authorize\\/[A-Za-z0-9_-]{43}$/);",
+                  "});",
+                  "pm.test('Expires in about 7 days', () => {",
+                  "  const days = (new Date(link.expiresAt).getTime() - Date.now()) / 86400000;",
+                  "  pm.expect(days).to.be.within(6.9, 7.01);",
+                  "});",
+                  "pm.collectionVariables.set('linkToken', link.url.split('/').pop());"
                 ]
               }
             }
           ],
           "request": {
             "method": "POST",
-            "url": "{{baseUrl}}/companies/{{companyId}}/authorization-links",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/companies/{{companyId}}/authorization-links",
             "description": "Returns `{ id, url, expiresAt }`: a one-time link (7 days) for the company's certificate holder. Saves the token into `linkToken`."
+          }
+        },
+        {
+          "name": "Create authorization link - unknown company (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/companies/2147483647/authorization-links"
           }
         }
       ]
     },
     {
       "name": "ANAF connections",
+      "description": "OAuth grants from ANAF (one per certificate). Tokens are never returned. Requests that need a connection are skipped until one exists.",
       "item": [
         {
           "name": "List connections",
@@ -176,66 +779,364 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
                   "const list = pm.response.json();",
-                  "if (Array.isArray(list) && list.length) {",
-                  "  pm.collectionVariables.set('connectionId', list[0].id);",
-                  "}"
+                  "pm.test('Returns an array of own connections', () => {",
+                  "  pm.expect(list).to.be.an('array');",
+                  "  list.forEach((c) => {",
+                  "    pm.expect(c.accountantId).to.eql(Number(pm.collectionVariables.get('accountantId')));",
+                  "    pm.expect(c).to.include.keys('id', 'label', 'certSerial', 'roles', 'source', 'status', 'accessExpiresAt', 'refreshExpiresAt');",
+                  "  });",
+                  "});",
+                  "",
+                  "pm.test('Tokens are never exposed', () => {",
+                  "  const list = [].concat(pm.response.json());",
+                  "  list.forEach((c) => {",
+                  "    pm.expect(c).to.not.have.any.keys('accessTokenEnc', 'refreshTokenEnc', 'accessToken', 'refreshToken');",
+                  "  });",
+                  "});",
+                  "pm.collectionVariables.set('connectionId', list.length ? list[0].id : '');"
                 ]
               }
             }
           ],
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/anaf/connections",
-            "description": "Saves the newest connection's id into `connectionId`."
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections",
+            "description": "Newest first. Saves the newest connection's id into `connectionId`."
           }
         },
         {
           "name": "Update connection label",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('connectionId')) {",
+                  "  console.log('No ANAF connection yet: connect a certificate in the browser first.');",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Label updated', () => pm.expect(pm.response.json().label).to.eql('Certificat Andrei'));",
+                  "",
+                  "pm.test('Tokens are never exposed', () => {",
+                  "  const list = [].concat(pm.response.json());",
+                  "  list.forEach((c) => {",
+                  "    pm.expect(c).to.not.have.any.keys('accessTokenEnc', 'refreshTokenEnc', 'accessToken', 'refreshToken');",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": "{{baseUrl}}/anaf/connections/{{connectionId}}",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/{{connectionId}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"label\": \"Certificat Andrei\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "`label` 1-120 chars."
+          }
+        },
+        {
+          "name": "Update connection label - empty label (400)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('connectionId')) {",
+                  "  console.log('No ANAF connection yet: connect a certificate in the browser first.');",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/{{connectionId}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           }
         },
         {
           "name": "Test connection (ANAF hello)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('connectionId')) {",
+                  "  console.log('No ANAF connection yet: connect a certificate in the browser first.');",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('ANAF says hello', () => {",
+                  "  const r = pm.response.json();",
+                  "  pm.expect(r.status).to.eql(200);",
+                  "  pm.expect(r.body).to.include('Hello, SPVDirect');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/anaf/connections/{{connectionId}}/test",
-            "description": "Calls ANAF `/TestOauth/jaxrs/hello` with this connection's token. Returns `{ status, body }`."
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/{{connectionId}}/test",
+            "description": "Calls ANAF `/TestOauth/jaxrs/hello?name=SPVDirect` with this connection's token (refreshed if needed). Returns `{ status, body }`."
           }
         },
         {
-          "name": "Delete connection",
+          "name": "List connections - other accountant (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/2147483647/anaf/connections"
+          }
+        },
+        {
+          "name": "Update connection - invalid id (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/not-a-uuid",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"x\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Update connection - not found (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Message is \"Conexiune ANAF inexistentă\"', () => pm.expect(pm.response.json().message).to.eql('Conexiune ANAF inexistentă'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/00000000-0000-4000-8000-000000000000",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"x\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Test connection - not found (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/00000000-0000-4000-8000-000000000000/test"
+          }
+        },
+        {
+          "name": "Delete connection - not found (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "DELETE",
-            "url": "{{baseUrl}}/anaf/connections/{{connectionId}}",
-            "description": "Returns 204."
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/00000000-0000-4000-8000-000000000000"
           }
         }
       ]
     },
     {
       "name": "ANAF OAuth (browser flow)",
-      "description": "These endpoints redirect to logincert.anaf.ro or render HTML. Postman can show the first response, but the certificate login only works in a browser.",
+      "description": "These endpoints redirect to logincert.anaf.ro or render HTML. The tests check the first response; the certificate login itself only works in a browser.",
       "item": [
         {
-          "name": "Connect own certificate",
-          "protocolProfileBehavior": { "followRedirects": false },
+          "name": "Connect own certificate - other accountant (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/anaf/connect",
-            "description": "Requires session. 302 to ANAF authorize and sets the `spv_anaf_oauth` state cookie."
+            "url": "{{baseUrl}}/accountants/2147483647/anaf/connect"
+          }
+        },
+        {
+          "name": "OAuth callback - no state (400 or error redirect)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Rejected', () => pm.expect(pm.response.code).to.be.oneOf([302, 400]));",
+                  "if (pm.response.code === 302) {",
+                  "  pm.test('Redirects to the frontend with status=error', () => pm.expect(pm.response.headers.get('Location')).to.include('/connections?status=error'));",
+                  "} else {",
+                  "  pm.test('Returns an HTML error page', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'));",
+                  "}",
+                  "pm.test('Clears the state cookie', () => {",
+                  "  const setCookie = pm.response.headers.all().filter((h) => h.key.toLowerCase() === 'set-cookie').map((h) => h.value).join(';');",
+                  "  pm.expect(setCookie).to.include('spv_anaf_oauth=;');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/anaf/callback?code=&state=",
+            "description": "ANAF redirect target. Without the `spv_anaf_oauth` cookie it returns a 400 \"Sesiune expirată\" page. With a stale cookie the empty state does not match: the self flow redirects to the frontend with `status=error`, the link flow returns a 400 page."
           }
         },
         {
           "name": "Authorization link landing page",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('HTML page with the start button', () => {",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html');",
+                  "  pm.expect(pm.response.text()).to.include('/anaf/authorize/' + pm.collectionVariables.get('linkToken') + '/start');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "url": "{{baseUrl}}/anaf/authorize/{{linkToken}}",
@@ -243,30 +1144,282 @@
           }
         },
         {
-          "name": "Authorization link start",
-          "protocolProfileBehavior": { "followRedirects": false },
+          "name": "Authorization link landing page - invalid (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Explains the link is invalid', () => pm.expect(pm.response.text()).to.include('Linkul de autorizare nu este valid.'));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/anaf/authorize/{{linkToken}}/start",
-            "description": "Public. 302 to ANAF authorize for the link flow."
+            "url": "{{baseUrl}}/anaf/authorize/invalid-token"
           }
         },
         {
-          "name": "OAuth callback",
-          "protocolProfileBehavior": { "followRedirects": false },
+          "name": "Authorization link start",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 302', () => pm.response.to.have.status(302));",
+                  "const location = pm.response.headers.get('Location') || '';",
+                  "const [locationPath, locationQuery = ''] = location.split('?');",
+                  "const q = {};",
+                  "locationQuery.split('&').filter(Boolean).forEach((p) => { const [k, v = ''] = p.split('='); q[decodeURIComponent(k)] = decodeURIComponent(v.split('+').join(' ')); });",
+                  "pm.test('Redirects to ANAF authorize', () => pm.expect(locationPath).to.include('/anaf-oauth2/v1/authorize'));",
+                  "pm.test('ANAF authorize parameters', () => {",
+                  "  pm.expect(q.response_type).to.eql('code');",
+                  "  pm.expect(q.token_content_type).to.eql('jwt');",
+                  "  pm.expect(q.client_id).to.not.be.empty;",
+                  "  pm.expect(q.redirect_uri).to.match(/\\/anaf\\/callback$/);",
+                  "  pm.expect(q.state).to.not.be.empty;",
+                  "  pm.expect('scope' in q).to.be.false;",
+                  "});",
+                  "pm.test('Sets the spv_anaf_oauth cookie', () => pm.expect(pm.cookies.has('spv_anaf_oauth')).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
           "request": {
             "method": "GET",
-            "url": {
-              "raw": "{{baseUrl}}/anaf/callback?code=&state=",
-              "host": ["{{baseUrl}}"],
-              "path": ["anaf", "callback"],
-              "query": [
-                { "key": "code", "value": "" },
-                { "key": "state", "value": "" },
-                { "key": "error", "value": "", "disabled": true }
-              ]
+            "url": "{{baseUrl}}/anaf/authorize/{{linkToken}}/start",
+            "description": "Public. 302 to ANAF authorize for the link flow; sets the `spv_anaf_oauth` state cookie."
+          }
+        },
+        {
+          "name": "Authorization link start - invalid (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/anaf/authorize/invalid-token/start"
+          }
+        },
+        {
+          "name": "Connect own certificate",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 302', () => pm.response.to.have.status(302));",
+                  "const location = pm.response.headers.get('Location') || '';",
+                  "const [locationPath, locationQuery = ''] = location.split('?');",
+                  "const q = {};",
+                  "locationQuery.split('&').filter(Boolean).forEach((p) => { const [k, v = ''] = p.split('='); q[decodeURIComponent(k)] = decodeURIComponent(v.split('+').join(' ')); });",
+                  "pm.test('Redirects to ANAF authorize without scope', () => {",
+                  "  pm.expect(locationPath).to.include('/anaf-oauth2/v1/authorize');",
+                  "  pm.expect(q.token_content_type).to.eql('jwt');",
+                  "  pm.expect('scope' in q).to.be.false;",
+                  "});",
+                  "pm.test('Sets the spv_anaf_oauth cookie', () => pm.expect(pm.cookies.has('spv_anaf_oauth')).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/anaf/connect",
+            "description": "Requires session. 302 to ANAF authorize and sets the `spv_anaf_oauth` state cookie. Open it in a browser to finish the flow."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cleanup",
+      "description": "Destructive requests, run last.",
+      "item": [
+        {
+          "name": "Delete company",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.collectionVariables.get('companyCreatedByRun') !== 'true') {",
+                  "  console.log('Company existed before this run: not deleting it.');",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
             },
-            "description": "ANAF redirect target. Needs the `spv_anaf_oauth` cookie; without it returns a 400 'Sesiune expirată' page."
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 204', () => pm.response.to.have.status(204));",
+                  "pm.collectionVariables.set('companyCreatedByRun', '');",
+                  "pm.sendRequest({ url: pm.variables.replaceIn('{{baseUrl}}/accountants/{{accountantId}}/companies/{{companyId}}'), method: 'GET' }, (err, res) => {",
+                  "  pm.test('Company is gone (404)', () => pm.expect(res.code).to.eql(404));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/companies/{{companyId}}",
+            "description": "Returns 204. Skipped unless this run created the company, so existing data is kept."
+          }
+        },
+        {
+          "name": "Delete connection",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.collectionVariables.get('allowConnectionDelete') !== 'true' || !pm.collectionVariables.get('connectionId')) {",
+                  "  console.log('Set allowConnectionDelete=true to revoke and delete the ANAF connection.');",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 204', () => pm.response.to.have.status(204));",
+                  "pm.collectionVariables.set('connectionId', '');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/{{connectionId}}",
+            "description": "Revokes both tokens at ANAF (best-effort) and deletes the connection. Returns 204. Skipped unless `allowConnectionDelete` is `true`."
+          }
+        },
+        {
+          "name": "Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 204', () => pm.response.to.have.status(204));",
+                  "pm.test('Clears the spv_session cookie', () => {",
+                  "  const setCookie = pm.response.headers.all().filter((h) => h.key.toLowerCase() === 'set-cookie').map((h) => h.value).join(';');",
+                  "  pm.expect(setCookie).to.include('spv_session=;');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/logout",
+            "description": "Clears the session cookie. Returns 204."
+          }
+        },
+        {
+          "name": "Me - after logout (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "List companies - no session (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/companies"
+          }
+        },
+        {
+          "name": "List connections - no session (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections"
+          }
+        },
+        {
+          "name": "Connect own certificate - no session (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/anaf/connect"
           }
         }
       ]

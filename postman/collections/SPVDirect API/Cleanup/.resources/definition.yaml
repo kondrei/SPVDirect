@@ -1,0 +1,3 @@
+$kind: collection
+description: Destructive requests, run last.
+order: 6000

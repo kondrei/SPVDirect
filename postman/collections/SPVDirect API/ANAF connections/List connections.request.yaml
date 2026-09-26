@@ -1,13 +1,26 @@
 $kind: http-request
-description: Saves the newest connection's id into `connectionId`.
-url: "{{baseUrl}}/anaf/connections"
+description: Newest first. Saves the newest connection's id into `connectionId`.
+url: "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections"
 method: GET
 scripts:
   - type: afterResponse
     code: |-
+      pm.test('Status 200', () => pm.response.to.have.status(200));
       const list = pm.response.json();
-      if (Array.isArray(list) && list.length) {
-        pm.collectionVariables.set('connectionId', list[0].id);
-      }
+      pm.test('Returns an array of own connections', () => {
+        pm.expect(list).to.be.an('array');
+        list.forEach((c) => {
+          pm.expect(c.accountantId).to.eql(Number(pm.collectionVariables.get('accountantId')));
+          pm.expect(c).to.include.keys('id', 'label', 'certSerial', 'roles', 'source', 'status', 'accessExpiresAt', 'refreshExpiresAt');
+        });
+      });
+
+      pm.test('Tokens are never exposed', () => {
+        const list = [].concat(pm.response.json());
+        list.forEach((c) => {
+          pm.expect(c).to.not.have.any.keys('accessTokenEnc', 'refreshTokenEnc', 'accessToken', 'refreshToken');
+        });
+      });
+      pm.collectionVariables.set('connectionId', list.length ? list[0].id : '');
     language: text/javascript
 order: 1000

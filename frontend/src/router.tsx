@@ -1,4 +1,5 @@
 import { createBrowserRouter } from 'react-router';
+import { AccountRedirect } from './layout/AccountRedirect';
 import { AppLayout } from './layout/AppLayout';
 import { AuthLayout } from './layout/AuthLayout';
 import { ComingSoonPage } from './pages/ComingSoonPage';
@@ -19,14 +20,15 @@ export const routes = [
     ],
   },
   {
+    path: '/accountants/:accountantId',
     element: <AppLayout />,
     children: [
-      { path: '/', element: <DashboardPage /> },
-      { path: '/companies', element: <CompaniesPage /> },
-      { path: '/companies/:id', element: <CompanyPage /> },
-      { path: '/connections', element: <ConnectionsPage /> },
+      { index: true, element: <DashboardPage /> },
+      { path: 'companies', element: <CompaniesPage /> },
+      { path: 'companies/:id', element: <CompanyPage /> },
+      { path: 'connections', element: <ConnectionsPage /> },
       {
-        path: '/efactura',
+        path: 'efactura',
         element: (
           <ComingSoonPage
             title="e-Factura"
@@ -36,7 +38,7 @@ export const routes = [
         ),
       },
       {
-        path: '/etransport',
+        path: 'etransport',
         element: (
           <ComingSoonPage
             title="e-Transport"
@@ -48,6 +50,7 @@ export const routes = [
       { path: '*', element: <NotFoundPage /> },
     ],
   },
+  { path: '*', element: <AccountRedirect /> },
 ];
 
 export const router = createBrowserRouter(routes);

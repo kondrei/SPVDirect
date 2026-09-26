@@ -1,0 +1,14 @@
+$kind: http-request
+description: Clears the session cookie. Returns 204.
+url: "{{baseUrl}}/auth/logout"
+method: POST
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status 204', () => pm.response.to.have.status(204));
+      pm.test('Clears the spv_session cookie', () => {
+        const setCookie = pm.response.headers.all().filter((h) => h.key.toLowerCase() === 'set-cookie').map((h) => h.value).join(';');
+        pm.expect(setCookie).to.include('spv_session=;');
+      });
+    language: text/javascript
+order: 3000

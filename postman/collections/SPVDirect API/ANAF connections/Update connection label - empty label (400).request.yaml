@@ -1,0 +1,23 @@
+$kind: http-request
+url: "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/{{connectionId}}"
+method: PATCH
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "label": ""
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      if (!pm.collectionVariables.get('connectionId')) {
+        console.log('No ANAF connection yet: connect a certificate in the browser first.');
+        pm.execution.skipRequest();
+      }
+    language: text/javascript
+  - type: afterResponse
+    code: pm.test('Status 400', () => pm.response.to.have.status(400));
+    language: text/javascript
+order: 3000

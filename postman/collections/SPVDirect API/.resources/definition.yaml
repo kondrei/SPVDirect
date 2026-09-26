@@ -1,16 +1,29 @@
 $kind: collection
 description: |-
-  All SPVDirect backend endpoints.
+  All SPVDirect backend endpoints, with Postman tests. Run the whole collection with the Collection Runner (in order) against a running backend (`npm run dev` in `backend/`).
 
-  Auth: `POST /auth/login` (or `/auth/register`) sets the httpOnly cookie `spv_session`. Postman's cookie jar sends it back automatically for `localhost`, so run Login first.
+  Setup: the dev server uses HTTPS with a self-signed certificate (`npm run cert:dev`), so turn off *Settings → SSL certificate verification* in Postman. Cookies (`spv_session`, `spv_anaf_oauth`) are kept by Postman's cookie jar for `localhost`.
 
-  Variables: `baseUrl` (default http://localhost:3000), `email`, `password`. `companyId`, `connectionId` and `linkToken` are filled in automatically by test scripts (Create company, List connections, Create authorization link).
+  Variables: `baseUrl`, `email`, `password`, `cui` (a real CUI; creating a company looks it up at ANAF). `accountantId`, `companyId`, `connectionId` and `linkToken` are filled in by the test scripts.
 
-  The ANAF OAuth endpoints (`/anaf/connect`, `/anaf/authorize/:token/start`, `/anaf/callback`) are browser redirects that need the USB/cloud certificate at logincert.anaf.ro. They are included for reference; open them in a browser to complete the flow.
+  Safety: the run deletes only a company it created itself (`companyCreatedByRun`). *Delete connection* revokes the certificate's tokens at ANAF, so it is skipped unless you set `allowConnectionDelete` to `true`. Requests that need an ANAF connection are skipped until one exists: connect a certificate in the browser (`/accountants/:accountantId/anaf/connect`) and run again.
+
+  Register and Login are throttled to 10 requests per minute; creating or refreshing a company to 20 per minute.
 variables:
-  baseUrl: http://localhost:3000
+  baseUrl: https://localhost:3000
   email: contabil@example.ro
   password: parola-sigura-123
+  cui: RO14399840
+  accountantId: ""
   companyId: ""
+  companyCreatedByRun: ""
   connectionId: ""
   linkToken: ""
+  allowConnectionDelete: "false"
+scripts:
+  - type: http:afterResponse
+    code: |-
+      pm.test('Responds within 15s', () => {
+        pm.expect(pm.response.responseTime).to.be.below(15000);
+      });
+    language: text/javascript

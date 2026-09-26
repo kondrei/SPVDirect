@@ -1,0 +1,24 @@
+$kind: http-request
+description: Throttled (20/min). Re-reads the company from the ANAF VAT registry and keeps the current name. Returns 200 with the company.
+url: "{{baseUrl}}/accountants/{{accountantId}}/companies/{{companyId}}/anaf-refresh"
+method: POST
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status 200', () => pm.response.to.have.status(200));
+      pm.test('anafSyncedAt is recent', () => {
+        const synced = new Date(pm.response.json().anafSyncedAt).getTime();
+        pm.expect(Date.now() - synced).to.be.below(5 * 60 * 1000);
+      });
+
+      pm.test('Company has the expected shape', () => {
+        const c = pm.response.json();
+        pm.expect(c.id).to.be.a('number').and.to.be.above(0);
+        pm.expect(c.accountantId).to.eql(Number(pm.collectionVariables.get('accountantId')));
+        pm.expect(c.cui).to.match(/^\d{2,10}$/);
+        pm.expect(c.name).to.be.a('string').and.not.empty;
+        pm.expect(c).to.have.property('anafConnectionId');
+        pm.expect(c).to.include.keys('regCom', 'address', 'caenCode', 'registrationStatus', 'vatPayer', 'vatOnCollection', 'splitVat', 'eFactura', 'inactive', 'anafSyncedAt', 'createdAt', 'updatedAt');
+      });
+    language: text/javascript
+order: 9000

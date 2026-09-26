@@ -10,7 +10,7 @@ export class AccountantsService {
     private readonly accountants: Repository<Accountant>,
   ) {}
 
-  findById(id: string): Promise<Accountant | null> {
+  findById(id: number): Promise<Accountant | null> {
     return this.accountants.findOneBy({ id });
   }
 

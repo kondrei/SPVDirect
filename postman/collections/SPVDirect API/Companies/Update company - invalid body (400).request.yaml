@@ -1,0 +1,27 @@
+$kind: http-request
+url: "{{baseUrl}}/accountants/{{accountantId}}/companies/{{companyId}}"
+method: PATCH
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "",
+      "anafConnectionId": "not-a-uuid"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      const errorMessage = () => {
+        const m = pm.response.json().message;
+        return Array.isArray(m) ? m.join(' | ') : m;
+      };
+      pm.test('Status 400', () => pm.response.to.have.status(400));
+      pm.test('Reports both fields', () => {
+        const msg = errorMessage();
+        pm.expect(msg).to.include('name');
+        pm.expect(msg).to.include('anafConnectionId');
+      });
+    language: text/javascript
+order: 12000

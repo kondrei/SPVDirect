@@ -13,8 +13,9 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsString, MaxLength, MinLength } from 'class-validator';
 import { Repository } from 'typeorm';
-import { CurrentAccountantId } from '../auth/current-accountant.decorator.js';
+import { AccountantParamGuard } from '../auth/accountant-param.guard.js';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
+import { ParseIdPipe } from '../common/parse-id.pipe.js';
 import { AnafApiService } from './anaf-api.service.js';
 import { AnafConnection } from './anaf-connection.entity.js';
 import { AnafOAuthService } from './anaf-oauth.service.js';
@@ -26,8 +27,8 @@ class UpdateConnectionDto {
   label: string;
 }
 
-@Controller('anaf/connections')
-@UseGuards(JwtAuthGuard)
+@Controller('accountants/:accountantId/anaf/connections')
+@UseGuards(JwtAuthGuard, AccountantParamGuard)
 export class AnafConnectionsController {
   constructor(
     private readonly api: AnafApiService,
@@ -37,7 +38,7 @@ export class AnafConnectionsController {
   ) {}
 
   @Get()
-  list(@CurrentAccountantId() accountantId: string) {
+  list(@Param('accountantId', ParseIdPipe) accountantId: number) {
     return this.connections.find({
       where: { accountantId },
       order: { createdAt: 'DESC' },
@@ -46,7 +47,7 @@ export class AnafConnectionsController {
 
   @Patch(':id')
   async update(
-    @CurrentAccountantId() accountantId: string,
+    @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateConnectionDto,
   ) {
@@ -58,7 +59,7 @@ export class AnafConnectionsController {
   @Delete(':id')
   @HttpCode(204)
   async remove(
-    @CurrentAccountantId() accountantId: string,
+    @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     const connection = await this.get(accountantId, id);
@@ -68,7 +69,7 @@ export class AnafConnectionsController {
 
   @Get(':id/test')
   async test(
-    @CurrentAccountantId() accountantId: string,
+    @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     const res = await this.api.request<string>({
@@ -82,7 +83,7 @@ export class AnafConnectionsController {
     return { status: res.status, body: res.data };
   }
 
-  private async get(accountantId: string, id: string) {
+  private async get(accountantId: number, id: string) {
     const connection = await this.connections.findOneBy({ id, accountantId });
     if (!connection) throw new NotFoundException('Conexiune ANAF inexistentă');
     return connection;

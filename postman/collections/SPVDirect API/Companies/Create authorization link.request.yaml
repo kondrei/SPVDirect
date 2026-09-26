@@ -1,13 +1,20 @@
 $kind: http-request
 description: "Returns `{ id, url, expiresAt }`: a one-time link (7 days) for the company's certificate holder. Saves the token into `linkToken`."
-url: "{{baseUrl}}/companies/{{companyId}}/authorization-links"
+url: "{{baseUrl}}/accountants/{{accountantId}}/companies/{{companyId}}/authorization-links"
 method: POST
 scripts:
   - type: afterResponse
     code: |-
-      if (pm.response.code === 201) {
-        const url = pm.response.json().url;
-        pm.collectionVariables.set('linkToken', url.split('/').pop());
-      }
+      pm.test('Status 201', () => pm.response.to.have.status(201));
+      const link = pm.response.json();
+      pm.test('Returns id, url and expiresAt', () => {
+        pm.expect(link.id).to.match(/^[0-9a-f-]{36}$/);
+        pm.expect(link.url).to.match(/\/anaf\/authorize\/[A-Za-z0-9_-]{43}$/);
+      });
+      pm.test('Expires in about 7 days', () => {
+        const days = (new Date(link.expiresAt).getTime() - Date.now()) / 86400000;
+        pm.expect(days).to.be.within(6.9, 7.01);
+      });
+      pm.collectionVariables.set('linkToken', link.url.split('/').pop());
     language: text/javascript
-order: 6000
+order: 13000

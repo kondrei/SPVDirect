@@ -8,8 +8,12 @@ import {
 
 @Entity('accountants')
 export class Accountant {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryGeneratedColumn('identity', {
+    type: 'integer',
+    generatedIdentity: 'ALWAYS',
+    primaryKeyConstraintName: 'accountants_pkey',
+  })
+  id: number;
 
   @Column({ type: 'citext', unique: true })
   email: string;

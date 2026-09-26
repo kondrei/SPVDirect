@@ -1,0 +1,28 @@
+$kind: http-request
+description: "Validation: bad email and a password shorter than 10 chars."
+url: "{{baseUrl}}/auth/register"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "not-an-email",
+      "password": "scurta"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      const errorMessage = () => {
+        const m = pm.response.json().message;
+        return Array.isArray(m) ? m.join(' | ') : m;
+      };
+      pm.test('Status 400', () => pm.response.to.have.status(400));
+      pm.test('Reports the email and password errors', () => {
+        const msg = errorMessage();
+        pm.expect(msg).to.include('email');
+        pm.expect(msg).to.include('password');
+      });
+    language: text/javascript
+order: 2000
