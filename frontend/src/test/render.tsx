@@ -4,13 +4,15 @@ import { createMemoryRouter, RouterProvider } from 'react-router';
 import { vi } from 'vitest';
 import { routes } from '../router';
 
-type Handler = (init: RequestInit | undefined) => { status: number; body?: unknown };
+type Handler = (init: RequestInit | undefined) => {
+  status: number;
+  body?: unknown;
+};
 
-/**
- * Renders the real route tree at `path` with fetch answered from `api`
- * (keys are "METHOD /path" without the /api prefix).
- */
-export function renderApp(path: string, api: Record<string, Handler | { status: number; body?: unknown }>) {
+export function renderApp(
+  path: string,
+  api: Record<string, Handler | { status: number; body?: unknown }>,
+) {
   const calls: string[] = [];
   vi.stubGlobal(
     'fetch',
@@ -18,11 +20,19 @@ export function renderApp(path: string, api: Record<string, Handler | { status: 
       const key = `${init?.method ?? 'GET'} ${input.replace(/^\/api/, '')}`;
       calls.push(key);
       const h = api[key];
-      const res = typeof h === 'function' ? h(init) : (h ?? { status: 404, body: { message: 'Not Found' } });
-      return new Response(res.status === 204 ? null : JSON.stringify(res.body ?? {}), { status: res.status, headers: { 'content-type': 'application/json' } });
+      const res =
+        typeof h === 'function'
+          ? h(init)
+          : (h ?? { status: 404, body: { message: 'Not Found' } });
+      return new Response(
+        res.status === 204 ? null : JSON.stringify(res.body ?? {}),
+        { status: res.status, headers: { 'content-type': 'application/json' } },
+      );
     }),
   );
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
   const router = createMemoryRouter(routes, { initialEntries: [path] });
   const utils = render(
     <QueryClientProvider client={qc}>
@@ -32,4 +42,9 @@ export function renderApp(path: string, api: Record<string, Handler | { status: 
   return { ...utils, router, calls };
 }
 
-export const ME = { id: 'a1', email: 'andrei@cabinet.ro', name: 'Andrei K', createdAt: '2026-09-01T00:00:00Z' };
+export const ME = {
+  id: 'a1',
+  email: 'andrei@cabinet.ro',
+  name: 'Andrei K',
+  createdAt: '2026-09-01T00:00:00Z',
+};

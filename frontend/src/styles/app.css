@@ -108,3 +108,8 @@ select.spv-input { appearance: none; padding-right: 32px; cursor: pointer;
   .spv-alert > div:nth-child(2) { flex: 1 1 calc(100% - 32px); }
   .spv-alert-action { margin-left: 28px; }
 }
+
+/* ANAF registry data (company page) */
+.anaf-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-6) var(--space-8); align-items: start; }
+.anaf-grid .dl { grid-template-columns: 190px minmax(0, 1fr); }
+@media (max-width: 1100px) { .anaf-grid { grid-template-columns: minmax(0, 1fr); } }

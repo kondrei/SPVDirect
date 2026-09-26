@@ -1,7 +1,3 @@
-/**
- * Claims SPVDirect reads from ANAF's JWT access token (see the ANAF OAuth PDF, p.28).
- * We only *decode* the token; api.anaf.ro validates the signature when it's used.
- */
 export interface AnafTokenClaims {
   serial: string | null;
   roles: string[];

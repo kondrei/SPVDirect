@@ -1,4 +1,3 @@
-/** Builds an unsigned JWT shaped like ANAF's (see the ANAF OAuth PDF, p.28). Test use only. */
 export function fakeAnafJwt(
   claims: Record<string, unknown> = {},
   { expInSeconds = 90 * 24 * 3600 } = {},

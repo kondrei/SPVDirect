@@ -14,7 +14,6 @@ export const envValidationSchema = Joi.object({
   DATABASE_SSL: Joi.boolean().default(true),
 
   JWT_SECRET: Joi.string().min(32).required(),
-  // 32 random bytes, base64-encoded: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`
   TOKEN_ENCRYPTION_KEY: Joi.string().base64().required(),
 
   ANAF_CLIENT_ID: Joi.string().required(),
@@ -31,8 +30,10 @@ export const envValidationSchema = Joi.object({
     .default('https://logincert.anaf.ro/anaf-oauth2/v1/revoke'),
   ANAF_API_ENDPOINT: Joi.string().uri().default('https://api.anaf.ro'),
   ANAF_ENV: Joi.string().valid('test', 'prod').default('test'),
+  ANAF_TVA_ENDPOINT: Joi.string()
+    .uri()
+    .default('https://webservicesp.anaf.ro/api/PlatitorTvaRest/v9/tva'),
 
-  // PEM files; set both to serve HTTPS directly (see `npm run cert:dev`).
   HTTPS_KEY_FILE: Joi.string(),
   HTTPS_CERT_FILE: Joi.string(),
 }).and('HTTPS_KEY_FILE', 'HTTPS_CERT_FILE');
@@ -54,6 +55,7 @@ export interface Env {
   ANAF_REVOKE_ENDPOINT: string;
   ANAF_API_ENDPOINT: string;
   ANAF_ENV: 'test' | 'prod';
+  ANAF_TVA_ENDPOINT: string;
   HTTPS_KEY_FILE?: string;
   HTTPS_CERT_FILE?: string;
 }

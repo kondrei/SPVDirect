@@ -11,9 +11,6 @@ import type {
   TableColumnOptions,
 } from 'typeorm';
 
-// Constraint names match Postgres' own defaults (`<table>_pkey`, `<table>_<col>_fkey`, …),
-// so this migration builds the same schema as the original raw-SQL version.
-
 function id(table: string): TableColumnOptions {
   return {
     name: 'id',
@@ -55,7 +52,6 @@ export class InitialSchema1790200000000 implements MigrationInterface {
   name = 'InitialSchema1790200000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // TypeORM has no API for extensions.
     await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS citext`);
 
     await queryRunner.createTable(
@@ -209,8 +205,6 @@ export class InitialSchema1790200000000 implements MigrationInterface {
           fk('api_logs', 'anaf_connection_id', 'anaf_connections', 'SET NULL'),
           fk('api_logs', 'company_id', 'companies', 'SET NULL'),
         ],
-        // TableIndex can't express DESC. A btree on (accountant_id, created_at) is still used
-        // for `WHERE accountant_id = $1 ORDER BY created_at DESC` via a backward scan.
         indices: [
           new TableIndex({
             name: 'idx_api_logs_accountant_created',

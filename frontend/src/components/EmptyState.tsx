@@ -1,7 +1,17 @@
 import type { ReactNode } from 'react';
 import { Icon, type IconName } from './ui';
 
-export function EmptyState({ icon, title, children, actions }: { icon: IconName; title: string; children?: ReactNode; actions?: ReactNode }) {
+export function EmptyState({
+  icon,
+  title,
+  children,
+  actions,
+}: {
+  icon: IconName;
+  title: string;
+  children?: ReactNode;
+  actions?: ReactNode;
+}) {
   return (
     <div className="empty">
       <Icon name={icon} />

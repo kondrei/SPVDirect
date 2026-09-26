@@ -22,7 +22,6 @@ export function buildTypeOrmOptions(env: {
   return {
     type: 'postgres',
     url: env.DATABASE_URL,
-    // Supabase's pooler certificate is not in Node's default CA store.
     ssl: ssl ? { rejectUnauthorized: false } : false,
     entities,
     migrations,

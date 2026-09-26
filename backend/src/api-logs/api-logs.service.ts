@@ -24,7 +24,6 @@ export class ApiLogsService {
     @InjectRepository(ApiLog) private readonly logs: Repository<ApiLog>,
   ) {}
 
-  /** Never throws: a failed audit write must not fail the ANAF call. */
   async record(entry: ApiLogEntry): Promise<void> {
     try {
       await this.logs.insert(entry);

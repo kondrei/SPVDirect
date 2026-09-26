@@ -4,7 +4,17 @@ import { Icon, type IconName } from './Icon';
 
 export type Tone = 'neutral' | 'brand' | 'success' | 'warning' | 'danger';
 
-export function Badge({ tone = 'neutral', icon, children, className }: { tone?: Tone; icon?: IconName; children: ReactNode; className?: string }) {
+export function Badge({
+  tone = 'neutral',
+  icon,
+  children,
+  className,
+}: {
+  tone?: Tone;
+  icon?: IconName;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
     <span className={cx('spv-badge', `spv-badge-${tone}`, className)}>
       {icon ? <Icon name={icon} /> : null}
@@ -13,9 +23,24 @@ export function Badge({ tone = 'neutral', icon, children, className }: { tone?: 
   );
 }
 
-export type Status = 'active' | 'expiring' | 'expired' | 'revoked' | 'ok' | 'nok' | 'processing' | 'pending' | 'none';
+export type Status =
+  | 'active'
+  | 'expiring'
+  | 'expired'
+  | 'revoked'
+  | 'ok'
+  | 'nok'
+  | 'processing'
+  | 'pending'
+  | 'none'
+  | 'yes'
+  | 'no'
+  | 'inactive';
 
-export const STATUS: Record<Status, { tone: Tone; icon: IconName; label: string }> = {
+export const STATUS: Record<
+  Status,
+  { tone: Tone; icon: IconName; label: string }
+> = {
   active: { tone: 'success', icon: 'check', label: 'Activ' },
   expiring: { tone: 'warning', icon: 'clock', label: 'Expiră curând' },
   expired: { tone: 'danger', icon: 'x', label: 'Expirat' },
@@ -25,10 +50,18 @@ export const STATUS: Record<Status, { tone: Tone; icon: IconName; label: string 
   processing: { tone: 'warning', icon: 'clock', label: 'În prelucrare' },
   pending: { tone: 'neutral', icon: 'clock', label: 'În așteptare' },
   none: { tone: 'neutral', icon: 'link', label: 'Fără certificat' },
+  yes: { tone: 'success', icon: 'check', label: 'Da' },
+  no: { tone: 'neutral', icon: 'x', label: 'Nu' },
+  inactive: { tone: 'danger', icon: 'alert', label: 'Contribuabil inactiv' },
 };
 
-/** The single way to show a backend state: tone + icon + Romanian word. */
-export function StatusBadge({ status, children }: { status: Status; children?: ReactNode }) {
+export function StatusBadge({
+  status,
+  children,
+}: {
+  status: Status;
+  children?: ReactNode;
+}) {
   const s = STATUS[status];
   return (
     <Badge tone={s.tone} icon={s.icon}>

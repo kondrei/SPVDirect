@@ -5,13 +5,19 @@ export interface CardProps {
   title?: ReactNode;
   subtitle?: ReactNode;
   actions?: ReactNode;
-  /** No body padding: use it when the body is a DataTable. */
   flush?: boolean;
   className?: string;
   children?: ReactNode;
 }
 
-export function Card({ title, subtitle, actions, flush, className, children }: CardProps) {
+export function Card({
+  title,
+  subtitle,
+  actions,
+  flush,
+  className,
+  children,
+}: CardProps) {
   return (
     <section className={cx('spv-card', flush && 'spv-card-flush', className)}>
       {title || actions ? (

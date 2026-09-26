@@ -8,13 +8,13 @@ export function CopyField({ value, label }: { value: string; label: string }) {
       await navigator.clipboard.writeText(value);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* clipboard blocked: the text is selectable */
-    }
+    } catch {}
   };
   return (
     <div className="copy-box">
-      <code aria-label={label} title={value}>{value}</code>
+      <code aria-label={label} title={value}>
+        {value}
+      </code>
       <Button size="sm" icon={copied ? 'check' : 'copy'} onClick={copy}>
         {copied ? 'Copiat' : 'Copiază'}
       </Button>

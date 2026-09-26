@@ -33,7 +33,6 @@ export class AuthService {
         name: dto.name ?? null,
       });
     } catch (err) {
-      // Lost a race with a concurrent registration of the same email.
       if (isUniqueViolation(err)) {
         throw new ConflictException('Există deja un cont cu acest email');
       }

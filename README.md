@@ -69,7 +69,8 @@ When the certificate belongs to the client company's legal representative:
 | POST | `/auth/register` · `/auth/login` | none | Create account / log in (sets cookie) |
 | POST | `/auth/logout` | none | Clear cookie |
 | GET | `/auth/me` | session | Current accountant |
-| GET/POST | `/companies` | session | List / add client company (CUI without RO) |
+| GET/POST | `/companies` | session | List / add client company by CUI (without RO); name and details come from ANAF's VAT registry, 400 if the CUI is unknown |
+| POST | `/companies/:id/anaf-refresh` | session | Re-read the company's data from ANAF's VAT registry |
 | GET/PATCH/DELETE | `/companies/:id` | session | Read / rename / attach connection / delete |
 | POST | `/companies/:id/authorization-links` | session | One-time link for the certificate holder |
 | GET | `/anaf/connect` | session | Start OAuth with your own certificate |
@@ -91,9 +92,9 @@ The schema is managed by TypeORM migrations in `backend/src/database/migrations`
 |---|---|
 | `accountants` | SPVDirect users (email is citext and unique, scrypt password hash) |
 | `anaf_connections` | One per authorized certificate: encrypted tokens, `cert_serial`, `roles`, expiries, status |
-| `companies` | Client CUIs per accountant, plus the connection used for each |
+| `companies` | Client CUIs per accountant, the connection used for each, and ANAF VAT-registry data (typed columns + full record in `anaf_data` jsonb) |
 | `authorization_links` | Delegated-authorization links (only the SHA-256 of the token is stored) |
-| `api_logs` | Audit of every api.anaf.ro call (service, endpoint, status, latency) |
+| `api_logs` | Audit of every api.anaf.ro call and every VAT-registry lookup (service, endpoint, status, latency) |
 
 ---
 

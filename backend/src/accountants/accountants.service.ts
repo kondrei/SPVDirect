@@ -14,7 +14,6 @@ export class AccountantsService {
     return this.accountants.findOneBy({ id });
   }
 
-  /** Includes passwordHash, which is excluded from normal selects. */
   findByEmailWithPassword(email: string): Promise<Accountant | null> {
     return this.accountants
       .createQueryBuilder('a')

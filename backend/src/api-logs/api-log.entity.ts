@@ -19,7 +19,6 @@ export class ApiLog {
   @Column({ name: 'company_id', type: 'uuid', nullable: true })
   companyId: string | null;
 
-  /** TestOAuth, FCTEL (e-Factura), ETRANSPORT, ... */
   @Column({ type: 'text' })
   service: string;
 

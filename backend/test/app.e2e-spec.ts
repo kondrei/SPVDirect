@@ -4,7 +4,6 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { HealthController } from './../src/health.controller.js';
 
-// Boots only the HTTP layer; DB-backed flows are verified against Supabase manually (see README).
 describe('Health (e2e)', () => {
   let app: INestApplication<App>;
 

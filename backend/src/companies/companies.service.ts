@@ -8,8 +8,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AnafConnection } from '../anaf/anaf-connection.entity.js';
 import { isUniqueViolation } from '../common/db-errors.js';
+import { companyFieldsFromAnaf } from './anaf-company-info.js';
+import { AnafCompanyLookupService } from './anaf-company-lookup.service.js';
 import { Company } from './company.entity.js';
 import { CreateCompanyDto, UpdateCompanyDto } from './dto/company.dto.js';
+
+const CUI_NOT_FOUND =
+  'CUI incorect: nu există nicio firmă cu acest CUI în baza de date ANAF.';
 
 @Injectable()
 export class CompaniesService {
@@ -18,6 +23,7 @@ export class CompaniesService {
     private readonly companies: Repository<Company>,
     @InjectRepository(AnafConnection)
     private readonly connections: Repository<AnafConnection>,
+    private readonly anaf: AnafCompanyLookupService,
   ) {}
 
   list(accountantId: string): Promise<Company[]> {
@@ -37,17 +43,34 @@ export class CompaniesService {
     if (await this.companies.existsBy({ accountantId, cui: dto.cui })) {
       throw new ConflictException('Firma cu acest CUI există deja');
     }
+    const record = await this.anaf.lookup(accountantId, dto.cui);
+    if (!record) throw new BadRequestException(CUI_NOT_FOUND);
     try {
       return await this.companies.save(
-        this.companies.create({ accountantId, cui: dto.cui, name: dto.name }),
+        this.companies.create({
+          accountantId,
+          cui: dto.cui,
+          ...companyFieldsFromAnaf(record),
+          anafSyncedAt: new Date(),
+        }),
       );
     } catch (err) {
-      // Lost a race with a concurrent insert of the same CUI.
       if (isUniqueViolation(err)) {
         throw new ConflictException('Firma cu acest CUI există deja');
       }
       throw err;
     }
+  }
+
+  async refreshFromAnaf(accountantId: string, id: string): Promise<Company> {
+    const company = await this.get(accountantId, id);
+    const record = await this.anaf.lookup(accountantId, company.cui, id);
+    if (!record) throw new BadRequestException(CUI_NOT_FOUND);
+    Object.assign(company, companyFieldsFromAnaf(record), {
+      name: company.name,
+      anafSyncedAt: new Date(),
+    });
+    return this.companies.save(company);
   }
 
   async update(

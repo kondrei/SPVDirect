@@ -1,5 +1,3 @@
-// Generates a self-signed certificate for https://localhost (dev only).
-// Usage: npm run cert:dev  ->  certs/localhost-key.pem + certs/localhost-cert.pem
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { generate } from 'selfsigned';
 
@@ -9,7 +7,6 @@ const dir = new URL('../certs/', import.meta.url);
 const pems = await generate([{ name: 'commonName', value: 'localhost' }], {
   keySize: 2048,
   algorithm: 'sha256',
-  // Browsers reject leaf certificates valid for more than 825 days.
   notAfterDate: new Date(Date.now() + 825 * DAY_MS),
   extensions: [
     { name: 'basicConstraints', cA: false },

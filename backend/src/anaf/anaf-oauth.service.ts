@@ -18,12 +18,9 @@ import {
 import { decodeAnafClaims } from './anaf-jwt.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-/** ANAF documents 90 days / 365 days; used only when the JWT has no `exp`. */
 const DEFAULT_ACCESS_TTL_MS = 90 * DAY_MS;
 const DEFAULT_REFRESH_TTL_MS = 365 * DAY_MS;
-/** The token endpoint must not be called more than once per 60 s. */
 export const TOKEN_COOLDOWN_MS = 60 * 1000;
-/** Refresh proactively once 90% of the access token lifetime has passed. */
 const REFRESH_AT_LIFETIME_FRACTION = 0.9;
 
 export interface AnafTokenSet {
@@ -53,16 +50,8 @@ export class AnafTokenError extends Error {
 @Injectable()
 export class AnafOAuthService {
   private readonly logger = new Logger(AnafOAuthService.name);
-  /** Per-connection in-flight refresh, so concurrent callers share one token call. */
   private readonly refreshes = new Map<string, Promise<string>>();
-  /**
-   * Last token-endpoint call per connection, successful or not (for the 60 s
-   * cooldown). Covers callers holding a row loaded before a refresh finished,
-   * whose stale lastRefreshedAt would otherwise allow a second refresh with the
-   * already-rotated refresh token.
-   */
   private readonly lastTokenCalls = new Map<string, number>();
-  /** lastRefreshedAt saved by our last successful refresh, to spot stale rows. */
   private readonly lastRefreshes = new Map<string, number>();
 
   constructor(
@@ -101,14 +90,7 @@ export class AnafOAuthService {
     });
   }
 
-  /**
-   * Revokes the connection's tokens at ANAF (RFC 7009) before it is deleted.
-   * Best-effort: returns false instead of throwing when ANAF rejects the call
-   * or can't be reached, so the caller can still remove the connection.
-   */
   async revokeConnection(connectionId: string): Promise<boolean> {
-    // Stop getAccessToken() from starting new refreshes, then let one already
-    // in flight finish: it rotates the refresh token we have to revoke.
     await this.connections.update(connectionId, { status: 'revoked' });
     await this.refreshes.get(connectionId)?.catch(() => undefined);
 
@@ -116,7 +98,6 @@ export class AnafOAuthService {
     const now = Date.now();
     if (connection.refreshExpiresAt.getTime() <= now) return true;
     try {
-      // The refresh token first: it's the long-lived credential.
       await this.revokeToken(
         this.cipher.decrypt(connection.refreshTokenEnc),
         'refresh_token',
@@ -136,7 +117,6 @@ export class AnafOAuthService {
     }
   }
 
-  /** Creates or updates (same accountant + same certificate) the connection. */
   async saveConnection(
     accountantId: string,
     tokens: AnafTokenSet,
@@ -172,17 +152,11 @@ export class AnafOAuthService {
     return this.connections.save(connection);
   }
 
-  /**
-   * Returns a usable access token, refreshing first when it's near expiry.
-   * `force` is used after api.anaf.ro rejected the current token (401/403).
-   */
   async getAccessToken(
     connectionId: string,
     { force = false }: { force?: boolean } = {},
   ): Promise<string> {
     let connection = await this.loadWithTokens(connectionId);
-    // Loaded before a concurrent refresh was saved: its tokens are already
-    // rotated, so read the row again instead of returning the old access token.
     if (
       (this.lastRefreshes.get(connectionId) ?? 0) >
       (connection.lastRefreshedAt?.getTime() ?? 0)
@@ -208,15 +182,12 @@ export class AnafOAuthService {
       this.lastTokenCalls.get(connectionId) ?? 0,
     );
     const inCooldown = now - lastAttempt < TOKEN_COOLDOWN_MS;
-    // A refresh already in flight is joined even though it started the cooldown.
     const canRefresh = !inCooldown || this.refreshes.has(connectionId);
 
     if ((force || this.nearExpiry(connection, now)) && canRefresh) {
       try {
         return await this.refreshOnce(connection);
       } catch (err) {
-        // A transient proactive-refresh failure is fine while the current token
-        // still works; a rejected grant (connection now expired) is not.
         if (!accessValid || force || err instanceof UnauthorizedException) {
           throw err;
         }
@@ -246,8 +217,6 @@ export class AnafOAuthService {
     if (inFlight) return inFlight;
 
     const run = (async () => {
-      // Set before the call, so failures also respect the cooldown without
-      // touching lastRefreshedAt (which dates the current token).
       this.lastTokenCalls.set(connection.id, Date.now());
       try {
         const tokens = await this.refreshTokens(
@@ -290,7 +259,6 @@ export class AnafOAuthService {
     return connection;
   }
 
-  /** ANAF expects client credentials as HTTP Basic, not in the body. */
   private clientAuthHeaders(): Record<string, string> {
     const clientId = this.config.getOrThrow<string>('ANAF_CLIENT_ID');
     const clientSecret = this.config.getOrThrow<string>('ANAF_CLIENT_SECRET');
@@ -312,7 +280,6 @@ export class AnafOAuthService {
         { headers: this.clientAuthHeaders(), timeout: 30_000 },
       );
     } catch (err) {
-      // Status or error code only: the request body carries the token.
       throw new AnafTokenError(
         isAxiosError(err) && err.response
           ? `ANAF revoke endpoint returned ${err.response.status}`
@@ -336,9 +303,6 @@ export class AnafOAuthService {
     } catch (err) {
       if (isAxiosError(err) && err.response) {
         const body = err.response.data as { error?: string } | undefined;
-        // A client-credential error (RFC 6749: 401, or an explicit
-        // invalid_client) is our misconfiguration: it must not expire every
-        // connection. Only a 400 is taken as a rejected refresh token.
         const clientError =
           body?.error === 'invalid_client' ||
           body?.error === 'unauthorized_client';
@@ -347,7 +311,6 @@ export class AnafOAuthService {
           (form.grant_type === 'refresh_token' &&
             !clientError &&
             err.response.status === 400);
-        // Deliberately not logging the body: it may echo the code/refresh token.
         throw new AnafTokenError(
           `ANAF token endpoint returned ${err.response.status}${body?.error ? ` (${body.error})` : ''}`,
           invalidGrant,

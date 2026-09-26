@@ -10,7 +10,6 @@ export function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (ch) => ESCAPES[ch]);
 }
 
-/** Minimal standalone page for flows that happen outside the React app (authorization links). */
 export function renderPage(title: string, bodyHtml: string): string {
   return `<!doctype html>
 <html lang="ro">

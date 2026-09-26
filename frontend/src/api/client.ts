@@ -1,7 +1,8 @@
-/** Base URL of the API. In dev it is /api, proxied by Vite (see vite.config.ts). */
-export const API_URL = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/$/, '');
+export const API_URL = (import.meta.env.VITE_API_URL ?? '/api').replace(
+  /\/$/,
+  '',
+);
 
-/** An error response from the API, with a message fit to show the accountant. */
 export class ApiError extends Error {
   readonly status: number;
 
@@ -20,21 +21,31 @@ const FALLBACK: Record<number, string> = {
   429: 'Prea multe încercări. Așteptați un minut și reîncercați.',
 };
 
-/**
- * Turns a NestJS error body ({ message: string | string[], statusCode }) into one
- * Romanian sentence. Backend messages are already Romanian; class-validator ones
- * may not be, so for 400s with several messages we join them.
- */
 export function errorMessage(status: number, body: unknown): string {
   if (body && typeof body === 'object' && 'message' in body) {
     const m = (body as { message: unknown }).message;
-    if (typeof m === 'string' && m && !/^(Unauthorized|Forbidden|Not Found|Bad Request|Conflict|Internal server error)$/i.test(m)) return m;
+    if (
+      typeof m === 'string' &&
+      m &&
+      !/^(Unauthorized|Forbidden|Not Found|Bad Request|Conflict|Internal server error)$/i.test(
+        m,
+      )
+    )
+      return m;
     if (Array.isArray(m) && m.length) return m.join('; ');
   }
-  return FALLBACK[status] ?? (status >= 500 ? 'Serverul nu răspunde. Reîncercați în câteva momente.' : 'Cererea nu a putut fi procesată.');
+  return (
+    FALLBACK[status] ??
+    (status >= 500
+      ? 'Serverul nu răspunde. Reîncercați în câteva momente.'
+      : 'Cererea nu a putut fi procesată.')
+  );
 }
 
-export async function api<T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
+export async function api<T>(
+  path: string,
+  init: RequestInit & { json?: unknown } = {},
+): Promise<T> {
   const { json, headers, ...rest } = init;
   let res: Response;
   try {
@@ -49,7 +60,10 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown 
       body: json !== undefined ? JSON.stringify(json) : rest.body,
     });
   } catch {
-    throw new ApiError(0, 'Nu se poate contacta serverul SPVDirect. Verificați conexiunea.');
+    throw new ApiError(
+      0,
+      'Nu se poate contacta serverul SPVDirect. Verificați conexiunea.',
+    );
   }
   if (res.status === 204) return undefined as T;
   const text = await res.text();

@@ -5,14 +5,21 @@ import { Icon, type IconName } from './Icon';
 export interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   hint?: string;
-  /** Replaces the hint, turns the border danger and sets aria-invalid. */
   error?: string;
-  /** Identifiers: CUI, certificate serials, ANAF indexes. */
   mono?: boolean;
   icon?: IconName;
 }
 
-export function TextField({ label, hint, error, mono, icon, className, id, ...rest }: TextFieldProps) {
+export function TextField({
+  label,
+  hint,
+  error,
+  mono,
+  icon,
+  className,
+  id,
+  ...rest
+}: TextFieldProps) {
   const auto = useId();
   const inputId = id ?? auto;
   const hintId = `${inputId}-hint`;

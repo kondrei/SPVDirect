@@ -55,7 +55,6 @@ export class AuthorizationLinksService {
     return this.check(await this.links.findOneBy({ id }));
   }
 
-  /** Marks the link used; returns false if another request already used it. */
   async markUsed(linkId: string, connectionId: string): Promise<boolean> {
     const result = await this.links.update(
       { id: linkId, usedAt: IsNull() },

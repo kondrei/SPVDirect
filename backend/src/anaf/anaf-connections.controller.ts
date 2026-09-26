@@ -36,7 +36,6 @@ export class AnafConnectionsController {
     private readonly connections: Repository<AnafConnection>,
   ) {}
 
-  /** Token columns are `select: false`, so they never leave the server. */
   @Get()
   list(@CurrentAccountantId() accountantId: string) {
     return this.connections.find({
@@ -56,7 +55,6 @@ export class AnafConnectionsController {
     return this.connections.save(connection);
   }
 
-  /** Revokes the tokens at ANAF (best-effort), then deletes the connection. */
   @Delete(':id')
   @HttpCode(204)
   async remove(
@@ -68,7 +66,6 @@ export class AnafConnectionsController {
     await this.connections.remove(connection);
   }
 
-  /** Calls ANAF's TestOauth "hello" service with this connection's token. */
   @Get(':id/test')
   async test(
     @CurrentAccountantId() accountantId: string,
