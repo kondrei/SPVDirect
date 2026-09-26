@@ -1,5 +1,11 @@
 import { useState } from 'react';
-import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router';
+import {
+  NavLink,
+  Navigate,
+  Outlet,
+  useLocation,
+  useNavigate,
+} from 'react-router';
 import { useCompanies, useConnections, useLogout, useMe } from '../api/hooks';
 import { Button, Icon, Wordmark, type IconName } from '../components/ui';
 import { useTheme } from '../hooks/useTheme';
@@ -13,16 +19,33 @@ interface NavItem {
   end?: boolean;
 }
 
-function NavGroup({ title, items, onNavigate }: { title?: string; items: NavItem[]; onNavigate: () => void }) {
+function NavGroup({
+  title,
+  items,
+  onNavigate,
+}: {
+  title?: string;
+  items: NavItem[];
+  onNavigate: () => void;
+}) {
   return (
     <>
       {title ? <div className="spv-side-group">{title}</div> : null}
       {items.map((it) => (
-        <NavLink key={it.to} to={it.to} end={it.end} className="spv-nav-item" onClick={onNavigate}>
+        <NavLink
+          key={it.to}
+          to={it.to}
+          end={it.end}
+          className="spv-nav-item"
+          onClick={onNavigate}
+        >
           <Icon name={it.icon} />
           {it.label}
           {it.count ? (
-            <span className="spv-nav-count" aria-label={`${it.count} de verificat`}>
+            <span
+              className="spv-nav-count"
+              aria-label={`${it.count} de verificat`}
+            >
               {it.count}
             </span>
           ) : null}
@@ -32,7 +55,6 @@ function NavGroup({ title, items, onNavigate }: { title?: string; items: NavItem
   );
 }
 
-/** Sidebar + main column for every signed-in page. Redirects to /login without a session. */
 export function AppLayout() {
   const me = useMe();
   const location = useLocation();
@@ -50,9 +72,11 @@ export function AppLayout() {
     return <Navigate to={`/login?next=${next}`} replace />;
   }
 
-  // Counts show what needs action, not totals.
-  const withoutCert = companies.data?.filter((c) => !c.anafConnectionId).length ?? 0;
-  const certsNeedingAction = connections.data?.filter((c) => connectionStatus(c) !== 'active').length ?? 0;
+  const withoutCert =
+    companies.data?.filter((c) => !c.anafConnectionId).length ?? 0;
+  const certsNeedingAction =
+    connections.data?.filter((c) => connectionStatus(c) !== 'active').length ??
+    0;
   const user = me.data;
   const close = () => setNavOpen(false);
 
@@ -60,7 +84,13 @@ export function AppLayout() {
     <div className={navOpen ? 'app nav-open' : 'app'}>
       <header className="app-topbar">
         <Wordmark />
-        <Button variant="ghost" size="sm" onClick={() => setNavOpen((o) => !o)} aria-expanded={navOpen} aria-controls="app-nav">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setNavOpen((o) => !o)}
+          aria-expanded={navOpen}
+          aria-controls="app-nav"
+        >
           {navOpen ? 'Închide' : 'Meniu'}
         </Button>
       </header>
@@ -72,8 +102,18 @@ export function AppLayout() {
           onNavigate={close}
           items={[
             { to: '/', label: 'Panou', icon: 'home', end: true },
-            { to: '/companies', label: 'Firme', icon: 'building', count: withoutCert },
-            { to: '/connections', label: 'Certificate ANAF', icon: 'certificate', count: certsNeedingAction },
+            {
+              to: '/companies',
+              label: 'Firme',
+              icon: 'building',
+              count: withoutCert,
+            },
+            {
+              to: '/connections',
+              label: 'Certificate ANAF',
+              icon: 'certificate',
+              count: certsNeedingAction,
+            },
           ]}
         />
         <NavGroup
@@ -92,7 +132,13 @@ export function AppLayout() {
             <div className="app-user-name">{user.name || user.email}</div>
             <div className="app-user-email">{user.email}</div>
           </div>
-          <Button variant="ghost" size="sm" onClick={toggle} aria-label={theme === 'dark' ? 'Temă luminoasă' : 'Temă întunecată'} title={theme === 'dark' ? 'Temă luminoasă' : 'Temă întunecată'}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={toggle}
+            aria-label={theme === 'dark' ? 'Temă luminoasă' : 'Temă întunecată'}
+            title={theme === 'dark' ? 'Temă luminoasă' : 'Temă întunecată'}
+          >
             <Icon name={theme === 'dark' ? 'sun' : 'moon'} />
           </Button>
           <Button
@@ -100,7 +146,11 @@ export function AppLayout() {
             size="sm"
             aria-label="Deconectare"
             title="Deconectare"
-            onClick={() => logout.mutate(undefined, { onSettled: () => navigate('/login', { replace: true }) })}
+            onClick={() =>
+              logout.mutate(undefined, {
+                onSettled: () => navigate('/login', { replace: true }),
+              })
+            }
           >
             <Icon name="logout" />
           </Button>

@@ -3,22 +3,33 @@ import { cx } from './cx';
 import { Icon, type IconName } from './Icon';
 
 type AlertTone = 'info' | 'success' | 'warning' | 'danger';
-const ICON: Record<AlertTone, IconName> = { info: 'info', success: 'check', warning: 'alert', danger: 'x' };
+const ICON: Record<AlertTone, IconName> = {
+  info: 'info',
+  success: 'check',
+  warning: 'alert',
+  danger: 'x',
+};
 
 export interface AlertProps {
   tone?: AlertTone;
-  /** What happened, one sentence. */
   title?: ReactNode;
-  /** Why, or what depends on it. */
   children?: ReactNode;
-  /** One small button that fixes it. */
   action?: ReactNode;
   className?: string;
 }
 
-export function Alert({ tone = 'info', title, children, action, className }: AlertProps) {
+export function Alert({
+  tone = 'info',
+  title,
+  children,
+  action,
+  className,
+}: AlertProps) {
   return (
-    <div className={cx('spv-alert', `spv-alert-${tone}`, className)} role={tone === 'danger' ? 'alert' : 'status'}>
+    <div
+      className={cx('spv-alert', `spv-alert-${tone}`, className)}
+      role={tone === 'danger' ? 'alert' : 'status'}
+    >
       <Icon name={ICON[tone]} />
       <div>
         {title ? <p className="spv-alert-title">{title}</p> : null}

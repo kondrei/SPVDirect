@@ -4,7 +4,6 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
 const VERSION = 'v1';
 
-/** AES-256-GCM encryption for ANAF tokens at rest. Format: v1:<iv>:<tag>:<ciphertext>, all base64. */
 @Injectable()
 export class TokenCipher {
   private readonly key: Buffer;

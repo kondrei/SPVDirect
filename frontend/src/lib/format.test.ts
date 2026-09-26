@@ -1,9 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { connectionStatus, daysUntil, formatCui, formatDate, groupSerial, initials, isValidCui, normalizeCui, pluralFirme, pluralZile } from './format';
+import {
+  connectionStatus,
+  daysUntil,
+  formatAnafDate,
+  formatCui,
+  formatDate,
+  groupSerial,
+  initials,
+  isValidCui,
+  normalizeCui,
+  pluralFirme,
+  pluralZile,
+} from './format';
 import { safeNext } from './safeNext';
 
 const NOW = new Date('2026-09-23T12:00:00Z');
-const inDays = (d: number) => new Date(NOW.getTime() + d * 86_400_000).toISOString();
+const inDays = (d: number) =>
+  new Date(NOW.getTime() + d * 86_400_000).toISOString();
 
 describe('CUI', () => {
   it('normalizes like the backend DTO', () => {
@@ -19,23 +32,45 @@ describe('CUI', () => {
     expect(isValidCui('RO12A')).toBe(false);
     expect(isValidCui('')).toBe(false);
   });
-  it('formats with the RO prefix', () => expect(formatCui('14399840')).toBe('RO 14399840'));
+  it('formats with the RO prefix', () =>
+    expect(formatCui('14399840')).toBe('RO 14399840'));
 });
 
 describe('connectionStatus', () => {
   it('keeps revoked regardless of dates', () => {
-    expect(connectionStatus({ status: 'revoked', refreshExpiresAt: inDays(300) }, NOW)).toBe('revoked');
+    expect(
+      connectionStatus(
+        { status: 'revoked', refreshExpiresAt: inDays(300) },
+        NOW,
+      ),
+    ).toBe('revoked');
   });
   it('is active with more than 30 days left', () => {
-    expect(connectionStatus({ status: 'active', refreshExpiresAt: inDays(31) }, NOW)).toBe('active');
+    expect(
+      connectionStatus({ status: 'active', refreshExpiresAt: inDays(31) }, NOW),
+    ).toBe('active');
   });
   it('is expiring under 30 days', () => {
-    expect(connectionStatus({ status: 'active', refreshExpiresAt: inDays(29) }, NOW)).toBe('expiring');
-    expect(connectionStatus({ status: 'active', refreshExpiresAt: inDays(0.5) }, NOW)).toBe('expiring');
+    expect(
+      connectionStatus({ status: 'active', refreshExpiresAt: inDays(29) }, NOW),
+    ).toBe('expiring');
+    expect(
+      connectionStatus(
+        { status: 'active', refreshExpiresAt: inDays(0.5) },
+        NOW,
+      ),
+    ).toBe('expiring');
   });
   it('is expired when the refresh token ended, even if the row still says active', () => {
-    expect(connectionStatus({ status: 'active', refreshExpiresAt: inDays(-1) }, NOW)).toBe('expired');
-    expect(connectionStatus({ status: 'expired', refreshExpiresAt: inDays(100) }, NOW)).toBe('expired');
+    expect(
+      connectionStatus({ status: 'active', refreshExpiresAt: inDays(-1) }, NOW),
+    ).toBe('expired');
+    expect(
+      connectionStatus(
+        { status: 'expired', refreshExpiresAt: inDays(100) },
+        NOW,
+      ),
+    ).toBe('expired');
   });
 });
 
@@ -60,7 +95,14 @@ describe('Romanian formatting', () => {
     expect(daysUntil(inDays(-0.1), NOW)).toBe(0);
     expect(daysUntil(inDays(-2), NOW)).toBe(-2);
   });
-  it('groups serials in fours', () => expect(groupSerial('4C000012A9F3')).toBe('4C00 0012 A9F3'));
+  it('groups serials in fours', () =>
+    expect(groupSerial('4C000012A9F3')).toBe('4C00 0012 A9F3'));
+  it('formats ANAF calendar dates and leaves other text alone', () => {
+    expect(formatAnafDate('2010-02-01')).toBe('01.02.2010');
+    expect(formatAnafDate('INREGISTRAT din data 27.01.1993')).toBe(
+      'INREGISTRAT din data 27.01.1993',
+    );
+  });
   it('makes initials', () => {
     expect(initials('Andrei Kondrei', 'x@y.ro')).toBe('AK');
     expect(initials(null, 'andrei@cabinet.ro')).toBe('AN');
@@ -68,7 +110,8 @@ describe('Romanian formatting', () => {
 });
 
 describe('safeNext', () => {
-  it('allows app paths', () => expect(safeNext('/companies?add=1')).toBe('/companies?add=1'));
+  it('allows app paths', () =>
+    expect(safeNext('/companies?add=1')).toBe('/companies?add=1'));
   it('blocks external and protocol-relative targets', () => {
     expect(safeNext('https://evil.example')).toBe('/');
     expect(safeNext('//evil.example')).toBe('/');

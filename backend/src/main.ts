@@ -8,17 +8,13 @@ import { AppModule } from './app.module.js';
 import { loadHttpsOptions } from './config/https.js';
 
 async function bootstrap() {
-  // HTTPS has to be chosen before the app exists, so read the validated env
-  // that ConfigModule.forRoot() has copied into process.env.
   await ConfigModule.envVariablesLoaded;
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     httpsOptions: loadHttpsOptions(process.env),
   });
   const config = app.get(ConfigService);
 
-  // Behind Azure's load balancer: trust X-Forwarded-* for secure cookies and client IPs.
   app.set('trust proxy', 1);
-  // HSTS on https://localhost would force HTTPS on every localhost port.
   app.use(
     helmet({
       strictTransportSecurity: config.get('NODE_ENV') === 'production',

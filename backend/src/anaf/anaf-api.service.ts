@@ -18,9 +18,7 @@ import { AnafOAuthService } from './anaf-oauth.service.js';
 export interface AnafRequest {
   accountantId: string;
   connectionId: string;
-  /** Path on api.anaf.ro, e.g. `/TestOauth/jaxrs/hello`. Use `envPath()` for FCTEL/ETRANSPORT. */
   path: string;
-  /** Short service name for api_logs, e.g. 'TestOAuth', 'FCTEL', 'ETRANSPORT'. */
   service: string;
   method?: Method;
   params?: Record<string, string | number>;
@@ -41,7 +39,6 @@ export class AnafApiService {
     private readonly connections: Repository<AnafConnection>,
   ) {}
 
-  /** `/FCTEL/rest/listaMesajeFactura` -> `/test/FCTEL/rest/listaMesajeFactura` (per ANAF_ENV). */
   envPath(path: string): string {
     return `/${this.config.getOrThrow<string>('ANAF_ENV')}${path}`;
   }

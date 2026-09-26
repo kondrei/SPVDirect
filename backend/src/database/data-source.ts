@@ -1,14 +1,10 @@
-// Entry point for the TypeORM CLI. Runs from the compiled output:
-//   npm run migration:run   (builds first, then uses dist/database/data-source.js)
 import 'reflect-metadata';
 import { DataSource } from 'typeorm';
 import { buildTypeOrmOptions } from '../config/typeorm.config.js';
 
 try {
   process.loadEnvFile('.env');
-} catch {
-  // No .env file: rely on the real environment.
-}
+} catch {}
 
 const { DATABASE_URL, DATABASE_SSL = 'true' } = process.env;
 if (!DATABASE_URL) {

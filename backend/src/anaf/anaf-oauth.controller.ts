@@ -51,7 +51,6 @@ export class AnafOAuthController {
     this.production = config.get('NODE_ENV') === 'production';
   }
 
-  /** (A) Accountant connects their own certificate. */
   @Get('connect')
   @UseGuards(JwtAuthGuard)
   async connect(
@@ -61,7 +60,6 @@ export class AnafOAuthController {
     await this.redirectToAnaf(res, { mode: 'self', accountantId });
   }
 
-  /** (B) Public landing page of an authorization link, opened by the certificate holder. */
   @Get('authorize/:token')
   async linkLanding(@Param('token') token: string, @Res() res: Response) {
     const lookup = await this.links.findByToken(token);
@@ -105,7 +103,6 @@ export class AnafOAuthController {
     await this.redirectToAnaf(res, { mode: 'link', linkId: lookup.link.id });
   }
 
-  /** Redirect target registered at ANAF (ANAF_REDIRECT_URI). */
   @Get('callback')
   async callback(
     @Query('code') code: string | undefined,
@@ -124,7 +121,6 @@ export class AnafOAuthController {
         'Sesiunea de autorizare a expirat sau lipsește. Porniți din nou autorizarea.',
       );
     }
-    // ANAF's reference flow leaves `state` empty; when it is echoed back it must match.
     if (state !== undefined && state !== payload.state) {
       return this.fail(res, payload, 'Parametrul state nu corespunde.');
     }

@@ -1,7 +1,17 @@
 import type { ReactNode } from 'react';
 import { Icon, type IconName } from './Icon';
 
-export function Stat({ label, value, note, icon }: { label: string; value: ReactNode; note?: ReactNode; icon?: IconName }) {
+export function Stat({
+  label,
+  value,
+  note,
+  icon,
+}: {
+  label: string;
+  value: ReactNode;
+  note?: ReactNode;
+  icon?: IconName;
+}) {
   return (
     <div className="spv-card spv-stat">
       <div className="spv-stat-label">

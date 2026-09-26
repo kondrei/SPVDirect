@@ -4,7 +4,6 @@ import { Wordmark } from '../components/ui';
 import { useTheme } from '../hooks/useTheme';
 import { safeNext } from '../lib/safeNext';
 
-/** Centered card for login and register; signed-in users go straight to the app. */
 export function AuthLayout() {
   useTheme();
   const me = useMe();

@@ -3,10 +3,6 @@ import { DataSource, Table } from 'typeorm';
 import type { QueryRunner } from 'typeorm';
 import { InitialSchema1790200000000 } from './1790200000000-InitialSchema.js';
 
-/**
- * Runs the migration against a Postgres query runner whose execution is stubbed out,
- * so we can assert the generated SQL without a database.
- */
 async function generatedSql(): Promise<string[]> {
   const ds = new DataSource({
     type: 'postgres',

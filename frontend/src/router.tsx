@@ -24,10 +24,27 @@ export const routes = [
       { path: '/', element: <DashboardPage /> },
       { path: '/companies', element: <CompaniesPage /> },
       { path: '/companies/:id', element: <CompanyPage /> },
-      // The backend redirects here after ANAF OAuth: /connections?status=ok|error
       { path: '/connections', element: <ConnectionsPage /> },
-      { path: '/efactura', element: <ComingSoonPage title="e-Factura" icon="invoice" what="Încărcarea facturilor XML, starea mesajelor și descărcarea facturilor primite vin în faza 2." /> },
-      { path: '/etransport', element: <ComingSoonPage title="e-Transport" icon="truck" what="Declararea transporturilor și codurile UIT vin în faza 2." /> },
+      {
+        path: '/efactura',
+        element: (
+          <ComingSoonPage
+            title="e-Factura"
+            icon="invoice"
+            what="Încărcarea facturilor XML, starea mesajelor și descărcarea facturilor primite vin în faza 2."
+          />
+        ),
+      },
+      {
+        path: '/etransport',
+        element: (
+          <ComingSoonPage
+            title="e-Transport"
+            icon="truck"
+            what="Declararea transporturilor și codurile UIT vin în faza 2."
+          />
+        ),
+      },
       { path: '*', element: <NotFoundPage /> },
     ],
   },

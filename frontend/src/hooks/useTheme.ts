@@ -13,12 +13,16 @@ function readStored(): Theme | null {
 }
 
 function systemTheme(): Theme {
-  return typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  return typeof window !== 'undefined' &&
+    window.matchMedia?.('(prefers-color-scheme: dark)').matches
+    ? 'dark'
+    : 'light';
 }
 
-/** Applies the theme as <html data-theme>; follows the OS until the user picks one. */
 export function useTheme() {
-  const [theme, setTheme] = useState<Theme>(() => readStored() ?? systemTheme());
+  const [theme, setTheme] = useState<Theme>(
+    () => readStored() ?? systemTheme(),
+  );
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -29,9 +33,7 @@ export function useTheme() {
       const next: Theme = t === 'dark' ? 'light' : 'dark';
       try {
         localStorage.setItem(KEY, next);
-      } catch {
-        /* private mode: keep it for this tab only */
-      }
+      } catch {}
       return next;
     });
   }, []);

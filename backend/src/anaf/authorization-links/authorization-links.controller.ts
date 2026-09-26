@@ -14,7 +14,6 @@ import { AuthorizationLinksService } from './authorization-links.service.js';
 export class AuthorizationLinksController {
   constructor(private readonly links: AuthorizationLinksService) {}
 
-  /** Returns a one-time URL to send to the company's certificate holder. */
   @Post()
   create(
     @CurrentAccountantId() accountantId: string,

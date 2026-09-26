@@ -118,8 +118,6 @@ describe('AnafOAuthService', () => {
   });
 
   it('does not refresh again from a stale row right after a successful refresh', async () => {
-    // The first load returns the pre-refresh row (old lastRefreshedAt), like a
-    // caller that loaded it before the first refresh was saved.
     const { service, post, update, getOne, stored } = setup();
     const newAccess = fakeAnafJwt();
     post.mockResolvedValue({
@@ -142,7 +140,6 @@ describe('AnafOAuthService', () => {
   });
 
   it('does not expire the connection on a bare 401 from the token endpoint', async () => {
-    // RFC 6749: a 401 means client authentication failed, not a bad grant.
     const { service, post, update } = setup({
       accessExpiresAt: new Date(Date.now() - 1000),
     });
@@ -250,7 +247,6 @@ describe('AnafOAuthService', () => {
       const access = service.getAccessToken('conn-1');
       await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
       const revoke = service.revokeConnection('conn-1');
-      // The refresh saves the rotated tokens before revoke reads the row.
       stored.refreshTokenEnc = cipher.encrypt('new-refresh');
       resolve({
         data: { access_token: fakeAnafJwt(), refresh_token: fakeAnafJwt() },

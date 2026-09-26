@@ -1,7 +1,17 @@
 import type { ReactNode } from 'react';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
-export function PageHead({ title, context, crumbs, actions }: { title: string; context?: ReactNode; crumbs?: ReactNode; actions?: ReactNode }) {
+export function PageHead({
+  title,
+  context,
+  crumbs,
+  actions,
+}: {
+  title: string;
+  context?: ReactNode;
+  crumbs?: ReactNode;
+  actions?: ReactNode;
+}) {
   useDocumentTitle(title);
   return (
     <div className="page-head">

@@ -5,10 +5,6 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
-/**
- * One-time link an accountant sends to a company's certificate holder so they
- * can authorize SPVDirect with their own USB token / cloud certificate.
- */
 @Entity('authorization_links')
 export class AuthorizationLink {
   @PrimaryGeneratedColumn('uuid')
@@ -20,7 +16,6 @@ export class AuthorizationLink {
   @Column({ name: 'company_id', type: 'uuid' })
   companyId: string;
 
-  /** SHA-256 of the random link token; the token itself is never stored. */
   @Column({ name: 'token_hash', type: 'text', unique: true })
   tokenHash: string;
 

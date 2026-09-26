@@ -1,31 +1,3 @@
-export interface Accountant {
-  id: string;
-  email: string;
-  name: string | null;
-  createdAt: string;
-}
-
-export interface Company {
-  id: string;
-  accountantId: string;
-  cui: string;
-  name: string;
-  anafConnectionId: string | null;
-  regCom: string | null;
-  address: string | null;
-  caenCode: string | null;
-  registrationStatus: string | null;
-  vatPayer: boolean | null;
-  vatOnCollection: boolean | null;
-  splitVat: boolean | null;
-  eFactura: boolean | null;
-  inactive: boolean | null;
-  anafData: AnafTvaRecord | null;
-  anafSyncedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface AnafTvaRecord {
   date_generale: {
     cui: number;
@@ -81,30 +53,29 @@ export interface AnafTvaRecord {
   adresa_domiciliu_fiscal: Record<string, string>;
 }
 
-export type AnafConnectionStatus = 'active' | 'expired' | 'revoked';
-
-export interface AnafConnection {
-  id: string;
-  accountantId: string;
-  label: string;
-  certSerial: string;
-  roles: string[];
-  source: 'self' | 'link';
-  accessExpiresAt: string;
-  refreshExpiresAt: string;
-  lastRefreshedAt: string | null;
-  status: AnafConnectionStatus;
-  createdAt: string;
-  updatedAt: string;
+export interface AnafTvaResponse {
+  found?: AnafTvaRecord[];
+  notFound?: (number | string)[];
 }
 
-export interface AuthorizationLink {
-  id: string;
-  url: string;
-  expiresAt: string;
+export function companyFieldsFromAnaf(record: AnafTvaRecord) {
+  const g = record.date_generale;
+  return {
+    name: g.denumire.trim(),
+    regCom: blankToNull(g.nrRegCom),
+    address: blankToNull(g.adresa),
+    caenCode: blankToNull(g.cod_CAEN),
+    registrationStatus: blankToNull(g.stare_inregistrare),
+    vatPayer: record.inregistrare_scop_Tva?.scpTVA ?? null,
+    vatOnCollection: record.inregistrare_RTVAI?.statusTvaIncasare ?? null,
+    splitVat: record.inregistrare_SplitTVA?.statusSplitTVA ?? null,
+    eFactura: g.statusRO_e_Factura ?? null,
+    inactive: record.stare_inactiv?.statusInactivi ?? null,
+    anafData: record,
+  };
 }
 
-export interface ConnectionTestResult {
-  status: number;
-  body: string;
+function blankToNull(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
 }

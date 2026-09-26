@@ -9,7 +9,6 @@ const scryptAsync = promisify(scrypt) as (
 
 const KEY_LENGTH = 64;
 
-/** Returns `scrypt$<salt>$<hash>` (base64). Uses node:crypto, so no native build on Windows. */
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16);
   const hash = await scryptAsync(password, salt, KEY_LENGTH);
