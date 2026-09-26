@@ -10,11 +10,11 @@ export class AuthorizationLink {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'accountant_id', type: 'uuid' })
-  accountantId: string;
+  @Column({ name: 'accountant_id', type: 'integer' })
+  accountantId: number;
 
-  @Column({ name: 'company_id', type: 'uuid' })
-  companyId: string;
+  @Column({ name: 'company_id', type: 'integer' })
+  companyId: number;
 
   @Column({ name: 'token_hash', type: 'text', unique: true })
   tokenHash: string;

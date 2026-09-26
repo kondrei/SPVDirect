@@ -26,7 +26,7 @@ export class AuthorizationLinksService {
     private readonly links: Repository<AuthorizationLink>,
   ) {}
 
-  async create(accountantId: string, companyId: string) {
+  async create(accountantId: number, companyId: number) {
     const company = await this.companies.get(accountantId, companyId);
     const token = randomBytes(32).toString('base64url');
     const link = await this.links.save(

@@ -1,5 +1,5 @@
 $kind: http-request
-description: Public, throttled (10/min). Password 10-200 chars, name optional. Sets the `spv_session` cookie.
+description: Public, throttled (10/min). Password 10-200 chars, name optional. Returns 201 with the accountant and sets `spv_session`. Returns 409 if the email is taken; the test accepts both so the collection can be re-run.
 url: "{{baseUrl}}/auth/register"
 method: POST
 headers:
@@ -12,4 +12,28 @@ body:
       "password": "{{password}}",
       "name": "Contabil Test"
     }
+scripts:
+  - type: afterResponse
+    code: |-
+      const errorMessage = () => {
+        const m = pm.response.json().message;
+        return Array.isArray(m) ? m.join(' | ') : m;
+      };
+      pm.test('Status 201 (new) or 409 (already registered)', () => {
+        pm.expect(pm.response.code).to.be.oneOf([201, 409]);
+      });
+      if (pm.response.code === 201) {
+        pm.test('Sets the spv_session cookie', () => pm.expect(pm.cookies.has('spv_session')).to.be.true);
+        const a = pm.response.json();
+        if (a.id !== undefined) pm.collectionVariables.set('accountantId', a.id);
+        pm.test('Returns the public accountant', () => {
+          pm.expect(a.id).to.be.a('number').and.to.be.above(0);
+          pm.expect(a.email.toLowerCase()).to.eql(pm.collectionVariables.get('email').toLowerCase());
+          pm.expect(a).to.have.property('createdAt');
+          pm.expect(a).to.not.have.any.keys('password', 'passwordHash');
+        });
+      } else {
+        pm.test('Conflict message is Romanian', () => pm.expect(errorMessage()).to.eql('Există deja un cont cu acest email'));
+      }
+    language: text/javascript
 order: 1000

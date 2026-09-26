@@ -5,33 +5,33 @@ import {
   Get,
   HttpCode,
   Param,
-  ParseUUIDPipe,
   Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { CurrentAccountantId } from '../auth/current-accountant.decorator.js';
+import { AccountantParamGuard } from '../auth/accountant-param.guard.js';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
+import { ParseIdPipe } from '../common/parse-id.pipe.js';
 import { CompaniesService } from './companies.service.js';
 import { CreateCompanyDto, UpdateCompanyDto } from './dto/company.dto.js';
 
 const ANAF_LOOKUP_THROTTLE = { default: { limit: 20, ttl: 60_000 } };
 
-@Controller('companies')
-@UseGuards(JwtAuthGuard)
+@Controller('accountants/:accountantId/companies')
+@UseGuards(JwtAuthGuard, AccountantParamGuard)
 export class CompaniesController {
   constructor(private readonly companies: CompaniesService) {}
 
   @Get()
-  list(@CurrentAccountantId() accountantId: string) {
+  list(@Param('accountantId', ParseIdPipe) accountantId: number) {
     return this.companies.list(accountantId);
   }
 
   @Post()
   @Throttle(ANAF_LOOKUP_THROTTLE)
   create(
-    @CurrentAccountantId() accountantId: string,
+    @Param('accountantId', ParseIdPipe) accountantId: number,
     @Body() dto: CreateCompanyDto,
   ) {
     return this.companies.create(accountantId, dto);
@@ -39,8 +39,8 @@ export class CompaniesController {
 
   @Get(':id')
   get(
-    @CurrentAccountantId() accountantId: string,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('accountantId', ParseIdPipe) accountantId: number,
+    @Param('id', ParseIdPipe) id: number,
   ) {
     return this.companies.get(accountantId, id);
   }
@@ -49,16 +49,16 @@ export class CompaniesController {
   @HttpCode(200)
   @Throttle(ANAF_LOOKUP_THROTTLE)
   refreshFromAnaf(
-    @CurrentAccountantId() accountantId: string,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('accountantId', ParseIdPipe) accountantId: number,
+    @Param('id', ParseIdPipe) id: number,
   ) {
     return this.companies.refreshFromAnaf(accountantId, id);
   }
 
   @Patch(':id')
   update(
-    @CurrentAccountantId() accountantId: string,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('accountantId', ParseIdPipe) accountantId: number,
+    @Param('id', ParseIdPipe) id: number,
     @Body() dto: UpdateCompanyDto,
   ) {
     return this.companies.update(accountantId, id, dto);
@@ -67,8 +67,8 @@ export class CompaniesController {
   @Delete(':id')
   @HttpCode(204)
   remove(
-    @CurrentAccountantId() accountantId: string,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('accountantId', ParseIdPipe) accountantId: number,
+    @Param('id', ParseIdPipe) id: number,
   ) {
     return this.companies.remove(accountantId, id);
   }

@@ -1,0 +1,18 @@
+$kind: http-request
+description: Revokes both tokens at ANAF (best-effort) and deletes the connection. Returns 204. Skipped unless `allowConnectionDelete` is `true`.
+url: "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/{{connectionId}}"
+method: DELETE
+scripts:
+  - type: beforeRequest
+    code: |-
+      if (pm.collectionVariables.get('allowConnectionDelete') !== 'true' || !pm.collectionVariables.get('connectionId')) {
+        console.log('Set allowConnectionDelete=true to revoke and delete the ANAF connection.');
+        pm.execution.skipRequest();
+      }
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('Status 204', () => pm.response.to.have.status(204));
+      pm.collectionVariables.set('connectionId', '');
+    language: text/javascript
+order: 2000

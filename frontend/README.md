@@ -21,9 +21,11 @@ The browser only talks to Vite. Vite proxies `/api/*` to `https://localhost:3000
 
 ANAF OAuth works like this:
 
-1. **Conectează certificat** is a plain link to `/api/anaf/connect`, a full-page navigation, because the backend answers with a redirect to logincert.anaf.ro.
+1. **Conectează certificat** is a plain link to `/api/accountants/:accountantId/anaf/connect`, a full-page navigation, because the backend answers with a redirect to logincert.anaf.ro.
 2. The backend sets the `spv_anaf_oauth` state cookie through the proxy. Cookies ignore the port, so the browser sends it to `https://localhost:3000/anaf/callback` when ANAF redirects back.
-3. The callback redirects to `/connections?status=ok|error&message=…`. The Connections page shows that result as a banner, rendering the message as text only.
+3. The callback redirects to `/accountants/:accountantId/connections?status=ok|error&message=…`. The Connections page shows that result as a banner, rendering the message as text only.
+
+Every page lives under `/accountants/:accountantId/` (e.g. `/accountants/1/companies/3`). Any other path redirects there for the signed-in accountant, and another accountant's URL shows "Nu aveți acces la acest cont."
 
 Authorization links, including the page the certificate holder opens, are served by the backend (`GET /anaf/authorize/:token`) and don't touch this app.
 

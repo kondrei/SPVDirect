@@ -1,4 +1,20 @@
 $kind: http-request
-url: "{{baseUrl}}/companies/{{companyId}}"
+url: "{{baseUrl}}/accountants/{{accountantId}}/companies/{{companyId}}"
 method: GET
-order: 3000
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status 200', () => pm.response.to.have.status(200));
+      pm.test('Returns the requested company', () => pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get('companyId'))));
+
+      pm.test('Company has the expected shape', () => {
+        const c = pm.response.json();
+        pm.expect(c.id).to.be.a('number').and.to.be.above(0);
+        pm.expect(c.accountantId).to.eql(Number(pm.collectionVariables.get('accountantId')));
+        pm.expect(c.cui).to.match(/^\d{2,10}$/);
+        pm.expect(c.name).to.be.a('string').and.not.empty;
+        pm.expect(c).to.have.property('anafConnectionId');
+        pm.expect(c).to.include.keys('regCom', 'address', 'caenCode', 'registrationStatus', 'vatPayer', 'vatOnCollection', 'splitVat', 'eFactura', 'inactive', 'anafSyncedAt', 'createdAt', 'updatedAt');
+      });
+    language: text/javascript
+order: 4000

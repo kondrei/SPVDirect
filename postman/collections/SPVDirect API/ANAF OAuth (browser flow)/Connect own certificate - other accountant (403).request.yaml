@@ -1,0 +1,10 @@
+$kind: http-request
+url: "{{baseUrl}}/accountants/2147483647/anaf/connect"
+method: GET
+scripts:
+  - type: afterResponse
+    code: pm.test('Status 403', () => pm.response.to.have.status(403));
+    language: text/javascript
+settings:
+  followRedirects: false
+order: 1000

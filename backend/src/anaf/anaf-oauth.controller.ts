@@ -12,10 +12,11 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { Request, Response } from 'express';
 import { randomBytes } from 'node:crypto';
-import { CurrentAccountantId } from '../auth/current-accountant.decorator.js';
+import { AccountantParamGuard } from '../auth/accountant-param.guard.js';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { cookieOptions } from '../auth/session.js';
 import { escapeHtml, renderPage } from '../common/html.js';
+import { ParseIdPipe } from '../common/parse-id.pipe.js';
 import { CompaniesService } from '../companies/companies.service.js';
 import { AnafOAuthService } from './anaf-oauth.service.js';
 import {
@@ -36,7 +37,7 @@ const LINK_ERRORS: Record<Exclude<LinkLookup, { ok: true }>['reason'], string> =
     expired: 'Linkul de autorizare a expirat. Cereți contabilului un link nou.',
   };
 
-@Controller('anaf')
+@Controller()
 export class AnafOAuthController {
   private readonly logger = new Logger(AnafOAuthController.name);
   private readonly production: boolean;
@@ -51,16 +52,16 @@ export class AnafOAuthController {
     this.production = config.get('NODE_ENV') === 'production';
   }
 
-  @Get('connect')
-  @UseGuards(JwtAuthGuard)
+  @Get('accountants/:accountantId/anaf/connect')
+  @UseGuards(JwtAuthGuard, AccountantParamGuard)
   async connect(
-    @CurrentAccountantId() accountantId: string,
+    @Param('accountantId', ParseIdPipe) accountantId: number,
     @Res() res: Response,
   ) {
     await this.redirectToAnaf(res, { mode: 'self', accountantId });
   }
 
-  @Get('authorize/:token')
+  @Get('anaf/authorize/:token')
   async linkLanding(@Param('token') token: string, @Res() res: Response) {
     const lookup = await this.links.findByToken(token);
     if (!lookup.ok) {
@@ -89,7 +90,7 @@ export class AnafOAuthController {
     );
   }
 
-  @Get('authorize/:token/start')
+  @Get('anaf/authorize/:token/start')
   async linkStart(@Param('token') token: string, @Res() res: Response) {
     const lookup = await this.links.findByToken(token);
     if (!lookup.ok) {
@@ -103,7 +104,7 @@ export class AnafOAuthController {
     await this.redirectToAnaf(res, { mode: 'link', linkId: lookup.link.id });
   }
 
-  @Get('callback')
+  @Get('anaf/callback')
   async callback(
     @Query('code') code: string | undefined,
     @Query('state') state: string | undefined,
@@ -137,7 +138,9 @@ export class AnafOAuthController {
 
       if (payload.mode === 'self') {
         await this.oauth.saveConnection(payload.accountantId, tokens, 'self');
-        return res.redirect(this.frontendUrl('/connections?status=ok'));
+        return res.redirect(
+          this.connectionsPage(payload.accountantId, 'status=ok'),
+        );
       }
 
       const lookup = await this.links.findById(payload.linkId);
@@ -173,7 +176,7 @@ export class AnafOAuthController {
   private async redirectToAnaf(
     res: Response,
     flow:
-      { mode: 'self'; accountantId: string } | { mode: 'link'; linkId: string },
+      { mode: 'self'; accountantId: number } | { mode: 'link'; linkId: string },
   ) {
     const state = randomBytes(24).toString('base64url');
     const payload: OAuthStatePayload = { ...flow, state };
@@ -195,9 +198,16 @@ export class AnafOAuthController {
     ];
     if (!raw) return null;
     try {
-      return await this.jwt.verifyAsync<OAuthStatePayload>(raw, {
+      const payload = await this.jwt.verifyAsync<OAuthStatePayload>(raw, {
         audience: OAUTH_STATE_AUDIENCE,
       });
+      if (
+        payload.mode === 'self' &&
+        !Number.isSafeInteger(payload.accountantId)
+      ) {
+        return null;
+      }
+      return payload;
     } catch {
       return null;
     }
@@ -206,8 +216,9 @@ export class AnafOAuthController {
   private fail(res: Response, payload: OAuthStatePayload, message: string) {
     if (payload.mode === 'self') {
       return res.redirect(
-        this.frontendUrl(
-          `/connections?status=error&message=${encodeURIComponent(message)}`,
+        this.connectionsPage(
+          payload.accountantId,
+          `status=error&message=${encodeURIComponent(message)}`,
         ),
       );
     }
@@ -228,7 +239,8 @@ export class AnafOAuthController {
       );
   }
 
-  private frontendUrl(path: string): string {
-    return `${this.config.getOrThrow<string>('FRONTEND_URL')}${path}`;
+  private connectionsPage(accountantId: number, query: string): string {
+    const base = this.config.getOrThrow<string>('FRONTEND_URL');
+    return `${base}/accountants/${encodeURIComponent(accountantId)}/connections?${query}`;
   }
 }

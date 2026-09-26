@@ -25,7 +25,7 @@ function setup(connection?: Partial<AnafConnection>) {
 
   const stored: AnafConnection = {
     id: 'conn-1',
-    accountantId: 'acc-1',
+    accountantId: 1,
     status: 'active',
     roles: ['HELLO'],
     accessTokenEnc: cipher.encrypt('old-access'),

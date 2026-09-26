@@ -1,0 +1,21 @@
+$kind: http-request
+description: Returns 204. Skipped unless this run created the company, so existing data is kept.
+url: "{{baseUrl}}/accountants/{{accountantId}}/companies/{{companyId}}"
+method: DELETE
+scripts:
+  - type: beforeRequest
+    code: |-
+      if (pm.collectionVariables.get('companyCreatedByRun') !== 'true') {
+        console.log('Company existed before this run: not deleting it.');
+        pm.execution.skipRequest();
+      }
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('Status 204', () => pm.response.to.have.status(204));
+      pm.collectionVariables.set('companyCreatedByRun', '');
+      pm.sendRequest({ url: pm.variables.replaceIn('{{baseUrl}}/accountants/{{accountantId}}/companies/{{companyId}}'), method: 'GET' }, (err, res) => {
+        pm.test('Company is gone (404)', () => pm.expect(res.code).to.eql(404));
+      });
+    language: text/javascript
+order: 1000

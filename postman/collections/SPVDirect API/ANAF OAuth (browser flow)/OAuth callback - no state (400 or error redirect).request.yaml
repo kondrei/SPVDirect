@@ -1,0 +1,24 @@
+$kind: http-request
+description: 'ANAF redirect target. Without the `spv_anaf_oauth` cookie it returns a 400 "Sesiune expirată" page. With a stale cookie the empty state does not match: the self flow redirects to the frontend with `status=error`, the link flow returns a 400 page.'
+url: "{{baseUrl}}/anaf/callback?code=&state="
+method: GET
+queryParams:
+  code: ""
+  state: ""
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Rejected', () => pm.expect(pm.response.code).to.be.oneOf([302, 400]));
+      if (pm.response.code === 302) {
+        pm.test('Redirects to the frontend with status=error', () => pm.expect(pm.response.headers.get('Location')).to.include('/connections?status=error'));
+      } else {
+        pm.test('Returns an HTML error page', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'));
+      }
+      pm.test('Clears the state cookie', () => {
+        const setCookie = pm.response.headers.all().filter((h) => h.key.toLowerCase() === 'set-cookie').map((h) => h.value).join(';');
+        pm.expect(setCookie).to.include('spv_anaf_oauth=;');
+      });
+    language: text/javascript
+settings:
+  followRedirects: false
+order: 2000

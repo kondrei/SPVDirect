@@ -1,6 +1,6 @@
 $kind: http-request
-description: "Both fields optional. `anafConnectionId: null` detaches the certificate."
-url: "{{baseUrl}}/companies/{{companyId}}"
+description: "Both fields optional: `name` (1-255 chars) and `anafConnectionId` (uuid of an own connection, or `null` to detach). The pre-request script adds `anafConnectionId` when `connectionId` is set."
+url: "{{baseUrl}}/accountants/{{accountantId}}/companies/{{companyId}}"
 method: PATCH
 headers:
   Content-Type: application/json
@@ -8,7 +8,33 @@ body:
   type: json
   content: |-
     {
-      "name": "Firma Test SRL (redenumit)",
-      "anafConnectionId": "{{connectionId}}"
+      "name": "Firma Test SRL (redenumit)"
     }
-order: 4000
+scripts:
+  - type: beforeRequest
+    code: |-
+      const body = { name: 'Firma Test SRL (redenumit)' };
+      const connectionId = pm.collectionVariables.get('connectionId');
+      if (connectionId) body.anafConnectionId = connectionId;
+      pm.request.body.update(JSON.stringify(body, null, 2));
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('Status 200', () => pm.response.to.have.status(200));
+      pm.test('Name updated', () => pm.expect(pm.response.json().name).to.eql('Firma Test SRL (redenumit)'));
+      const connectionId = pm.collectionVariables.get('connectionId');
+      if (connectionId) {
+        pm.test('Certificate attached', () => pm.expect(pm.response.json().anafConnectionId).to.eql(connectionId));
+      }
+
+      pm.test('Company has the expected shape', () => {
+        const c = pm.response.json();
+        pm.expect(c.id).to.be.a('number').and.to.be.above(0);
+        pm.expect(c.accountantId).to.eql(Number(pm.collectionVariables.get('accountantId')));
+        pm.expect(c.cui).to.match(/^\d{2,10}$/);
+        pm.expect(c.name).to.be.a('string').and.not.empty;
+        pm.expect(c).to.have.property('anafConnectionId');
+        pm.expect(c).to.include.keys('regCom', 'address', 'caenCode', 'registrationStatus', 'vatPayer', 'vatOnCollection', 'splitVat', 'eFactura', 'inactive', 'anafSyncedAt', 'createdAt', 'updatedAt');
+      });
+    language: text/javascript
+order: 10000

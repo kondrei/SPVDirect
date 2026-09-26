@@ -3,11 +3,12 @@ import { Link, useNavigate, useParams } from 'react-router';
 import {
   useCompany,
   useConnections,
+  useConnectUrl,
   useCreateAuthorizationLink,
   useDeleteCompany,
   useUpdateCompany,
 } from '../api/hooks';
-import { API_URL, ApiError } from '../api/client';
+import { ApiError } from '../api/client';
 import { AnafDataCard } from '../components/AnafDataCard';
 import { ConfirmButton } from '../components/ConfirmButton';
 import { CopyField } from '../components/CopyField';
@@ -24,6 +25,7 @@ import {
   StatusBadge,
   TextField,
 } from '../components/ui';
+import { useAppPath } from '../hooks/useAppPath';
 import {
   connectionStatus,
   formatCui,
@@ -36,11 +38,12 @@ function CertificateCard({
   companyId,
   current,
 }: {
-  companyId: string;
+  companyId: number;
   current: string | null;
 }) {
   const connections = useConnections();
   const update = useUpdateCompany(companyId);
+  const appPath = useAppPath();
   const [choice, setChoice] = useState(current ?? '');
   const conn = connections.data?.find((c) => c.id === current);
   const usable = (connections.data ?? []).filter(
@@ -122,7 +125,7 @@ function CertificateCard({
         ) : connections.data ? (
           <p className="muted">
             Nu aveți încă niciun certificat conectat.{' '}
-            <Link to="/connections">Conectați unul</Link> sau folosiți linkul de
+            <Link to={appPath('/connections')}>Conectați unul</Link> sau folosiți linkul de
             autorizare de mai jos.
           </p>
         ) : null}
@@ -135,7 +138,7 @@ function AuthorizationLinkCard({
   companyId,
   companyName,
 }: {
-  companyId: string;
+  companyId: number;
   companyName: string;
 }) {
   const create = useCreateAuthorizationLink(companyId);
@@ -185,7 +188,7 @@ function DetailsCard({
   cui,
   createdAt,
 }: {
-  id: string;
+  id: number;
   name: string;
   cui: string;
   createdAt: string;
@@ -193,6 +196,7 @@ function DetailsCard({
   const update = useUpdateCompany(id);
   const remove = useDeleteCompany();
   const navigate = useNavigate();
+  const appPath = useAppPath();
   const [value, setValue] = useState(name);
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -240,7 +244,7 @@ function DetailsCard({
             loading={remove.isPending}
             onConfirm={() =>
               remove.mutate(id, {
-                onSuccess: () => navigate('/companies', { replace: true }),
+                onSuccess: () => navigate(appPath('/companies'), { replace: true }),
               })
             }
           />
@@ -252,7 +256,9 @@ function DetailsCard({
 
 export function CompanyPage() {
   const { id = '' } = useParams();
-  const company = useCompany(id);
+  const appPath = useAppPath();
+  const connectUrl = useConnectUrl();
+  const company = useCompany(/^\d+$/.test(id) ? Number(id) : 0);
 
   if (company.isPending) return <div className="loading">Se încarcă…</div>;
   if (company.isError) {
@@ -265,7 +271,7 @@ export function CompanyPage() {
           <EmptyState
             icon="building"
             title="Firma nu a fost găsită."
-            actions={<ButtonLink to="/companies">Înapoi la firme</ButtonLink>}
+            actions={<ButtonLink to={appPath('/companies')}>Înapoi la firme</ButtonLink>}
           >
             Poate a fost ștearsă sau linkul nu este corect.
           </EmptyState>
@@ -280,7 +286,7 @@ export function CompanyPage() {
       <PageHead
         crumbs={
           <>
-            <Link to="/companies">Firme</Link> › {c.name}
+            <Link to={appPath('/companies')}>Firme</Link> › {c.name}
           </>
         }
         title={c.name}
@@ -295,7 +301,7 @@ export function CompanyPage() {
             <ButtonAnchor
               variant="primary"
               icon="certificate"
-              href={`${API_URL}/anaf/connect`}
+              href={connectUrl}
             >
               Conectează certificat
             </ButtonAnchor>

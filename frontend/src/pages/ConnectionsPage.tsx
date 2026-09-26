@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { API_URL } from '../api/client';
 import {
   useCompanies,
   useConnections,
+  useConnectUrl,
   useDeleteConnection,
   useRenameConnection,
   useTestConnection,
@@ -67,6 +67,7 @@ function ConnectionCard({
   const rename = useRenameConnection();
   const remove = useDeleteConnection();
   const test = useTestConnection();
+  const connectUrl = useConnectUrl();
   const [editing, setEditing] = useState(false);
   const [label, setLabel] = useState(c.label);
   const status = connectionStatus(c);
@@ -215,7 +216,7 @@ function ConnectionCard({
               size="sm"
               variant="primary"
               icon="certificate"
-              href={`${API_URL}/anaf/connect`}
+              href={connectUrl}
             >
               Reautorizează
             </ButtonAnchor>
@@ -237,6 +238,7 @@ function ConnectionCard({
 export function ConnectionsPage() {
   const connections = useConnections();
   const companies = useCompanies();
+  const connectUrl = useConnectUrl();
   const count = (id: string) =>
     companies.data?.filter((co) => co.anafConnectionId === id).length ?? 0;
   const list = connections.data ?? [];
@@ -250,7 +252,7 @@ export function ConnectionsPage() {
           <ButtonAnchor
             variant="primary"
             icon="certificate"
-            href={`${API_URL}/anaf/connect`}
+            href={connectUrl}
           >
             Conectează certificat
           </ButtonAnchor>
@@ -279,7 +281,7 @@ export function ConnectionsPage() {
               <ButtonAnchor
                 variant="primary"
                 icon="certificate"
-                href={`${API_URL}/anaf/connect`}
+                href={connectUrl}
               >
                 Conectează certificat
               </ButtonAnchor>

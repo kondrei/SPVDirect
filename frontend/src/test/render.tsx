@@ -43,7 +43,7 @@ export function renderApp(
 }
 
 export const ME = {
-  id: 'a1',
+  id: 1,
   email: 'andrei@cabinet.ro',
   name: 'Andrei K',
   createdAt: '2026-09-01T00:00:00Z',

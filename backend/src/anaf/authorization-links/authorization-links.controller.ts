@@ -1,23 +1,20 @@
-import {
-  Controller,
-  Param,
-  ParseUUIDPipe,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
-import { CurrentAccountantId } from '../../auth/current-accountant.decorator.js';
+import { Controller, Param, Post, UseGuards } from '@nestjs/common';
+import { AccountantParamGuard } from '../../auth/accountant-param.guard.js';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard.js';
+import { ParseIdPipe } from '../../common/parse-id.pipe.js';
 import { AuthorizationLinksService } from './authorization-links.service.js';
 
-@Controller('companies/:companyId/authorization-links')
-@UseGuards(JwtAuthGuard)
+@Controller(
+  'accountants/:accountantId/companies/:companyId/authorization-links',
+)
+@UseGuards(JwtAuthGuard, AccountantParamGuard)
 export class AuthorizationLinksController {
   constructor(private readonly links: AuthorizationLinksService) {}
 
   @Post()
   create(
-    @CurrentAccountantId() accountantId: string,
-    @Param('companyId', ParseUUIDPipe) companyId: string,
+    @Param('accountantId', ParseIdPipe) accountantId: number,
+    @Param('companyId', ParseIdPipe) companyId: number,
   ) {
     return this.links.create(accountantId, companyId);
   }

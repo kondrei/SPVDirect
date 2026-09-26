@@ -9,7 +9,7 @@ const future = (days: number) =>
   new Date(Date.now() + days * 86_400_000).toISOString();
 const CONN = {
   id: 'c1',
-  accountantId: 'a1',
+  accountantId: 1,
   label: 'Popescu — token USB',
   certSerial: '4C000012A9F3',
   roles: ['EFACTURA'],
@@ -92,8 +92,8 @@ const ANAF = {
 };
 
 const company = (over: Record<string, unknown> = {}) => ({
-  id: 'co1',
-  accountantId: 'a1',
+  id: 1,
+  accountantId: 1,
   cui: '14399840',
   name: 'Agro Vest SRL',
   anafConnectionId: null,
@@ -134,19 +134,57 @@ describe('session', () => {
         body = String(init?.body);
         return { status: 200, body: ME };
       },
-      'GET /companies': { status: 200, body: [] },
-      'GET /anaf/connections': { status: 200, body: [] },
+      'GET /accountants/1/companies': { status: 200, body: [] },
+      'GET /accountants/1/anaf/connections': { status: 200, body: [] },
     });
     await user.type(await screen.findByLabelText('Email'), 'andrei@cabinet.ro');
     await user.type(screen.getByLabelText('Parolă'), 'a-long-password');
     await user.click(screen.getByRole('button', { name: 'Intră în cont' }));
     await waitFor(() =>
-      expect(router.state.location.pathname).toBe('/companies'),
+      expect(router.state.location.pathname).toBe('/accountants/1/companies'),
     );
     expect(JSON.parse(body)).toEqual({
       email: 'andrei@cabinet.ro',
       password: 'a-long-password',
     });
+  });
+
+  it('moves URLs without an accountant under the signed-in accountant', async () => {
+    const { router } = renderApp('/companies?add=1', {
+      'GET /auth/me': { status: 200, body: ME },
+      'GET /accountants/1/companies': { status: 200, body: [] },
+      'GET /accountants/1/anaf/connections': { status: 200, body: [] },
+    });
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe('/accountants/1/companies'),
+    );
+    expect(router.state.location.search).toBe('?add=1');
+  });
+
+  it('opens the dashboard of the signed-in accountant from /', async () => {
+    const { router } = renderApp('/', {
+      'GET /auth/me': { status: 200, body: ME },
+      'GET /accountants/1/companies': { status: 200, body: [] },
+      'GET /accountants/1/anaf/connections': { status: 200, body: [] },
+    });
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe('/accountants/1'),
+    );
+  });
+
+  it('does not show another accountant’s pages', async () => {
+    const { calls } = renderApp('/accountants/2/companies', {
+      'GET /auth/me': { status: 200, body: ME },
+      'GET /accountants/1/companies': { status: 200, body: [] },
+      'GET /accountants/1/anaf/connections': { status: 200, body: [] },
+    });
+    expect(
+      await screen.findByText('Nu aveți acces la acest cont.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Mergi la contul dvs.' }),
+    ).toHaveAttribute('href', '/accountants/1');
+    expect(calls.some((c) => c.includes('/accountants/2'))).toBe(false);
   });
 
   it('shows the backend message when login fails', async () => {
@@ -173,9 +211,9 @@ describe('companies', () => {
     let posted: unknown;
     const { calls, router } = renderApp('/companies?add=1', {
       'GET /auth/me': { status: 200, body: ME },
-      'GET /companies': { status: 200, body: [] },
-      'GET /anaf/connections': { status: 200, body: [] },
-      'POST /companies': (init) => {
+      'GET /accountants/1/companies': { status: 200, body: [] },
+      'GET /accountants/1/anaf/connections': { status: 200, body: [] },
+      'POST /accountants/1/companies': (init) => {
         posted = JSON.parse(String(init?.body));
         return { status: 201, body: company() };
       },
@@ -185,14 +223,14 @@ describe('companies', () => {
     await user.type(cui, 'RO12A');
     await user.click(screen.getByRole('button', { name: 'Adaugă' }));
     expect(await screen.findByText(/CUI invalid/)).toBeInTheDocument();
-    expect(calls).not.toContain('POST /companies');
+    expect(calls).not.toContain('POST /accountants/1/companies');
 
     await user.clear(cui);
     await user.type(cui, 'RO 14399840');
     await user.click(screen.getByRole('button', { name: 'Adaugă' }));
     await waitFor(() => expect(posted).toEqual({ cui: '14399840' }));
     await waitFor(() =>
-      expect(router.state.location.pathname).toBe('/companies/co1'),
+      expect(router.state.location.pathname).toBe('/accountants/1/companies/1'),
     );
   });
 
@@ -200,9 +238,9 @@ describe('companies', () => {
     const user = userEvent.setup();
     renderApp('/companies?add=1', {
       'GET /auth/me': { status: 200, body: ME },
-      'GET /companies': { status: 200, body: [] },
-      'GET /anaf/connections': { status: 200, body: [] },
-      'POST /companies': {
+      'GET /accountants/1/companies': { status: 200, body: [] },
+      'GET /accountants/1/anaf/connections': { status: 200, body: [] },
+      'POST /accountants/1/companies': {
         status: 400,
         body: {
           statusCode: 400,
@@ -219,12 +257,12 @@ describe('companies', () => {
   it('lists companies with their certificate and VAT status', async () => {
     renderApp('/companies', {
       'GET /auth/me': { status: 200, body: ME },
-      'GET /companies': {
+      'GET /accountants/1/companies': {
         status: 200,
         body: [
           company({ anafConnectionId: 'c1' }),
           company({
-            id: 'co2',
+            id: 2,
             cui: '40211987',
             name: 'Brutăria Ionescu SRL',
             vatPayer: false,
@@ -232,11 +270,11 @@ describe('companies', () => {
           }),
         ],
       },
-      'GET /anaf/connections': { status: 200, body: [CONN] },
+      'GET /accountants/1/anaf/connections': { status: 200, body: [CONN] },
     });
     expect(
       await screen.findByRole('link', { name: 'Agro Vest SRL' }),
-    ).toHaveAttribute('href', '/companies/co1');
+    ).toHaveAttribute('href', '/accountants/1/companies/1');
     expect(screen.getByText('RO 14399840')).toBeInTheDocument();
     expect(screen.getByText('Expiră curând')).toBeInTheDocument();
     expect(screen.getByText('Fără certificat')).toBeInTheDocument();
@@ -246,10 +284,10 @@ describe('companies', () => {
   });
 
   it('shows every ANAF section on the company page', async () => {
-    renderApp('/companies/co1', {
+    renderApp('/companies/1', {
       'GET /auth/me': { status: 200, body: ME },
-      'GET /companies/co1': { status: 200, body: company() },
-      'GET /anaf/connections': { status: 200, body: [] },
+      'GET /accountants/1/companies/1': { status: 200, body: company() },
+      'GET /accountants/1/anaf/connections': { status: 200, body: [] },
     });
     expect(
       await screen.findByRole('heading', { name: 'Date ANAF' }),
@@ -273,17 +311,28 @@ describe('companies', () => {
     expect(screen.getByText('01.03.2010')).toBeInTheDocument();
   });
 
+  it('shows not found for a non-numeric company id without calling the API', async () => {
+    const { calls } = renderApp('/companies/abc', {
+      'GET /auth/me': { status: 200, body: ME },
+      'GET /accountants/1/anaf/connections': { status: 200, body: [] },
+    });
+    expect(
+      await screen.findByText('Firma nu a fost găsită.'),
+    ).toBeInTheDocument();
+    expect(calls.filter((c) => c.includes('/companies/'))).toEqual([]);
+  });
+
   it('offers to fetch ANAF data for a company added before the lookup existed', async () => {
     const user = userEvent.setup();
     let refreshed = false;
-    renderApp('/companies/co1', {
+    renderApp('/companies/1', {
       'GET /auth/me': { status: 200, body: ME },
-      'GET /companies/co1': {
+      'GET /accountants/1/companies/1': {
         status: 200,
         body: company({ anafData: null, anafSyncedAt: null, vatPayer: null }),
       },
-      'GET /anaf/connections': { status: 200, body: [] },
-      'POST /companies/co1/anaf-refresh': () => {
+      'GET /accountants/1/anaf/connections': { status: 200, body: [] },
+      'POST /accountants/1/companies/1/anaf-refresh': () => {
         refreshed = true;
         return { status: 200, body: company() };
       },
@@ -305,8 +354,8 @@ describe('connections', () => {
       '/connections?status=error&message=%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E',
       {
         'GET /auth/me': { status: 200, body: ME },
-        'GET /companies': { status: 200, body: [] },
-        'GET /anaf/connections': { status: 200, body: [] },
+        'GET /accountants/1/companies': { status: 200, body: [] },
+        'GET /accountants/1/anaf/connections': { status: 200, body: [] },
       },
     );
     const alert = await screen.findByRole('alert');
@@ -317,13 +366,13 @@ describe('connections', () => {
   it('links "Conectează certificat" to the backend OAuth start as a full navigation', async () => {
     renderApp('/connections', {
       'GET /auth/me': { status: 200, body: ME },
-      'GET /companies': { status: 200, body: [] },
-      'GET /anaf/connections': { status: 200, body: [CONN] },
+      'GET /accountants/1/companies': { status: 200, body: [] },
+      'GET /accountants/1/anaf/connections': { status: 200, body: [CONN] },
     });
     const links = await screen.findAllByRole('link', {
       name: /Conectează certificat/,
     });
-    expect(links[0]).toHaveAttribute('href', '/api/anaf/connect');
+    expect(links[0]).toHaveAttribute('href', '/api/accountants/1/anaf/connect');
     expect(await screen.findByText('Expiră în 12 zile')).toBeInTheDocument();
   });
 });

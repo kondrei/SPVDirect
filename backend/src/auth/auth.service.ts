@@ -53,8 +53,8 @@ export class AuthService {
     return accountant;
   }
 
-  signSession(accountantId: string): Promise<string> {
-    const payload: SessionPayload = { sub: accountantId };
+  signSession(accountantId: number): Promise<string> {
+    const payload: SessionPayload = { sub: String(accountantId) };
     return this.jwt.signAsync(payload, {
       expiresIn: SESSION_TTL_SECONDS,
       audience: SESSION_AUDIENCE,

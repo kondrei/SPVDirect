@@ -26,20 +26,20 @@ export class CompaniesService {
     private readonly anaf: AnafCompanyLookupService,
   ) {}
 
-  list(accountantId: string): Promise<Company[]> {
+  list(accountantId: number): Promise<Company[]> {
     return this.companies.find({
       where: { accountantId },
       order: { name: 'ASC' },
     });
   }
 
-  async get(accountantId: string, id: string): Promise<Company> {
+  async get(accountantId: number, id: number): Promise<Company> {
     const company = await this.companies.findOneBy({ id, accountantId });
     if (!company) throw new NotFoundException('Firma nu a fost găsită');
     return company;
   }
 
-  async create(accountantId: string, dto: CreateCompanyDto): Promise<Company> {
+  async create(accountantId: number, dto: CreateCompanyDto): Promise<Company> {
     if (await this.companies.existsBy({ accountantId, cui: dto.cui })) {
       throw new ConflictException('Firma cu acest CUI există deja');
     }
@@ -62,7 +62,7 @@ export class CompaniesService {
     }
   }
 
-  async refreshFromAnaf(accountantId: string, id: string): Promise<Company> {
+  async refreshFromAnaf(accountantId: number, id: number): Promise<Company> {
     const company = await this.get(accountantId, id);
     const record = await this.anaf.lookup(accountantId, company.cui, id);
     if (!record) throw new BadRequestException(CUI_NOT_FOUND);
@@ -74,8 +74,8 @@ export class CompaniesService {
   }
 
   async update(
-    accountantId: string,
-    id: string,
+    accountantId: number,
+    id: number,
     dto: UpdateCompanyDto,
   ): Promise<Company> {
     const company = await this.get(accountantId, id);
@@ -95,14 +95,14 @@ export class CompaniesService {
     return this.companies.save(company);
   }
 
-  async attachConnection(companyId: string, connectionId: string) {
+  async attachConnection(companyId: number, connectionId: string) {
     await this.companies.update(
       { id: companyId },
       { anafConnectionId: connectionId },
     );
   }
 
-  async remove(accountantId: string, id: string): Promise<void> {
+  async remove(accountantId: number, id: number): Promise<void> {
     const company = await this.get(accountantId, id);
     await this.companies.remove(company);
   }

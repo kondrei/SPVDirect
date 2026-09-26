@@ -1,4 +1,4 @@
-import { Children, useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useCompanies, useConnections, useCreateCompany } from '../api/hooks';
 import { EmptyState } from '../components/EmptyState';
@@ -13,6 +13,7 @@ import {
   StatusBadge,
   TextField,
 } from '../components/ui';
+import { useAppPath } from '../hooks/useAppPath';
 import {
   connectionStatus,
   formatCui,
@@ -24,6 +25,7 @@ import {
 function AddCompanyForm({ onDone }: { onDone: () => void }) {
   const create = useCreateCompany();
   const navigate = useNavigate();
+  const appPath = useAppPath();
   const [cui, setCui] = useState('');
   const [touched, setTouched] = useState(false);
   const cuiError =
@@ -37,7 +39,7 @@ function AddCompanyForm({ onDone }: { onDone: () => void }) {
     if (!isValidCui(cui)) return;
     create.mutate(
       { cui: normalizeCui(cui) },
-      { onSuccess: (company) => navigate(`/companies/${company.id}`) },
+      { onSuccess: (company) => navigate(appPath(`/companies/${company.id}`)) },
     );
   };
 
@@ -82,6 +84,7 @@ function AddCompanyForm({ onDone }: { onDone: () => void }) {
 export function CompaniesPage() {
   const companies = useCompanies();
   const connections = useConnections();
+  const appPath = useAppPath();
   const [params, setParams] = useSearchParams();
   const adding = params.get('add') === '1';
   const [q, setQ] = useState('');
@@ -179,7 +182,7 @@ export function CompaniesPage() {
                 key: 'name',
                 header: 'Firmă',
                 render: (r) => (
-                  <Link className="row-link" to={`/companies/${r.id}`}>
+                  <Link className="row-link" to={appPath(`/companies/${r.id}`)}>
                     {r.name}
                   </Link>
                 ),
@@ -234,7 +237,7 @@ export function CompaniesPage() {
                   <ButtonLink
                     size="sm"
                     variant="ghost"
-                    to={`/companies/${r.id}`}
+                    to={appPath(`/companies/${r.id}`)}
                   >
                     Detalii
                   </ButtonLink>

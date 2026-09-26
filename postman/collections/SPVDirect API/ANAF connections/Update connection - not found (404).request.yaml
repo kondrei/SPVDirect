@@ -1,0 +1,18 @@
+$kind: http-request
+url: "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/00000000-0000-4000-8000-000000000000"
+method: PATCH
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "label": "x"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status 404', () => pm.response.to.have.status(404));
+      pm.test('Message is "Conexiune ANAF inexistentă"', () => pm.expect(pm.response.json().message).to.eql('Conexiune ANAF inexistentă'));
+    language: text/javascript
+order: 7000

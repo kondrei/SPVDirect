@@ -1,5 +1,22 @@
 $kind: http-request
-description: Calls ANAF `/TestOauth/jaxrs/hello` with this connection's token. Returns `{ status, body }`.
-url: "{{baseUrl}}/anaf/connections/{{connectionId}}/test"
+description: Calls ANAF `/TestOauth/jaxrs/hello?name=SPVDirect` with this connection's token (refreshed if needed). Returns `{ status, body }`.
+url: "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/{{connectionId}}/test"
 method: GET
-order: 3000
+scripts:
+  - type: beforeRequest
+    code: |-
+      if (!pm.collectionVariables.get('connectionId')) {
+        console.log('No ANAF connection yet: connect a certificate in the browser first.');
+        pm.execution.skipRequest();
+      }
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('Status 200', () => pm.response.to.have.status(200));
+      pm.test('ANAF says hello', () => {
+        const r = pm.response.json();
+        pm.expect(r.status).to.eql(200);
+        pm.expect(r.body).to.include('Hello, SPVDirect');
+      });
+    language: text/javascript
+order: 4000

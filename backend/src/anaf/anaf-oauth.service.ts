@@ -118,7 +118,7 @@ export class AnafOAuthService {
   }
 
   async saveConnection(
-    accountantId: string,
+    accountantId: number,
     tokens: AnafTokenSet,
     source: AnafConnectionSource,
   ): Promise<AnafConnection> {

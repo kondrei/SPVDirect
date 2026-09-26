@@ -8,6 +8,12 @@ export interface SessionPayload {
   sub: string;
 }
 
+export function parseSessionSubject(sub: unknown): number | null {
+  if (typeof sub !== 'string' || !/^[1-9]\d{0,9}$/.test(sub)) return null;
+  const id = Number(sub);
+  return id <= 2_147_483_647 ? id : null;
+}
+
 export function cookieOptions(
   maxAgeSeconds: number,
   production: boolean,

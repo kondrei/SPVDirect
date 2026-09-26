@@ -41,9 +41,9 @@ describe('AuthService', () => {
   });
 
   it('signs sessions with the session audience', async () => {
-    const token = await setup(() => Promise.resolve({})).signSession('acc-1');
+    const token = await setup(() => Promise.resolve({})).signSession(1);
     await expect(
       jwt.verifyAsync(token, { audience: SESSION_AUDIENCE }),
-    ).resolves.toMatchObject({ sub: 'acc-1', aud: SESSION_AUDIENCE });
+    ).resolves.toMatchObject({ sub: '1', aud: SESSION_AUDIENCE });
   });
 });

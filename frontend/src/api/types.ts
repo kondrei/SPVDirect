@@ -1,13 +1,13 @@
 export interface Accountant {
-  id: string;
+  id: number;
   email: string;
   name: string | null;
   createdAt: string;
 }
 
 export interface Company {
-  id: string;
-  accountantId: string;
+  id: number;
+  accountantId: number;
   cui: string;
   name: string;
   anafConnectionId: string | null;
@@ -85,7 +85,7 @@ export type AnafConnectionStatus = 'active' | 'expired' | 'revoked';
 
 export interface AnafConnection {
   id: string;
-  accountantId: string;
+  accountantId: number;
   label: string;
   certSerial: string;
   roles: string[];

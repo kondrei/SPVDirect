@@ -1,5 +1,5 @@
 $kind: http-request
-description: Public, throttled (10/min). Returns 200 and sets the `spv_session` cookie.
+description: Public, throttled (10/min). Returns 200 with the accountant, sets `spv_session` and saves `accountantId`.
 url: "{{baseUrl}}/auth/login"
 method: POST
 headers:
@@ -11,4 +11,19 @@ body:
       "email": "{{email}}",
       "password": "{{password}}"
     }
-order: 2000
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status 200', () => pm.response.to.have.status(200));
+      pm.test('Sets the spv_session cookie', () => pm.expect(pm.cookies.has('spv_session')).to.be.true);
+
+      const a = pm.response.json();
+      if (a.id !== undefined) pm.collectionVariables.set('accountantId', a.id);
+      pm.test('Returns the public accountant', () => {
+        pm.expect(a.id).to.be.a('number').and.to.be.above(0);
+        pm.expect(a.email.toLowerCase()).to.eql(pm.collectionVariables.get('email').toLowerCase());
+        pm.expect(a).to.have.property('createdAt');
+        pm.expect(a).to.not.have.any.keys('password', 'passwordHash');
+      });
+    language: text/javascript
+order: 4000

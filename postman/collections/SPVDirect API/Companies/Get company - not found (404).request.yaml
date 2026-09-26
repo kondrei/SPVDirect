@@ -1,0 +1,14 @@
+$kind: http-request
+url: "{{baseUrl}}/accountants/{{accountantId}}/companies/2147483647"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      const errorMessage = () => {
+        const m = pm.response.json().message;
+        return Array.isArray(m) ? m.join(' | ') : m;
+      };
+      pm.test('Status 404', () => pm.response.to.have.status(404));
+      pm.test('Message is "Firma nu a fost găsită"', () => pm.expect(errorMessage()).to.eql('Firma nu a fost găsită'));
+    language: text/javascript
+order: 6000

@@ -1,0 +1,15 @@
+$kind: http-request
+description: "`ParseIdPipe` accepts only positive int4 ids."
+url: "{{baseUrl}}/accountants/{{accountantId}}/companies/abc"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      const errorMessage = () => {
+        const m = pm.response.json().message;
+        return Array.isArray(m) ? m.join(' | ') : m;
+      };
+      pm.test('Status 400', () => pm.response.to.have.status(400));
+      pm.test('Message is "Identificator invalid"', () => pm.expect(errorMessage()).to.eql('Identificator invalid'));
+    language: text/javascript
+order: 5000

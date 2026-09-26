@@ -1,5 +1,0 @@
-$kind: http-request
-description: Returns 204.
-url: "{{baseUrl}}/anaf/connections/{{connectionId}}"
-method: DELETE
-order: 4000

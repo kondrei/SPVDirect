@@ -16,7 +16,7 @@ import { AnafConnection } from './anaf-connection.entity.js';
 import { AnafOAuthService } from './anaf-oauth.service.js';
 
 export interface AnafRequest {
-  accountantId: string;
+  accountantId: number;
   connectionId: string;
   path: string;
   service: string;
@@ -25,7 +25,7 @@ export interface AnafRequest {
   data?: unknown;
   headers?: Record<string, string>;
   responseType?: ResponseType;
-  companyId?: string;
+  companyId?: number;
 }
 
 @Injectable()

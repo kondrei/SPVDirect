@@ -23,9 +23,9 @@ export class AnafCompanyLookupService {
   ) {}
 
   async lookup(
-    accountantId: string,
+    accountantId: number,
     cui: string,
-    companyId: string | null = null,
+    companyId: number | null = null,
   ): Promise<AnafTvaRecord | null> {
     await this.waitTurn();
 

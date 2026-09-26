@@ -1,2 +1,3 @@
 $kind: collection
+description: OAuth grants from ANAF (one per certificate). Tokens are never returned. Requests that need a connection are skipped until one exists.
 order: 4000

@@ -68,13 +68,13 @@ export class AuthController {
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
-  async me(@CurrentAccountantId() accountantId: string) {
+  async me(@CurrentAccountantId() accountantId: number) {
     const accountant = await this.accountants.findById(accountantId);
     if (!accountant) throw new NotFoundException();
     return toPublic(accountant);
   }
 
-  private async setSession(res: Response, accountantId: string) {
+  private async setSession(res: Response, accountantId: number) {
     const token = await this.auth.signSession(accountantId);
     res.cookie(
       SESSION_COOKIE,

@@ -2,9 +2,11 @@
 workspace:
   id: 28ace151-5136-4136-85f6-6e1b346872f1
 
+# Each entry here maps a local resource to one or more corresponding objects in Postman Cloud
+
 cloudResources:
   collections:
-    ../postman/collections/SPVDirect API: a53eebf4-593b-4f83-9374-70bc1a2ad3cf
+    ../postman/collections/SPVDirect API: 7b476ded-ba38-43b5-adaf-c5db56c8c491
 
 # All resources in the `postman/` folder are automatically registered in Local View.
 # Point to additional files outside the `postman/` folder to register them individually. Example:

@@ -1,2 +1,3 @@
 $kind: collection
+description: Client companies of the logged-in accountant, under `/accountants/:accountantId/companies`. The URL accountant must equal the session accountant (403 otherwise). Company ids are integers.
 order: 3000
