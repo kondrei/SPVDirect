@@ -6,6 +6,7 @@ import { ApiLogsService } from '../api-logs/api-logs.service.js';
 import type { AnafTvaRecord, AnafTvaResponse } from './anaf-company-info.js';
 
 export const MIN_INTERVAL_MS = 1_000;
+export const MAX_CUIS_PER_REQUEST = 100;
 
 const bucharestDate = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Europe/Bucharest',
@@ -27,6 +28,29 @@ export class AnafCompanyLookupService {
     cui: string,
     companyId: number | null = null,
   ): Promise<AnafTvaRecord | null> {
+    const found = await this.request(accountantId, [cui], companyId);
+    return found.get(Number(cui)) ?? null;
+  }
+
+  async lookupMany(
+    accountantId: number,
+    cuis: string[],
+  ): Promise<Map<number, AnafTvaRecord>> {
+    const found = new Map<number, AnafTvaRecord>();
+    for (let i = 0; i < cuis.length; i += MAX_CUIS_PER_REQUEST) {
+      const chunk = cuis.slice(i, i + MAX_CUIS_PER_REQUEST);
+      for (const [cui, record] of await this.request(accountantId, chunk)) {
+        found.set(cui, record);
+      }
+    }
+    return found;
+  }
+
+  private async request(
+    accountantId: number,
+    cuis: string[],
+    companyId: number | null = null,
+  ): Promise<Map<number, AnafTvaRecord>> {
     await this.waitTurn();
 
     const endpoint = this.config.getOrThrow<string>('ANAF_TVA_ENDPOINT');
@@ -34,9 +58,10 @@ export class AnafCompanyLookupService {
     let status: number | null = null;
     let error: string | null = null;
     try {
+      const data = bucharestDate.format(new Date());
       const res = await this.http.axiosRef.post<AnafTvaResponse>(
         endpoint,
-        [{ cui: Number(cui), data: bucharestDate.format(new Date()) }],
+        cuis.map((cui) => ({ cui: Number(cui), data })),
         { timeout: 30_000, validateStatus: () => true },
       );
       status = res.status;
@@ -46,11 +71,13 @@ export class AnafCompanyLookupService {
           `Serviciul ANAF de verificare a CUI a răspuns cu ${status}. Reîncercați în câteva momente.`,
         );
       }
-      return (
-        res.data.found.find(
-          (r) => Number(r.date_generale?.cui) === Number(cui),
-        ) ?? null
-      );
+      const wanted = new Set(cuis.map(Number));
+      const found = new Map<number, AnafTvaRecord>();
+      for (const record of res.data.found) {
+        const cui = Number(record.date_generale?.cui);
+        if (wanted.has(cui) && !found.has(cui)) found.set(cui, record);
+      }
+      return found;
     } catch (err) {
       if (err instanceof BadGatewayException) throw err;
       error = isAxiosError(err) ? (err.code ?? err.message) : String(err);

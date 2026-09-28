@@ -27,6 +27,10 @@ export interface Company {
   updatedAt: string;
 }
 
+export type BulkCompanyResult =
+  | { cui: string; status: 'created'; company: Company }
+  | { cui: string; status: 'exists' | 'not_found' };
+
 export interface AnafTvaRecord {
   date_generale: {
     cui: number;

@@ -17,9 +17,14 @@ import { CaenService } from '../open-data/caen.service.js';
 import { CompaniesService } from './companies.service.js';
 import type { Company } from './company.entity.js';
 import { toCompanyResponse } from './company-response.js';
-import { CreateCompanyDto, UpdateCompanyDto } from './dto/company.dto.js';
+import {
+  CreateCompaniesDto,
+  CreateCompanyDto,
+  UpdateCompanyDto,
+} from './dto/company.dto.js';
 
 const ANAF_LOOKUP_THROTTLE = { default: { limit: 20, ttl: 60_000 } };
+const ANAF_BULK_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
 
 @Controller('accountants/:accountantId/companies')
 @UseGuards(JwtAuthGuard, AccountantParamGuard)
@@ -47,6 +52,22 @@ export class CompaniesController {
     @Body() dto: CreateCompanyDto,
   ) {
     return this.respond(await this.companies.create(accountantId, dto));
+  }
+
+  @Post('bulk')
+  @Throttle(ANAF_BULK_THROTTLE)
+  async createMany(
+    @Param('accountantId', ParseIdPipe) accountantId: number,
+    @Body() dto: CreateCompaniesDto,
+  ) {
+    const results = await this.companies.createMany(accountantId, dto);
+    return Promise.all(
+      results.map(async (r) =>
+        r.status === 'created'
+          ? { ...r, company: await this.respond(r.company) }
+          : r,
+      ),
+    );
   }
 
   @Get(':id')

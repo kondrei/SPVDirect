@@ -15,19 +15,27 @@ function setup({
   exists = false,
   lookup = () => Promise.resolve(anafTvaRecord()),
   stored,
+  existing = [],
+  lookupMany = (_: number, cuis: string[]) =>
+    Promise.resolve(
+      new Map(cuis.map((c) => [Number(c), anafTvaRecord(Number(c))])),
+    ),
 }: {
   save?: (c: unknown) => Promise<unknown>;
   exists?: boolean;
   lookup?: () => Promise<unknown>;
   stored?: Partial<Company>;
+  existing?: string[];
+  lookupMany?: (accountantId: number, cuis: string[]) => Promise<unknown>;
 } = {}) {
   const companies = {
     existsBy: vi.fn().mockResolvedValue(exists),
     findOneBy: vi.fn().mockResolvedValue(stored ?? null),
+    find: vi.fn().mockResolvedValue(existing.map((cui) => ({ cui }))),
     create: vi.fn((data: Partial<Company>) => data),
     save: vi.fn(save),
   };
-  const anaf = { lookup: vi.fn(lookup) };
+  const anaf = { lookup: vi.fn(lookup), lookupMany: vi.fn(lookupMany) };
   const service = new CompaniesService(
     companies as unknown as Repository<Company>,
     {} as Repository<AnafConnection>,
@@ -161,6 +169,99 @@ describe('CompaniesService.refreshFromAnaf', () => {
     await expect(service.refreshFromAnaf(1, 7)).rejects.toBeInstanceOf(
       BadRequestException,
     );
+    expect(companies.save).not.toHaveBeenCalled();
+  });
+});
+
+describe('CompaniesService.createMany', () => {
+  const dup = () =>
+    Promise.reject(
+      new QueryFailedError(
+        'INSERT',
+        [],
+        Object.assign(new Error('dup'), { code: '23505' }),
+      ),
+    );
+
+  it('creates every company ANAF knows, in the order given', async () => {
+    const { service, anaf, companies } = setup();
+    const results = await service.createMany(1, { cuis: ['22', '11'] });
+
+    expect(anaf.lookupMany).toHaveBeenCalledWith(1, ['22', '11']);
+    expect(companies.find).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ accountantId: 1 }),
+      }),
+    );
+    expect(results.map((r) => [r.cui, r.status])).toEqual([
+      ['22', 'created'],
+      ['11', 'created'],
+    ]);
+    expect(results[0]).toMatchObject({
+      company: { accountantId: 1, cui: '22', name: 'AGRO VEST SRL' },
+    });
+  });
+
+  it('skips companies that already exist without calling ANAF for them', async () => {
+    const { service, anaf, companies } = setup({ existing: ['11'] });
+    const results = await service.createMany(1, { cuis: ['11', '22'] });
+
+    expect(anaf.lookupMany).toHaveBeenCalledWith(1, ['22']);
+    expect(companies.save).toHaveBeenCalledTimes(1);
+    expect(results.map((r) => r.status)).toEqual(['exists', 'created']);
+  });
+
+  it('does not call ANAF when every CUI already exists', async () => {
+    const { service, anaf } = setup({ existing: ['11'] });
+    const results = await service.createMany(1, { cuis: ['11'] });
+    expect(anaf.lookupMany).not.toHaveBeenCalled();
+    expect(results).toEqual([{ cui: '11', status: 'exists' }]);
+  });
+
+  it('reports CUIs that ANAF does not know', async () => {
+    const { service, companies } = setup({
+      lookupMany: () => Promise.resolve(new Map([[22, anafTvaRecord(22)]])),
+    });
+    const results = await service.createMany(1, { cuis: ['11', '22'] });
+    expect(results.map((r) => r.status)).toEqual(['not_found', 'created']);
+    expect(companies.save).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops duplicates, including ones that differ only by leading zeros', async () => {
+    const { service, anaf } = setup();
+    const results = await service.createMany(1, {
+      cuis: ['123', '0123', '123', '45'],
+    });
+    expect(anaf.lookupMany).toHaveBeenCalledWith(1, ['123', '45']);
+    expect(results.map((r) => r.cui)).toEqual(['123', '45']);
+  });
+
+  it('maps a concurrent duplicate to exists and keeps going', async () => {
+    const save = vi
+      .fn()
+      .mockImplementationOnce(dup)
+      .mockImplementation((c: unknown) => Promise.resolve(c));
+    const { service } = setup({ save });
+    const results = await service.createMany(1, { cuis: ['11', '22'] });
+    expect(results.map((r) => r.status)).toEqual(['exists', 'created']);
+  });
+
+  it('rethrows other database errors', async () => {
+    const { service } = setup({
+      save: () => Promise.reject(new Error('connection lost')),
+    });
+    await expect(service.createMany(1, { cuis: ['11'] })).rejects.toThrow(
+      'connection lost',
+    );
+  });
+
+  it('saves nothing when ANAF is down', async () => {
+    const { service, companies } = setup({
+      lookupMany: () => Promise.reject(new BadGatewayException('down')),
+    });
+    await expect(
+      service.createMany(1, { cuis: ['11', '22'] }),
+    ).rejects.toBeInstanceOf(BadGatewayException);
     expect(companies.save).not.toHaveBeenCalled();
   });
 });

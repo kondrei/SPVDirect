@@ -6,6 +6,7 @@ import type { ApiLogsService } from '../api-logs/api-logs.service.js';
 import { anafTvaRecord } from '../testing/anaf-tva-record.js';
 import {
   AnafCompanyLookupService,
+  MAX_CUIS_PER_REQUEST,
   MIN_INTERVAL_MS,
 } from './anaf-company-lookup.service.js';
 
@@ -151,5 +152,58 @@ describe('AnafCompanyLookupService', () => {
     await vi.runAllTimersAsync();
     expect(await first).toBeInstanceOf(BadGatewayException);
     await expect(second).resolves.toBeNull();
+  });
+});
+
+describe('AnafCompanyLookupService.lookupMany', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('sends up to 100 CUIs per request and merges the found records', async () => {
+    vi.useFakeTimers();
+    const { service, post, record } = setup();
+    post.mockImplementation((_url: string, body: { cui: number }[]) =>
+      Promise.resolve({
+        status: 200,
+        data: {
+          found: body
+            .filter((b) => b.cui % 2 === 0)
+            .map((b) => anafTvaRecord(b.cui)),
+          notFound: body.filter((b) => b.cui % 2 !== 0).map((b) => b.cui),
+        },
+      }),
+    );
+    const cuis = Array.from({ length: MAX_CUIS_PER_REQUEST + 5 }, (_, i) =>
+      String(10 + i),
+    );
+
+    const pending = service.lookupMany(1, cuis);
+    await vi.runAllTimersAsync();
+    const found = await pending;
+
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(post.mock.calls[0][1]).toHaveLength(MAX_CUIS_PER_REQUEST);
+    expect(post.mock.calls[1][1]).toHaveLength(5);
+    expect(record).toHaveBeenCalledTimes(2);
+    expect(found.size).toBe(Math.ceil(cuis.length / 2));
+    expect(found.get(10)).toEqual(anafTvaRecord(10));
+    expect(found.has(11)).toBe(false);
+  });
+
+  it('ignores records for CUIs that were not asked for', async () => {
+    const { service, post } = setup();
+    post.mockResolvedValue({
+      status: 200,
+      data: { found: [anafTvaRecord(12), anafTvaRecord(99)], notFound: [] },
+    });
+    const found = await service.lookupMany(1, ['12']);
+    expect([...found.keys()]).toEqual([12]);
+  });
+
+  it('fails the whole lookup when one request fails', async () => {
+    const { service, post } = setup();
+    post.mockResolvedValue({ status: 503, data: '' });
+    await expect(service.lookupMany(1, ['12'])).rejects.toBeInstanceOf(
+      BadGatewayException,
+    );
   });
 });
