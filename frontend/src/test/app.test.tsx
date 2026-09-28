@@ -228,7 +228,7 @@ describe('companies', () => {
       },
     });
     expect(screen.queryByLabelText('Denumire')).not.toBeInTheDocument();
-    const cui = await screen.findByLabelText('CUI');
+    const cui = await screen.findByLabelText('CUI-uri');
     await user.type(cui, 'RO12A');
     await user.click(screen.getByRole('button', { name: 'Adaugă' }));
     expect(await screen.findByText(/CUI invalid/)).toBeInTheDocument();
@@ -258,9 +258,92 @@ describe('companies', () => {
         },
       },
     });
-    await user.type(await screen.findByLabelText('CUI'), '99999999');
+    await user.type(await screen.findByLabelText('CUI-uri'), '99999999');
     await user.click(screen.getByRole('button', { name: 'Adaugă' }));
     expect(await screen.findByText(/CUI incorect/)).toBeInTheDocument();
+  });
+
+  it('adds several comma-separated CUIs in one request and shows the result of each', async () => {
+    const user = userEvent.setup();
+    let posted: unknown;
+    const { calls } = renderApp('/companies?add=1', {
+      'GET /auth/me': { status: 200, body: ME },
+      'GET /accountants/1/companies': { status: 200, body: [] },
+      'GET /accountants/1/anaf/connections': { status: 200, body: [] },
+      'POST /accountants/1/companies/bulk': (init) => {
+        posted = JSON.parse(String(init?.body));
+        return {
+          status: 201,
+          body: [
+            { cui: '14399840', status: 'created', company: company() },
+            { cui: '123', status: 'exists' },
+            { cui: '99999999', status: 'not_found' },
+          ],
+        };
+      },
+    });
+    const field = await screen.findByLabelText('CUI-uri');
+    await user.type(field, 'RO 14399840, 12X, 123');
+    await user.click(screen.getByRole('button', { name: 'Adaugă 2 firme' }));
+    expect(await screen.findByText(/CUI invalid: 12X/)).toBeInTheDocument();
+    expect(calls).not.toContain('POST /accountants/1/companies/bulk');
+
+    await user.clear(field);
+    await user.type(field, 'RO 14399840, 123, RO123, 99999999');
+    await user.click(screen.getByRole('button', { name: 'Adaugă 3 firme' }));
+    await waitFor(() =>
+      expect(posted).toEqual({ cuis: ['14399840', '123', '99999999'] }),
+    );
+    expect(await screen.findByText('Am adăugat 1 firmă.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Agro Vest SRL' })).toHaveAttribute(
+      'href',
+      '/accountants/1/companies/1',
+    );
+    expect(screen.getByText('Adăugată')).toBeInTheDocument();
+    expect(screen.getByText('Exista deja')).toBeInTheDocument();
+    expect(screen.getByText('Negăsit la ANAF')).toBeInTheDocument();
+    expect(calls).not.toContain('POST /accountants/1/companies');
+  });
+
+  it('loads CUIs from an uploaded CSV file into the field', async () => {
+    const user = userEvent.setup();
+    renderApp('/companies?add=1', {
+      'GET /auth/me': { status: 200, body: ME },
+      'GET /accountants/1/companies': { status: 200, body: [] },
+      'GET /accountants/1/anaf/connections': { status: 200, body: [] },
+    });
+    const field = await screen.findByLabelText('CUI-uri');
+    await user.type(field, '45');
+    const file = new File(
+      ['CUI;Denumire\nRO14399840;Agro Vest\n123;Alta\n'],
+      'clienti.csv',
+      { type: 'text/csv' },
+    );
+    await user.upload(screen.getByLabelText('Fișier cu CUI-uri'), file);
+    expect(
+      await screen.findByText('Am citit 2 CUI-uri din clienti.csv.'),
+    ).toBeInTheDocument();
+    expect(field).toHaveValue('45, 14399840, 123');
+    expect(
+      screen.getByRole('button', { name: 'Adaugă 3 firme' }),
+    ).toBeInTheDocument();
+  });
+
+  it('explains when an uploaded file has no CUIs', async () => {
+    const user = userEvent.setup();
+    renderApp('/companies?add=1', {
+      'GET /auth/me': { status: 200, body: ME },
+      'GET /accountants/1/companies': { status: 200, body: [] },
+      'GET /accountants/1/anaf/connections': { status: 200, body: [] },
+    });
+    await screen.findByLabelText('CUI-uri');
+    await user.upload(
+      screen.getByLabelText('Fișier cu CUI-uri'),
+      new File(['nume\nion\n'], 'gol.txt', { type: 'text/plain' }),
+    );
+    expect(
+      await screen.findByText(/gol\.txt nu conține niciun CUI valid/),
+    ).toBeInTheDocument();
   });
 
   it('lists companies with their certificate and VAT status', async () => {

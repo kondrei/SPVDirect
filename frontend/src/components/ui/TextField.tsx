@@ -1,4 +1,8 @@
-import { useId, type InputHTMLAttributes } from 'react';
+import {
+  useId,
+  type InputHTMLAttributes,
+  type TextareaHTMLAttributes,
+} from 'react';
 import { cx } from './cx';
 import { Icon, type IconName } from './Icon';
 
@@ -47,6 +51,49 @@ export function TextField({
       ) : (
         input
       )}
+      {error || hint ? (
+        <div id={hintId} className="spv-field-hint">
+          {error ?? hint}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export interface TextAreaFieldProps
+  extends TextareaHTMLAttributes<HTMLTextAreaElement> {
+  label?: string;
+  hint?: string;
+  error?: string;
+  mono?: boolean;
+}
+
+export function TextAreaField({
+  label,
+  hint,
+  error,
+  mono,
+  className,
+  id,
+  ...rest
+}: TextAreaFieldProps) {
+  const auto = useId();
+  const inputId = id ?? auto;
+  const hintId = `${inputId}-hint`;
+  return (
+    <div className={cx('spv-field', error && 'spv-field-invalid', className)}>
+      {label ? (
+        <label className="spv-field-label" htmlFor={inputId}>
+          {label}
+        </label>
+      ) : null}
+      <textarea
+        {...rest}
+        id={inputId}
+        className={cx('spv-input', 'spv-textarea', mono && 'spv-input-mono')}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error || hint ? hintId : undefined}
+      />
       {error || hint ? (
         <div id={hintId} className="spv-field-hint">
           {error ?? hint}

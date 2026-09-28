@@ -6,6 +6,7 @@ import type {
   AccountantProfile,
   AnafConnection,
   AuthorizationLink,
+  BulkCompanyResult,
   CaenInfo,
   Company,
   ConnectionTestResult,
@@ -196,6 +197,25 @@ export function useCreateCompany() {
       api<Company>(requirePath(path), { method: 'POST', json: dto }),
     onSuccess: (company) => {
       qc.setQueryData(keys.company(company.id), company);
+      void qc.invalidateQueries({ queryKey: keys.companies, exact: true });
+    },
+  });
+}
+
+export function useCreateCompanies() {
+  const qc = useQueryClient();
+  const path = useCompaniesPath();
+  return useMutation({
+    mutationFn: (cuis: string[]) =>
+      api<BulkCompanyResult[]>(`${requirePath(path)}/bulk`, {
+        method: 'POST',
+        json: { cuis },
+      }),
+    onSuccess: (results) => {
+      for (const r of results) {
+        if (r.status === 'created')
+          qc.setQueryData(keys.company(r.company.id), r.company);
+      }
       void qc.invalidateQueries({ queryKey: keys.companies, exact: true });
     },
   });

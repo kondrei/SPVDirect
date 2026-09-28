@@ -35,7 +35,10 @@ export type Status =
   | 'none'
   | 'yes'
   | 'no'
-  | 'inactive';
+  | 'inactive'
+  | 'added'
+  | 'duplicate'
+  | 'notFound';
 
 export const STATUS: Record<
   Status,
@@ -53,6 +56,9 @@ export const STATUS: Record<
   yes: { tone: 'success', icon: 'check', label: 'Da' },
   no: { tone: 'neutral', icon: 'x', label: 'Nu' },
   inactive: { tone: 'danger', icon: 'alert', label: 'Contribuabil inactiv' },
+  added: { tone: 'success', icon: 'check', label: 'Adăugată' },
+  duplicate: { tone: 'neutral', icon: 'info', label: 'Exista deja' },
+  notFound: { tone: 'danger', icon: 'x', label: 'Negăsit la ANAF' },
 };
 
 export function StatusBadge({

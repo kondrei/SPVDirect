@@ -74,6 +74,7 @@ When the certificate belongs to the client company's legal representative:
 | GET | `/caen/:code` | session | CAEN class name (Rev. 3 first, Rev. 2 fallback), 404 if unknown |
 | POST | `/accountants/:accountantId/password` | session | Change password (needs the current one; 400 if it is wrong) |
 | GET/POST | `/accountants/:accountantId/companies` | session | List / add client company by CUI (without RO); name and details come from ANAF's VAT registry, 400 if the CUI is unknown. Company responses include `caen` (the CAEN code's name) |
+| POST | `/accountants/:accountantId/companies/bulk` | session | Add up to 500 companies at once: `{ "cuis": [...] }`. ANAF is queried in batches of 100; returns one `{ cui, status: created, exists or not_found, company? }` per unique CUI |
 | POST | `/accountants/:accountantId/companies/:id/anaf-refresh` | session | Re-read the company's data from ANAF's VAT registry |
 | GET/PATCH/DELETE | `/accountants/:accountantId/companies/:id` | session | Read / rename / attach connection / delete |
 | POST | `/accountants/:accountantId/companies/:id/authorization-links` | session | One-time link for the certificate holder |

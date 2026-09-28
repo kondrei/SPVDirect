@@ -42,6 +42,7 @@
   background: var(--surface-raised); color: var(--ink); font: 400 14px/20px var(--font-sans); }
 .spv-input::placeholder { color: var(--ink-muted); }
 .spv-input-mono { font-family: var(--font-mono); font-size: 13px; }
+.spv-textarea { height: auto; min-height: 88px; padding: var(--space-2) var(--space-3); resize: vertical; }
 .spv-field-hint { font-size: 12px; line-height: 16px; color: var(--ink-muted); }
 .spv-field-invalid .spv-input { border-color: var(--danger); }
 .spv-field-invalid .spv-field-hint { color: var(--danger); }

@@ -1,6 +1,18 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import {
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
-import { useCompanies, useConnections, useCreateCompany } from '../api/hooks';
+import {
+  useCompanies,
+  useConnections,
+  useCreateCompanies,
+  useCreateCompany,
+} from '../api/hooks';
+import type { BulkCompanyResult } from '../api/types';
 import { EmptyState } from '../components/EmptyState';
 import { PageHead } from '../components/PageHead';
 import { QueryError } from '../components/QueryError';
@@ -11,68 +23,244 @@ import {
   Card,
   DataTable,
   StatusBadge,
+  TextAreaField,
   TextField,
+  type Status,
 } from '../components/ui';
 import { useAppPath } from '../hooks/useAppPath';
 import {
+  cuisFromFile,
+  MAX_BULK_CUIS,
+  MAX_CUI_FILE_BYTES,
+  parseCuiList,
+} from '../lib/cuiList';
+import {
   connectionStatus,
   formatCui,
-  isValidCui,
   normalizeCui,
+  plural,
   pluralFirme,
 } from '../lib/format';
 
+const RESULT_STATUS: Record<BulkCompanyResult['status'], Status> = {
+  created: 'added',
+  exists: 'duplicate',
+  not_found: 'notFound',
+};
+
+function listError(text: string): string | undefined {
+  const { cuis, invalid } = parseCuiList(text);
+  if (invalid.length) {
+    const shown = invalid.slice(0, 5).join(', ');
+    const more = invalid.length > 5 ? '…' : '';
+    return `CUI invalid: ${shown}${more}. Fiecare CUI are 2–10 cifre, cu sau fără RO.`;
+  }
+  if (cuis.length === 0) return 'Introduceți cel puțin un CUI.';
+  if (cuis.length > MAX_BULK_CUIS)
+    return `Puteți adăuga cel mult ${MAX_BULK_CUIS} firme odată (ați introdus ${cuis.length}).`;
+  return undefined;
+}
+
+function BulkResults({
+  results,
+  onAgain,
+  onDone,
+}: {
+  results: BulkCompanyResult[];
+  onAgain: () => void;
+  onDone: () => void;
+}) {
+  const appPath = useAppPath();
+  const count = (s: BulkCompanyResult['status']) =>
+    results.filter((r) => r.status === s).length;
+  const created = count('created');
+  const exists = count('exists');
+  const notFound = count('not_found');
+  return (
+    <Card title="Rezultatul adăugării">
+      <div className="stack">
+        <Alert
+          tone={notFound ? 'warning' : 'success'}
+          title={`Am adăugat ${pluralFirme(created)}.`}
+        >
+          {`${plural(exists, 'firmă exista', 'firme existau')} deja. ${plural(notFound, 'CUI nu a fost găsit', 'CUI-uri nu au fost găsite')} la ANAF.`}
+          {notFound ? ' Verificați-le și încercați din nou.' : null}
+        </Alert>
+        <DataTable
+          caption="Rezultatul adăugării"
+          rowKey={(r) => r.cui}
+          rows={results}
+          columns={[
+            {
+              key: 'cui',
+              header: 'CUI',
+              mono: true,
+              render: (r) => formatCui(r.cui),
+            },
+            {
+              key: 'name',
+              header: 'Firmă',
+              render: (r) =>
+                r.status === 'created' ? (
+                  <Link
+                    className="row-link"
+                    to={appPath(`/companies/${r.company.id}`)}
+                  >
+                    {r.company.name}
+                  </Link>
+                ) : (
+                  <span className="muted">—</span>
+                ),
+            },
+            {
+              key: 'st',
+              header: 'Rezultat',
+              render: (r) => <StatusBadge status={RESULT_STATUS[r.status]} />,
+            },
+          ]}
+        />
+        <div className="spv-row">
+          <Button variant="primary" icon="plus" onClick={onAgain}>
+            Adaugă alte firme
+          </Button>
+          <Button onClick={onDone}>Închide</Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+type FileNote = { tone: 'info' | 'danger'; message: string };
+
 function AddCompanyForm({ onDone }: { onDone: () => void }) {
   const create = useCreateCompany();
+  const createMany = useCreateCompanies();
   const navigate = useNavigate();
   const appPath = useAppPath();
-  const [cui, setCui] = useState('');
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [text, setText] = useState('');
   const [touched, setTouched] = useState(false);
-  const cuiError =
-    touched && !isValidCui(cui)
-      ? 'CUI invalid: 2–10 cifre, cu sau fără RO.'
-      : undefined;
+  const [fileNote, setFileNote] = useState<FileNote | null>(null);
+  const { cuis } = parseCuiList(text);
+  const error = touched ? listError(text) : undefined;
+  const pending = create.isPending || createMany.isPending;
+  const failure = create.error ?? createMany.error;
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     setTouched(true);
-    if (!isValidCui(cui)) return;
-    create.mutate(
-      { cui: normalizeCui(cui) },
-      { onSuccess: (company) => navigate(appPath(`/companies/${company.id}`)) },
-    );
+    if (pending || listError(text)) return;
+    if (cuis.length === 1) {
+      createMany.reset();
+      create.mutate(
+        { cui: cuis[0] },
+        {
+          onSuccess: (company) =>
+            navigate(appPath(`/companies/${company.id}`)),
+        },
+      );
+    } else {
+      create.reset();
+      createMany.mutate(cuis);
+    }
   };
+
+  const loadFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > MAX_CUI_FILE_BYTES) {
+      setFileNote({
+        tone: 'danger',
+        message: `Fișierul ${file.name} este prea mare. Încărcați un fișier de cel mult 1 MB.`,
+      });
+      return;
+    }
+    const found = cuisFromFile(await file.text());
+    if (found.length === 0) {
+      setFileNote({
+        tone: 'danger',
+        message: `Fișierul ${file.name} nu conține niciun CUI valid. Puneți câte un CUI pe fiecare rând.`,
+      });
+      return;
+    }
+    setText((prev) =>
+      [prev.trim().replace(/[,;]$/, ''), found.join(', ')]
+        .filter(Boolean)
+        .join(', '),
+    );
+    setFileNote({
+      tone: 'info',
+      message: `Am citit ${plural(found.length, 'CUI', 'CUI-uri')} din ${file.name}.`,
+    });
+  };
+
+  if (createMany.isSuccess) {
+    return (
+      <BulkResults
+        results={createMany.data}
+        onAgain={() => {
+          createMany.reset();
+          setText('');
+          setTouched(false);
+          setFileNote(null);
+        }}
+        onDone={onDone}
+      />
+    );
+  }
 
   return (
     <Card
-      title="Firmă nouă"
-      subtitle="Introduceți CUI-ul. Denumirea și celelalte date se preiau automat de la ANAF; certificatul îl legați din pagina firmei."
+      title="Firme noi"
+      subtitle="Introduceți unul sau mai multe CUI-uri, separate prin virgulă, sau încărcați un fișier .csv ori .txt cu câte un CUI pe rând. Denumirea și celelalte date se preiau automat de la ANAF; certificatul îl legați din pagina firmei."
     >
       <form onSubmit={submit} noValidate className="stack">
-        {create.isError ? (
-          <Alert
-            tone="danger"
-            title={`Eroare server ANAF`}
-            children={create.error.message}
-          />
+        {failure ? (
+          <Alert tone="danger" title="Eroare server ANAF">
+            {failure.message}
+          </Alert>
         ) : null}
-        <div className="form-row">
-          <TextField
-            label="CUI"
-            mono
-            placeholder="RO 12345678"
-            value={cui}
-            onChange={(e) => setCui(e.target.value)}
-            hint="Cu sau fără prefixul RO"
-            error={cuiError}
-          />
+        {fileNote ? (
+          <Alert tone={fileNote.tone}>{fileNote.message}</Alert>
+        ) : null}
+        <TextAreaField
+          label="CUI-uri"
+          mono
+          rows={3}
+          placeholder="RO 12345678, 87654321"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          hint="Cu sau fără prefixul RO, separate prin virgulă sau pe rânduri separate."
+          error={error}
+        />
+        <input
+          ref={fileInput}
+          type="file"
+          accept=".csv,.txt,text/csv,text/plain"
+          hidden
+          aria-label="Fișier cu CUI-uri"
+          onChange={(e) => void loadFile(e)}
+        />
+        <div className="spv-row">
           <Button
             type="submit"
             variant="primary"
             icon="plus"
-            loading={create.isPending}
+            loading={pending}
           >
-            {create.isPending ? 'Se caută la ANAF…' : 'Adaugă'}
+            {pending
+              ? 'Se caută la ANAF…'
+              : cuis.length > 1
+                ? `Adaugă ${pluralFirme(cuis.length)}`
+                : 'Adaugă'}
+          </Button>
+          <Button
+            icon="upload"
+            onClick={() => fileInput.current?.click()}
+            disabled={pending}
+          >
+            Încarcă fișier
           </Button>
           <Button onClick={onDone}>Renunță</Button>
         </div>
