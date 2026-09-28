@@ -13,7 +13,7 @@ import { AnafCompanyLookupService } from './anaf-company-lookup.service.js';
 import { Company } from './company.entity.js';
 import { CreateCompanyDto, UpdateCompanyDto } from './dto/company.dto.js';
 
-const CUI_NOT_FOUND =
+export const CUI_NOT_FOUND =
   'CUI incorect: nu există nicio firmă cu acest CUI în baza de date ANAF.';
 
 @Injectable()

@@ -33,6 +33,9 @@ export const envValidationSchema = Joi.object({
   ANAF_TVA_ENDPOINT: Joi.string()
     .uri()
     .default('https://webservicesp.anaf.ro/api/PlatitorTvaRest/v9/tva'),
+  DATA_GOV_RO_API_URL: Joi.string()
+    .uri()
+    .default('https://data.gov.ro/api/3/action'),
 
   HTTPS_KEY_FILE: Joi.string(),
   HTTPS_CERT_FILE: Joi.string(),
@@ -56,6 +59,7 @@ export interface Env {
   ANAF_API_ENDPOINT: string;
   ANAF_ENV: 'test' | 'prod';
   ANAF_TVA_ENDPOINT: string;
+  DATA_GOV_RO_API_URL: string;
   HTTPS_KEY_FILE?: string;
   HTTPS_CERT_FILE?: string;
 }

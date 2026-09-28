@@ -69,7 +69,11 @@ When the certificate belongs to the client company's legal representative:
 | POST | `/auth/register` · `/auth/login` | none | Create account / log in (sets cookie) |
 | POST | `/auth/logout` | none | Clear cookie |
 | GET | `/auth/me` | session | Current accountant |
-| GET/POST | `/accountants/:accountantId/companies` | session | List / add client company by CUI (without RO); name and details come from ANAF's VAT registry, 400 if the CUI is unknown |
+| GET/PATCH | `/accountants/:accountantId/profile` | session | Read / update name, phone, CECCAR membership (title, card number, branch), CCF card number, practice name, CUI and CAEN code (response includes the CAEN name) |
+| GET | `/accountants/:accountantId/profile/firm-lookup/:cui` | session | Read the practice's name and CAEN code from ANAF's VAT registry (nothing is saved) |
+| GET | `/caen/:code` | session | CAEN class name (Rev. 3 first, Rev. 2 fallback), 404 if unknown |
+| POST | `/accountants/:accountantId/password` | session | Change password (needs the current one; 400 if it is wrong) |
+| GET/POST | `/accountants/:accountantId/companies` | session | List / add client company by CUI (without RO); name and details come from ANAF's VAT registry, 400 if the CUI is unknown. Company responses include `caen` (the CAEN code's name) |
 | POST | `/accountants/:accountantId/companies/:id/anaf-refresh` | session | Re-read the company's data from ANAF's VAT registry |
 | GET/PATCH/DELETE | `/accountants/:accountantId/companies/:id` | session | Read / rename / attach connection / delete |
 | POST | `/accountants/:accountantId/companies/:id/authorization-links` | session | One-time link for the certificate holder |
@@ -90,7 +94,7 @@ The schema is managed by TypeORM migrations in `backend/src/database/migrations`
 
 | Table | Purpose |
 |---|---|
-| `accountants` | SPVDirect users (integer id from 1, email is citext and unique, scrypt password hash) |
+| `accountants` | SPVDirect users (integer id from 1, email is citext and unique, scrypt password hash) and their professional profile (CECCAR membership, CCF, practice) |
 | `anaf_connections` | One per authorized certificate: encrypted tokens, `cert_serial`, `roles`, expiries, status |
 | `companies` | Client CUIs per accountant (integer id from 1), the connection used for each, and ANAF VAT-registry data (typed columns + full record in `anaf_data` jsonb) |
 | `authorization_links` | Delegated-authorization links (only the SHA-256 of the token is stored) |
@@ -127,6 +131,9 @@ npm run migration:show      # applied/pending migrations
 npm run migration:generate -- src/database/migrations/<Name>   # after entity changes
 ```
 After generating or creating a migration, add its class to `src/database/migrations/index.ts`.
+
+`src/open-data/` reads public datasets from data.gov.ro (licence OGL-ROU-1.0) through its CKAN API (`DATA_GOV_RO_API_URL`). Nothing is bundled:
+- **CAEN names:** the first time one is needed, `CaenService` downloads the latest ONRC `N_CAEN.CSV` and keeps the Rev. 2 and Rev. 3 classes in memory for 24 hours. If data.gov.ro is unreachable, it keeps the last copy and retries after 5 minutes. Without any copy, company pages load without CAEN names, and `/caen/:code` and saving a profile CAEN code answer 503.
 
 ### Manual end-to-end check
 ```bash

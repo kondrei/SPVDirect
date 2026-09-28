@@ -91,6 +91,14 @@ const ANAF = {
   },
 };
 
+const CAEN_0111 = {
+  code: '0111',
+  name: 'Cultivarea cerealelor (excluzând orezul), plantelor leguminoase și a plantelor oleaginoase',
+  revision: 3,
+  rev2Name:
+    'Cultivarea cerealelor (exclusiv orez), plantelor leguminoase și a plantelor producătoare de semințe oleaginoase',
+};
+
 const company = (over: Record<string, unknown> = {}) => ({
   id: 1,
   accountantId: 1,
@@ -100,6 +108,7 @@ const company = (over: Record<string, unknown> = {}) => ({
   regCom: 'J35/100/2010',
   address: ANAF.date_generale.adresa,
   caenCode: '0111',
+  caen: CAEN_0111,
   registrationStatus: ANAF.date_generale.stare_inregistrare,
   vatPayer: true,
   vatOnCollection: false,
@@ -281,6 +290,9 @@ describe('companies', () => {
     expect(screen.getByText('Da')).toBeInTheDocument();
     expect(screen.getByText('Nu')).toBeInTheDocument();
     expect(screen.getByText('Contribuabil inactiv')).toBeInTheDocument();
+    expect(
+      screen.getAllByText(/^CAEN 0111 · Cultivarea cerealelor/),
+    ).toHaveLength(2);
   });
 
   it('shows every ANAF section on the company page', async () => {
@@ -309,6 +321,15 @@ describe('companies', () => {
       screen.getByText('SOCIETATE COMERCIALĂ CU RĂSPUNDERE LIMITATĂ'),
     ).toBeInTheDocument();
     expect(screen.getByText('01.03.2010')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Cultivarea cerealelor \(excluzând orezul\)/),
+    ).toBeInTheDocument();
+    expect(screen.getByText('CAEN Rev. 3')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /În CAEN Rev. 2, același cod însemna: Cultivarea cerealelor \(exclusiv orez\)/,
+      ),
+    ).toBeInTheDocument();
   });
 
   it('shows not found for a non-numeric company id without calling the API', async () => {
@@ -374,5 +395,257 @@ describe('connections', () => {
     });
     expect(links[0]).toHaveAttribute('href', '/api/accountants/1/anaf/connect');
     expect(await screen.findByText('Expiră în 12 zile')).toBeInTheDocument();
+  });
+});
+
+const PROFILE = {
+  ...ME,
+  phone: null,
+  ceccarMember: false,
+  professionalTitle: null,
+  ceccarNumber: null,
+  ceccarBranch: null,
+  ccfNumber: null,
+  firmName: null,
+  firmCui: null,
+  firmCaenCode: null,
+  firmCaen: null,
+  updatedAt: ME.createdAt,
+};
+
+const profileApi = (extra: Parameters<typeof renderApp>[1] = {}) => ({
+  'GET /auth/me': { status: 200, body: ME },
+  'GET /accountants/1/companies': { status: 200, body: [] },
+  'GET /accountants/1/anaf/connections': { status: 200, body: [] },
+  'GET /accountants/1/profile': { status: 200, body: PROFILE },
+  ...extra,
+});
+
+describe('profile', () => {
+  it('saves the name and CECCAR data and updates the sidebar', async () => {
+    const user = userEvent.setup();
+    let body: Record<string, unknown> = {};
+    renderApp(
+      '/accountants/1/profile',
+      profileApi({
+        'PATCH /accountants/1/profile': (init) => {
+          body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return { status: 200, body: { ...PROFILE, ...body } };
+        },
+      }),
+    );
+    const name = await screen.findByLabelText('Nume');
+    await user.clear(name);
+    await user.type(name, 'Ana Pop');
+    await user.click(screen.getByLabelText('Membru CECCAR'));
+    await user.selectOptions(
+      screen.getByLabelText('Calitate profesională'),
+      'expert_contabil',
+    );
+    await user.type(screen.getByLabelText('Nr. legitimație CECCAR'), '12345');
+    await user.type(screen.getByLabelText('Filiala CECCAR'), 'Timiș');
+    await user.type(screen.getByLabelText('CUI cabinet'), 'RO 14399840');
+    await user.click(screen.getByRole('button', { name: 'Salvează datele' }));
+
+    expect(
+      await screen.findByText('Datele au fost salvate.'),
+    ).toBeInTheDocument();
+    expect(body).toEqual({
+      name: 'Ana Pop',
+      phone: null,
+      ceccarMember: true,
+      professionalTitle: 'expert_contabil',
+      ceccarNumber: '12345',
+      ceccarBranch: 'Timiș',
+      ccfNumber: null,
+      firmName: null,
+      firmCui: '14399840',
+      firmCaenCode: null,
+    });
+    expect(document.querySelector('.app-user-name')).toHaveTextContent(
+      'Ana Pop',
+    );
+  });
+
+  it('asks for the CECCAR title and number before calling the API', async () => {
+    const user = userEvent.setup();
+    const { calls } = renderApp('/accountants/1/profile', profileApi());
+    await user.click(await screen.findByLabelText('Membru CECCAR'));
+    await user.click(screen.getByRole('button', { name: 'Salvează datele' }));
+    expect(
+      screen.getByText('Alegeți calitatea profesională.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Completați numărul de legitimație.'),
+    ).toBeInTheDocument();
+    expect(calls).not.toContain('PATCH /accountants/1/profile');
+  });
+
+  it('changes the password after checking the confirmation', async () => {
+    const user = userEvent.setup();
+    let body = '';
+    renderApp(
+      '/accountants/1/profile',
+      profileApi({
+        'POST /accountants/1/password': (init) => {
+          body = String(init?.body);
+          return { status: 204 };
+        },
+      }),
+    );
+    await user.type(
+      await screen.findByLabelText('Parola actuală'),
+      'old-password-1',
+    );
+    await user.type(screen.getByLabelText('Parola nouă'), 'new-password-2');
+    await user.type(
+      screen.getByLabelText('Confirmă parola nouă'),
+      'new-password-3',
+    );
+    await user.click(screen.getByRole('button', { name: 'Schimbă parola' }));
+    expect(screen.getByText('Parolele nu coincid.')).toBeInTheDocument();
+    expect(body).toBe('');
+
+    await user.clear(screen.getByLabelText('Confirmă parola nouă'));
+    await user.type(
+      screen.getByLabelText('Confirmă parola nouă'),
+      'new-password-2',
+    );
+    await user.click(screen.getByRole('button', { name: 'Schimbă parola' }));
+    expect(
+      await screen.findByText('Parola a fost schimbată.'),
+    ).toBeInTheDocument();
+    expect(JSON.parse(body)).toEqual({
+      currentPassword: 'old-password-1',
+      newPassword: 'new-password-2',
+    });
+    expect(screen.getByLabelText('Parola actuală')).toHaveValue('');
+  });
+
+  it('shows the backend message when the current password is wrong', async () => {
+    const user = userEvent.setup();
+    renderApp(
+      '/accountants/1/profile',
+      profileApi({
+        'POST /accountants/1/password': {
+          status: 400,
+          body: { message: 'Parola actuală este incorectă' },
+        },
+      }),
+    );
+    await user.type(
+      await screen.findByLabelText('Parola actuală'),
+      'wrong-password',
+    );
+    await user.type(screen.getByLabelText('Parola nouă'), 'new-password-2');
+    await user.type(
+      screen.getByLabelText('Confirmă parola nouă'),
+      'new-password-2',
+    );
+    await user.click(screen.getByRole('button', { name: 'Schimbă parola' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Parola actuală este incorectă',
+    );
+  });
+});
+
+describe('profile firm', () => {
+  it('fetches the practice name, CUI and CAEN from ANAF, then saves them', async () => {
+    const user = userEvent.setup();
+    let body: Record<string, unknown> = {};
+    const { calls } = renderApp(
+      '/accountants/1/profile',
+      profileApi({
+        'GET /accountants/1/profile/firm-lookup/14399840': {
+          status: 200,
+          body: {
+            firmCui: '14399840',
+            firmName: 'AGRO VEST SRL',
+            firmCaenCode: '0111',
+            firmCaen: CAEN_0111,
+          },
+        },
+        'PATCH /accountants/1/profile': (init) => {
+          body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          return { status: 200, body: { ...PROFILE, ...body } };
+        },
+      }),
+    );
+    await user.type(await screen.findByLabelText('CUI cabinet'), 'RO 14399840');
+    await user.click(screen.getByRole('button', { name: 'Preia din ANAF' }));
+
+    expect(
+      await screen.findByDisplayValue('AGRO VEST SRL'),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('CUI cabinet')).toHaveValue('14399840');
+    expect(screen.getByLabelText('Cod CAEN cabinet')).toHaveValue('0111');
+    expect(
+      screen.getByText(/Cultivarea cerealelor \(excluzând orezul\)/),
+    ).toBeInTheDocument();
+    expect(calls.some((c) => c.startsWith('GET /caen/'))).toBe(false);
+    expect(calls).not.toContain('PATCH /accountants/1/profile');
+
+    await user.click(screen.getByRole('button', { name: 'Salvează datele' }));
+    await screen.findByText('Datele au fost salvate.');
+    expect(body).toMatchObject({
+      firmName: 'AGRO VEST SRL',
+      firmCui: '14399840',
+      firmCaenCode: '0111',
+    });
+  });
+
+  it('shows the ANAF message when the CUI does not exist', async () => {
+    const user = userEvent.setup();
+    renderApp(
+      '/accountants/1/profile',
+      profileApi({
+        'GET /accountants/1/profile/firm-lookup/12': {
+          status: 400,
+          body: { message: 'CUI incorect: nu există nicio firmă cu acest CUI în baza de date ANAF.' },
+        },
+      }),
+    );
+    await user.type(await screen.findByLabelText('CUI cabinet'), '12');
+    await user.click(screen.getByRole('button', { name: 'Preia din ANAF' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'CUI incorect: nu există nicio firmă',
+    );
+  });
+
+  it('names a CAEN code typed by hand and blocks unknown codes', async () => {
+    const user = userEvent.setup();
+    const { calls } = renderApp(
+      '/accountants/1/profile',
+      profileApi({
+        'GET /caen/6201': {
+          status: 200,
+          body: {
+            code: '6201',
+            name: 'Activități de realizare a soft-ului la comandă (software orientat client)',
+            revision: 2,
+            rev2Name: null,
+          },
+        },
+        'GET /caen/0000': { status: 404, body: { message: 'Cod CAEN necunoscut' } },
+      }),
+    );
+    const field = await screen.findByLabelText('Cod CAEN cabinet');
+    await user.type(field, '6201');
+    expect(
+      await screen.findByText(/Activități de realizare a soft-ului la comandă/),
+    ).toBeInTheDocument();
+    expect(screen.getByText('CAEN Rev. 2')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Codul nu mai există în CAEN Rev. 3/),
+    ).toBeInTheDocument();
+
+    await user.clear(field);
+    await user.type(field, '0000');
+    await waitFor(() => expect(calls).toContain('GET /caen/0000'));
+    await user.click(screen.getByRole('button', { name: 'Salvează datele' }));
+    expect(
+      await screen.findByText('Cod necunoscut în nomenclatorul CAEN.'),
+    ).toBeInTheDocument();
+    expect(calls).not.toContain('PATCH /accountants/1/profile');
   });
 });

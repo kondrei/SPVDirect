@@ -1,6 +1,7 @@
 import { Fragment, type ReactNode } from 'react';
 import { useRefreshCompanyAnaf } from '../api/hooks';
-import type { AnafTvaRecord, Company } from '../api/types';
+import type { AnafTvaRecord, CaenInfo, Company } from '../api/types';
+import { CaenName } from './CaenName';
 import { formatAnafDate, formatCui, formatDateTime } from '../lib/format';
 import { Alert, Button, Card, StatusBadge } from './ui';
 
@@ -54,13 +55,25 @@ function address(a: Record<string, string>, p: 's' | 'd'): Row[] {
   ];
 }
 
-export function AnafDetails({ data }: { data: AnafTvaRecord }) {
+export function AnafDetails({
+  data,
+  caen,
+}: {
+  data: AnafTvaRecord;
+  caen?: CaenInfo | null;
+}) {
   const g = data.date_generale;
   const tva = data.inregistrare_scop_Tva;
   const inc = data.inregistrare_RTVAI;
   const inactiv = data.stare_inactiv;
   const split = data.inregistrare_SplitTVA;
   const periods = tva?.perioade_TVA ?? [];
+  const caenCode = g.cod_CAEN?.trim();
+  const caenValue = caenCode ? (
+    <CaenName caen={caen} code={caenCode} />
+  ) : (
+    text('')
+  );
 
   return (
     <div className="anaf-grid">
@@ -77,7 +90,7 @@ export function AnafDetails({ data }: { data: AnafTvaRecord }) {
           ['Act autorizare', text(g.act)],
           ['Stare înregistrare', text(g.stare_inregistrare)],
           ['Data înregistrării', date(g.data_inregistrare)],
-          ['Cod CAEN', text(g.cod_CAEN, { mono: true })],
+          ['Cod CAEN', caenValue],
           ['IBAN', text(g.iban, { mono: true })],
           ['Organ fiscal competent', text(g.organFiscalCompetent)],
           ['Formă de proprietate', text(g.forma_de_proprietate)],
@@ -177,7 +190,7 @@ export function AnafDataCard({ company }: { company: Company }) {
           <Alert tone="danger" title={refresh.error.message} />
         ) : null}
         {data ? (
-          <AnafDetails data={data} />
+          <AnafDetails data={data} caen={company.caen} />
         ) : (
           <Alert
             tone="info"

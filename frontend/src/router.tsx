@@ -9,6 +9,7 @@ import { ConnectionsPage } from './pages/ConnectionsPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { LoginPage } from './pages/LoginPage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { ProfilePage } from './pages/ProfilePage';
 import { RegisterPage } from './pages/RegisterPage';
 
 export const routes = [
@@ -27,6 +28,7 @@ export const routes = [
       { path: 'companies', element: <CompaniesPage /> },
       { path: 'companies/:id', element: <CompanyPage /> },
       { path: 'connections', element: <ConnectionsPage /> },
+      { path: 'profile', element: <ProfilePage /> },
       {
         path: 'efactura',
         element: (

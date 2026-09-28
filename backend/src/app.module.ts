@@ -12,6 +12,7 @@ import { CompaniesModule } from './companies/companies.module.js';
 import { Env, envValidationSchema } from './config/env.validation.js';
 import { buildTypeOrmOptions } from './config/typeorm.config.js';
 import { HealthController } from './health.controller.js';
+import { OpenDataModule } from './open-data/open-data.module.js';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { HealthController } from './health.controller.js';
     CommonModule,
     AuthModule,
     AccountantsModule,
+    OpenDataModule,
     CompaniesModule,
     ApiLogsModule,
     AnafModule,
