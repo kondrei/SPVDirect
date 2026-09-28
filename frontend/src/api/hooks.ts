@@ -3,14 +3,20 @@ import { accountantPath } from '../hooks/useAppPath';
 import { api, API_URL, ApiError } from './client';
 import type {
   Accountant,
+  AccountantProfile,
   AnafConnection,
   AuthorizationLink,
+  CaenInfo,
   Company,
   ConnectionTestResult,
+  FirmLookup,
+  ProfileUpdate,
 } from './types';
 
 export const keys = {
   me: ['me'] as const,
+  profile: ['profile'] as const,
+  caen: (code: string) => ['caen', code] as const,
   companies: ['companies'] as const,
   company: (id: number) => ['companies', id] as const,
   connections: ['connections'] as const,
@@ -67,6 +73,78 @@ export function useLogout() {
 function useAccountantApiPath(path: string) {
   const accountantId = useMe().data?.id;
   return accountantId ? accountantPath(accountantId, path) : null;
+}
+
+function seedCaen(
+  qc: ReturnType<typeof useQueryClient>,
+  caen: CaenInfo | null,
+) {
+  if (caen) qc.setQueryData(keys.caen(caen.code), caen);
+}
+
+export function useProfile() {
+  const qc = useQueryClient();
+  const path = useAccountantApiPath('/profile');
+  return useQuery({
+    queryKey: keys.profile,
+    queryFn: async () => {
+      const profile = await api<AccountantProfile>(requirePath(path));
+      seedCaen(qc, profile.firmCaen);
+      return profile;
+    },
+    enabled: !!path,
+  });
+}
+
+export function useUpdateProfile() {
+  const qc = useQueryClient();
+  const path = useAccountantApiPath('/profile');
+  return useMutation({
+    mutationFn: (dto: ProfileUpdate) =>
+      api<AccountantProfile>(requirePath(path), { method: 'PATCH', json: dto }),
+    onSuccess: (profile) => {
+      qc.setQueryData(keys.profile, profile);
+      seedCaen(qc, profile.firmCaen);
+      qc.setQueryData<Accountant | null>(keys.me, (me) =>
+        me ? { ...me, name: profile.name } : me,
+      );
+    },
+  });
+}
+
+export function useFirmLookup() {
+  const qc = useQueryClient();
+  const path = useAccountantApiPath('/profile/firm-lookup');
+  return useMutation({
+    mutationFn: (cui: string) =>
+      api<FirmLookup>(`${requirePath(path)}/${encodeURIComponent(cui)}`),
+    onSuccess: (firm) => seedCaen(qc, firm.firmCaen),
+  });
+}
+
+export function useCaen(code: string) {
+  const valid = /^\d{4}$/.test(code);
+  return useQuery({
+    queryKey: keys.caen(code),
+    queryFn: async () => {
+      try {
+        return await api<CaenInfo>(`/caen/${code}`);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) return null;
+        throw err;
+      }
+    },
+    enabled: valid,
+    staleTime: Infinity,
+  });
+}
+
+export function useChangePassword() {
+  const path = useAccountantApiPath('/password');
+  return useMutation({
+    mutationFn: (dto: { currentPassword: string; newPassword: string }) =>
+      api<void>(requirePath(path), { method: 'POST', json: dto }),
+  });
 }
 
 function useCompaniesPath() {

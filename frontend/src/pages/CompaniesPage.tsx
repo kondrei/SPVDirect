@@ -182,9 +182,16 @@ export function CompaniesPage() {
                 key: 'name',
                 header: 'Firmă',
                 render: (r) => (
-                  <Link className="row-link" to={appPath(`/companies/${r.id}`)}>
-                    {r.name}
-                  </Link>
+                  <>
+                    <Link className="row-link" to={appPath(`/companies/${r.id}`)}>
+                      {r.name}
+                    </Link>
+                    {r.caen ? (
+                      <div className="muted small">
+                        CAEN {r.caen.code} · {r.caen.name}
+                      </div>
+                    ) : null}
+                  </>
                 ),
               },
               {

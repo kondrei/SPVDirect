@@ -22,6 +22,7 @@ export interface Company {
   inactive: boolean | null;
   anafData: AnafTvaRecord | null;
   anafSyncedAt: string | null;
+  caen: CaenInfo | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -107,4 +108,45 @@ export interface AuthorizationLink {
 export interface ConnectionTestResult {
   status: number;
   body: string;
+}
+
+export type ProfessionalTitle = 'expert_contabil' | 'contabil_autorizat';
+
+export interface AccountantProfile {
+  id: number;
+  email: string;
+  name: string | null;
+  phone: string | null;
+  ceccarMember: boolean;
+  professionalTitle: ProfessionalTitle | null;
+  ceccarNumber: string | null;
+  ceccarBranch: string | null;
+  ccfNumber: string | null;
+  firmName: string | null;
+  firmCui: string | null;
+  firmCaenCode: string | null;
+  firmCaen: CaenInfo | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ProfileUpdate = Partial<
+  Omit<
+    AccountantProfile,
+    'id' | 'email' | 'firmCaen' | 'createdAt' | 'updatedAt'
+  >
+>;
+
+export interface CaenInfo {
+  code: string;
+  name: string;
+  revision: 2 | 3;
+  rev2Name: string | null;
+}
+
+export interface FirmLookup {
+  firmCui: string;
+  firmName: string;
+  firmCaenCode: string | null;
+  firmCaen: CaenInfo | null;
 }

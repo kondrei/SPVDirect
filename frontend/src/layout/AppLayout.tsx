@@ -137,6 +137,11 @@ export function AppLayout() {
             { to: path('/etransport'), label: 'e-Transport', icon: 'truck' },
           ]}
         />
+        <NavGroup
+          title="Cont"
+          onNavigate={close}
+          items={[{ to: path('/profile'), label: 'Profil', icon: 'settings' }]}
+        />
         <div className="spv-side-foot">
           <span className="spv-avatar" aria-hidden="true">
             {initials(user.name, user.email)}

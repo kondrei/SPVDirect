@@ -71,6 +71,7 @@ A Stop hook (`.claude/settings.json` → `.claude/hooks/verify-backend.sh`) bloc
 - `src/anaf/anaf-oauth.controller.ts`: `/accountants/:accountantId/anaf/connect` (self), `/anaf/authorize/:token[/start]` (public authorization-link pages), `/anaf/callback`.
   - A signed short-lived cookie `spv_anaf_oauth` carries the OAuth state and the mode (`self` or `link`).
 - `src/anaf/authorization-links/`: one-time links (7 days) that let a company's certificate holder authorize for an accountant. Only the SHA-256 hash of the link token is stored.
+- `src/open-data/`: public data.gov.ro datasets through `DataGovRoService` (CKAN search). `CaenService` (ONRC CAEN names, cached 24 h). Never bundle these datasets in the repo.
 - `src/companies/`: client CUIs, stored as digits without `RO`. `anafConnectionId` says which certificate to use for that company.
   - Company ids are integers (identity, from 1). Parse route ids with `ParseIdPipe`.
 
