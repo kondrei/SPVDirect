@@ -37,6 +37,20 @@ export const envValidationSchema = Joi.object({
     .uri()
     .default('https://data.gov.ro/api/3/action'),
 
+  RECAPTCHA_SECRET_KEY: Joi.string().required(),
+  RECAPTCHA_MIN_SCORE: Joi.number().min(0).max(1).default(0.5),
+  RECAPTCHA_VERIFY_URL: Joi.string()
+    .uri()
+    .default('https://www.google.com/recaptcha/api/siteverify'),
+
+  ADMIN_EMAIL: Joi.string().email().required(),
+  MAIL_FROM: Joi.string().required(),
+  SMTP_HOST: Joi.string().hostname().required(),
+  SMTP_PORT: Joi.number().port().default(587),
+  SMTP_SECURE: Joi.boolean().default(false),
+  SMTP_USER: Joi.string().allow(''),
+  SMTP_PASS: Joi.string().allow(''),
+
   HTTPS_KEY_FILE: Joi.string(),
   HTTPS_CERT_FILE: Joi.string(),
 }).and('HTTPS_KEY_FILE', 'HTTPS_CERT_FILE');
@@ -60,6 +74,16 @@ export interface Env {
   ANAF_ENV: 'test' | 'prod';
   ANAF_TVA_ENDPOINT: string;
   DATA_GOV_RO_API_URL: string;
+  RECAPTCHA_SECRET_KEY: string;
+  RECAPTCHA_MIN_SCORE: number;
+  RECAPTCHA_VERIFY_URL: string;
+  ADMIN_EMAIL: string;
+  MAIL_FROM: string;
+  SMTP_HOST: string;
+  SMTP_PORT: number;
+  SMTP_SECURE: boolean;
+  SMTP_USER?: string;
+  SMTP_PASS?: string;
   HTTPS_KEY_FILE?: string;
   HTTPS_CERT_FILE?: string;
 }

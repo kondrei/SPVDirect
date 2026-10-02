@@ -63,18 +63,6 @@ export class AccountantsService {
       .getOne();
   }
 
-  existsByEmail(email: string): Promise<boolean> {
-    return this.accountants.existsBy({ email });
-  }
-
-  create(data: {
-    email: string;
-    passwordHash: string;
-    name: string | null;
-  }): Promise<Accountant> {
-    return this.accountants.save(this.accountants.create(data));
-  }
-
   async getProfile(id: number): Promise<AccountantProfile> {
     return this.profile(await this.getOrThrow(id));
   }

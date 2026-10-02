@@ -1,7 +1,13 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { recaptchaToken } from '../lib/recaptcha';
 import { ME, renderApp } from './render';
+
+vi.mock('../lib/recaptcha', () => ({
+  loadRecaptcha: vi.fn(() => Promise.resolve()),
+  recaptchaToken: vi.fn(() => Promise.resolve('captcha-token')),
+}));
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -194,6 +200,50 @@ describe('session', () => {
       screen.getByRole('link', { name: 'Mergi la contul dvs.' }),
     ).toHaveAttribute('href', '/accountants/1');
     expect(calls.some((c) => c.includes('/accountants/2'))).toBe(false);
+  });
+
+  it('sends the registration with a reCAPTCHA token and waits for approval', async () => {
+    const user = userEvent.setup();
+    let body = '';
+    const { router } = renderApp('/register', {
+      'GET /auth/me': { status: 401 },
+      'POST /auth/register': (init) => {
+        body = String(init?.body);
+        return { status: 202, body: { status: 'pending' } };
+      },
+    });
+    await user.type(await screen.findByLabelText('Nume'), 'Ana Pop');
+    await user.type(screen.getByLabelText('Email'), 'ana@cabinet.ro');
+    await user.type(screen.getByLabelText('Parolă'), 'a-long-password');
+    await user.click(screen.getByRole('button', { name: 'Trimite cererea' }));
+    expect(
+      await screen.findByText('Contul așteaptă aprobarea'),
+    ).toBeInTheDocument();
+    expect(recaptchaToken).toHaveBeenCalledWith('register');
+    expect(JSON.parse(body)).toEqual({
+      email: 'ana@cabinet.ro',
+      password: 'a-long-password',
+      name: 'Ana Pop',
+      captchaToken: 'captcha-token',
+    });
+    expect(router.state.location.pathname).toBe('/register');
+  });
+
+  it('does not register when reCAPTCHA cannot load', async () => {
+    const user = userEvent.setup();
+    vi.mocked(recaptchaToken).mockRejectedValueOnce(
+      new Error('Verificarea anti-robot nu s-a putut încărca.'),
+    );
+    const { calls } = renderApp('/register', {
+      'GET /auth/me': { status: 401 },
+    });
+    await user.type(await screen.findByLabelText('Email'), 'ana@cabinet.ro');
+    await user.type(screen.getByLabelText('Parolă'), 'a-long-password');
+    await user.click(screen.getByRole('button', { name: 'Trimite cererea' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Verificarea anti-robot nu s-a putut încărca.',
+    );
+    expect(calls).not.toContain('POST /auth/register');
   });
 
   it('shows the backend message when login fails', async () => {

@@ -1,47 +1,58 @@
-import { ConflictException } from '@nestjs/common';
+import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { QueryFailedError } from 'typeorm';
 import type { AccountantsService } from '../accountants/accountants.service.js';
-import { AuthService } from './auth.service.js';
+import { hashPassword } from '../common/crypto/password.js';
+import { ACCOUNT_PENDING, AuthService } from './auth.service.js';
 import { SESSION_AUDIENCE } from './session.js';
 
 const jwt = new JwtService({ secret: 'x'.repeat(32) });
+const password = 'a-long-password';
 
-function setup(create: () => Promise<unknown>) {
+async function setup(found: Record<string, unknown> | null) {
   const accountants = {
-    existsByEmail: vi.fn().mockResolvedValue(false),
-    create: vi.fn(create),
+    findByEmailWithPassword: vi
+      .fn()
+      .mockResolvedValue(
+        found && { ...found, passwordHash: await hashPassword(password) },
+      ),
   } as unknown as AccountantsService;
   return new AuthService(accountants, jwt);
 }
 
-const dto = { email: 'a@example.com', password: 'a-long-password' };
-
 describe('AuthService', () => {
-  it('maps a concurrent duplicate registration to 409', async () => {
-    const service = setup(() =>
-      Promise.reject(
-        new QueryFailedError(
-          'INSERT',
-          [],
-          Object.assign(new Error('dup'), {
-            code: '23505',
-          }),
-        ),
-      ),
-    );
-    await expect(service.register(dto)).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+  it('logs in an active accountant', async () => {
+    const service = await setup({ id: 1, status: 'active' });
+    await expect(
+      service.validateLogin({ email: 'a@example.com', password }),
+    ).resolves.toMatchObject({ id: 1 });
   });
 
-  it('rethrows other database errors', async () => {
-    const service = setup(() => Promise.reject(new Error('connection lost')));
-    await expect(service.register(dto)).rejects.toThrow('connection lost');
+  it('refuses a pending accountant with 403 after checking the password', async () => {
+    const service = await setup({ id: 1, status: 'pending' });
+    await expect(
+      service.validateLogin({ email: 'a@example.com', password }),
+    ).rejects.toThrow(new ForbiddenException(ACCOUNT_PENDING));
+  });
+
+  it('does not reveal a pending account to a wrong password', async () => {
+    const service = await setup({ id: 1, status: 'pending' });
+    await expect(
+      service.validateLogin({
+        email: 'a@example.com',
+        password: 'wrong-pass!',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('rejects an unknown email with 401', async () => {
+    const service = await setup(null);
+    await expect(
+      service.validateLogin({ email: 'a@example.com', password }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
   it('signs sessions with the session audience', async () => {
-    const token = await setup(() => Promise.resolve({})).signSession(1);
+    const token = await (await setup(null)).signSession(1);
     await expect(
       jwt.verifyAsync(token, { audience: SESSION_AUDIENCE }),
     ).resolves.toMatchObject({ sub: '1', aud: SESSION_AUDIENCE });

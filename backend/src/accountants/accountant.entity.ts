@@ -13,6 +13,10 @@ export const PROFESSIONAL_TITLES = [
 
 export type ProfessionalTitle = (typeof PROFESSIONAL_TITLES)[number];
 
+export const ACCOUNT_STATUSES = ['pending', 'active'] as const;
+
+export type AccountStatus = (typeof ACCOUNT_STATUSES)[number];
+
 @Entity('accountants')
 export class Accountant {
   @PrimaryGeneratedColumn('identity', {
@@ -30,6 +34,21 @@ export class Accountant {
 
   @Column({ type: 'text', nullable: true })
   name: string | null;
+
+  @Column({ type: 'text', default: 'pending' })
+  status: AccountStatus;
+
+  @Column({
+    name: 'approval_token_hash',
+    type: 'text',
+    nullable: true,
+    unique: true,
+    select: false,
+  })
+  approvalTokenHash: string | null;
+
+  @Column({ name: 'admin_notified_at', type: 'timestamptz', nullable: true })
+  adminNotifiedAt: Date | null;
 
   @Column({ type: 'varchar', length: 30, nullable: true })
   phone: string | null;

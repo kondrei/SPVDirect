@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { accountantPath } from '../hooks/useAppPath';
+import { recaptchaToken } from '../lib/recaptcha';
 import { api, API_URL, ApiError } from './client';
 import type {
   Accountant,
@@ -52,11 +53,16 @@ export function useLogin() {
 }
 
 export function useRegister() {
-  const qc = useQueryClient();
   return useMutation({
-    mutationFn: (dto: { email: string; password: string; name?: string }) =>
-      api<Accountant>('/auth/register', { method: 'POST', json: dto }),
-    onSuccess: (me) => qc.setQueryData(keys.me, me),
+    mutationFn: async (dto: {
+      email: string;
+      password: string;
+      name?: string;
+    }) =>
+      api<{ status: 'pending' }>('/auth/register', {
+        method: 'POST',
+        json: { ...dto, captchaToken: await recaptchaToken('register') },
+      }),
   });
 }
 

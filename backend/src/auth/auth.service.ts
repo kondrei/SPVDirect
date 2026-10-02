@@ -1,19 +1,21 @@
 import {
-  ConflictException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { AccountantsService } from '../accountants/accountants.service.js';
 import { Accountant } from '../accountants/accountant.entity.js';
-import { hashPassword, verifyPassword } from '../common/crypto/password.js';
-import { isUniqueViolation } from '../common/db-errors.js';
-import { LoginDto, RegisterDto } from './dto/auth.dto.js';
+import { verifyPassword } from '../common/crypto/password.js';
+import { LoginDto } from './dto/auth.dto.js';
 import {
   SESSION_AUDIENCE,
   SESSION_TTL_SECONDS,
   SessionPayload,
 } from './session.js';
+
+export const ACCOUNT_PENDING =
+  'Contul dvs. așteaptă aprobarea administratorului.';
 
 @Injectable()
 export class AuthService {
@@ -21,24 +23,6 @@ export class AuthService {
     private readonly accountants: AccountantsService,
     private readonly jwt: JwtService,
   ) {}
-
-  async register(dto: RegisterDto): Promise<Accountant> {
-    if (await this.accountants.existsByEmail(dto.email)) {
-      throw new ConflictException('Există deja un cont cu acest email');
-    }
-    try {
-      return await this.accountants.create({
-        email: dto.email,
-        passwordHash: await hashPassword(dto.password),
-        name: dto.name ?? null,
-      });
-    } catch (err) {
-      if (isUniqueViolation(err)) {
-        throw new ConflictException('Există deja un cont cu acest email');
-      }
-      throw err;
-    }
-  }
 
   async validateLogin(dto: LoginDto): Promise<Accountant> {
     const accountant = await this.accountants.findByEmailWithPassword(
@@ -49,6 +33,9 @@ export class AuthService {
       !(await verifyPassword(dto.password, accountant.passwordHash))
     ) {
       throw new UnauthorizedException('Email sau parolă incorectă');
+    }
+    if (accountant.status !== 'active') {
+      throw new ForbiddenException(ACCOUNT_PENDING);
     }
     return accountant;
   }

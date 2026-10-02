@@ -3,6 +3,7 @@ import { Accountant } from '../accountants/accountant.entity.js';
 import { AnafConnection } from '../anaf/anaf-connection.entity.js';
 import { AuthorizationLink } from '../anaf/authorization-links/authorization-link.entity.js';
 import { ApiLog } from '../api-logs/api-log.entity.js';
+import { BannedEmail } from '../auth/banned-email.entity.js';
 import { Company } from '../companies/company.entity.js';
 import { migrations } from '../database/migrations/index.js';
 
@@ -11,6 +12,7 @@ export const entities = [
   AnafConnection,
   AuthorizationLink,
   ApiLog,
+  BannedEmail,
   Company,
 ];
 

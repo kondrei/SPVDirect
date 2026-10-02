@@ -3,12 +3,14 @@ import {
   Controller,
   Get,
   HttpCode,
+  Ip,
   NotFoundException,
   Post,
   Res,
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { CommandBus } from '@nestjs/cqrs';
 import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { AccountantsService } from '../accountants/accountants.service.js';
@@ -17,6 +19,7 @@ import { AuthService } from './auth.service.js';
 import { CurrentAccountantId } from './current-accountant.decorator.js';
 import { LoginDto, RegisterDto } from './dto/auth.dto.js';
 import { JwtAuthGuard } from './jwt-auth.guard.js';
+import { RegisterAccountantCommand } from './registrations/register-accountant.command.js';
 import {
   cookieOptions,
   SESSION_COOKIE,
@@ -32,6 +35,7 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly accountants: AccountantsService,
+    private readonly commands: CommandBus,
     config: ConfigService,
   ) {
     this.production = config.get('NODE_ENV') === 'production';
@@ -39,13 +43,10 @@ export class AuthController {
 
   @Post('register')
   @Throttle(CREDENTIALS_THROTTLE)
-  async register(
-    @Body() dto: RegisterDto,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    const accountant = await this.auth.register(dto);
-    await this.setSession(res, accountant.id);
-    return toPublic(accountant);
+  @HttpCode(202)
+  async register(@Body() dto: RegisterDto, @Ip() ip: string) {
+    await this.commands.execute(new RegisterAccountantCommand(dto, ip));
+    return { status: 'pending' as const };
   }
 
   @Post('login')
