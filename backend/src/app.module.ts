@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { CqrsModule } from '@nestjs/cqrs';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AccountantsModule } from './accountants/accountants.module.js';
@@ -29,6 +31,8 @@ import { OpenDataModule } from './open-data/open-data.module.js';
         }),
     }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
+    CqrsModule.forRoot(),
+    ScheduleModule.forRoot(),
     CommonModule,
     AuthModule,
     AccountantsModule,

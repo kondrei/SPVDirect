@@ -46,6 +46,10 @@ describe('env validation of the HTTPS files', () => {
     ANAF_CLIENT_ID: 'id',
     ANAF_CLIENT_SECRET: 'secret',
     ANAF_REDIRECT_URI: 'https://localhost:3000/anaf/callback',
+    RECAPTCHA_SECRET_KEY: 'recaptcha-secret',
+    ADMIN_EMAIL: 'admin@example.com',
+    MAIL_FROM: 'SPVDirect <no-reply@example.com>',
+    SMTP_HOST: 'smtp.example.com',
   };
 
   it('accepts both files or neither', () => {

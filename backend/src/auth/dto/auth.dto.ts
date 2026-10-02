@@ -1,5 +1,6 @@
 import {
   IsEmail,
+  IsNotEmpty,
   IsOptional,
   IsString,
   MaxLength,
@@ -20,6 +21,11 @@ export class RegisterDto {
   @IsString()
   @MaxLength(200)
   name?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(4000)
+  captchaToken: string;
 }
 
 export class LoginDto {

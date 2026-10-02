@@ -66,7 +66,9 @@ When the certificate belongs to the client company's legal representative:
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | GET | `/health` | none | Liveness |
-| POST | `/auth/register` · `/auth/login` | none | Create account / log in (sets cookie) |
+| POST | `/auth/register` | none | Request an account (reCAPTCHA v3 `captchaToken`). Answers 202; the account stays pending and `ADMIN_EMAIL` gets approve/reject links |
+| GET · POST | `/auth/registrations/:token/approve` · `/reject` | link | Admin links from the email. GET shows a confirmation page, POST acts. Reject deletes the request and adds the email to `banned_emails` |
+| POST | `/auth/login` | none | Log in (sets cookie). 403 while the account is pending |
 | POST | `/auth/logout` | none | Clear cookie |
 | GET | `/auth/me` | session | Current accountant |
 | GET/PATCH | `/accountants/:accountantId/profile` | session | Read / update name, phone, CECCAR membership (title, card number, branch), CCF card number, practice name, CUI and CAEN code (response includes the CAEN name) |
@@ -118,7 +120,7 @@ The schema is managed by TypeORM migrations in `backend/src/database/migrations`
 cd backend
 npm install
 cp .env.example .env        # fill in DATABASE_URL, secrets, ANAF credentials
-npm run migration:run       # creates the 5 tables in Supabase
+npm run migration:run       # creates the 6 tables in Supabase
 npm run cert:dev            # self-signed cert for https://localhost (certs/, git-ignored)
 npm run dev                 # https://localhost:3000
 ```
@@ -139,10 +141,11 @@ After generating or creating a migration, add its class to `src/database/migrati
 ### Manual end-to-end check
 ```bash
 curl -k -c jar -H "Content-Type: application/json" \
-  -d '{"email":"andrei@example.com","password":"a-long-password","name":"Andrei"}' \
-  https://localhost:3000/auth/register
+  -d '{"email":"andrei@example.com","password":"a-long-password"}' \
+  https://localhost:3000/auth/login
 curl -k -b jar https://localhost:3000/auth/me
 ```
+Register from the React app (`/register`), since it needs a reCAPTCHA token, then approve the account from the email sent to `ADMIN_EMAIL`.
 Then open `https://localhost:3000/accountants/<your id>/anaf/connect` in the browser where you're logged in (the id is in the `/auth/me` response; accept the self-signed certificate warning once), pick the certificate, and call `GET /accountants/<your id>/anaf/connections/:id/test`. You should see a response starting with `Hello, SPVDirect`.
 
 ---
