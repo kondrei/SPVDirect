@@ -48,7 +48,7 @@ src/
   components/ui design-system components: Button, Badge/StatusBadge, TextField, Card, Alert, DataTable, Stat, Icon, Wordmark
   components/   app pieces: PageHead, EmptyState, QueryError, ConfirmButton, CopyField
   layout/       AppLayout (sidebar, session guard) · AuthLayout
-  pages/        Login, Register, Panou, Firme, Firmă, Certificate ANAF, e-Factura/e-Transport (placeholders)
+  pages/        Login, Register, Panou, Firme, Firmă, Certificate ANAF, Mesaje SPV (list, download, document request), e-Factura/e-Transport (placeholders)
   lib/format.ts CUI rules (mirror the backend DTO), dates in Europe/Bucharest, Romanian plurals, certificate status
   styles/       tokens.css (generated from the design system) · components.css · app.css
 ```

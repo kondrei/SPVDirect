@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { SPV_PAGE_SIZE } from '../common/constants';
 import { accountantPath } from '../hooks/useAppPath';
 import { recaptchaToken } from '../lib/recaptcha';
-import { api, API_URL, ApiError } from './client';
+import { api, API_URL, ApiError, downloadFile } from './client';
 import type {
   Accountant,
   AccountantProfile,
@@ -13,6 +14,10 @@ import type {
   ConnectionTestResult,
   FirmLookup,
   ProfileUpdate,
+  SpvArchivePage,
+  SpvRequestInput,
+  SpvRequestResult,
+  SpvSyncSummary,
 } from './types';
 
 export const keys = {
@@ -326,5 +331,78 @@ export function useTestConnection() {
       api<ConnectionTestResult>(
         `${requirePath(path)}/${encodeURIComponent(id)}/test`,
       ),
+  });
+}
+
+function spvPath(path: string | null, connectionId: string, rest: string) {
+  return `${requirePath(path)}/${encodeURIComponent(connectionId)}/spv${rest}`;
+}
+
+export interface SpvArchiveQuery {
+  cif?: string;
+  page: number;
+}
+
+
+export function useSpvArchive(query: SpvArchiveQuery) {
+  const path = useAccountantApiPath('/spv/archive');
+  return useQuery({
+    queryKey: ['spv-archive', query] as const,
+    queryFn: () => {
+      const params = new URLSearchParams({
+        page: String(query.page),
+        pageSize: String(SPV_PAGE_SIZE),
+      });
+      if (query.cif) params.set('cif', query.cif);
+      return api<SpvArchivePage>(`${requirePath(path)}?${params}`);
+    },
+    enabled: !!path,
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function useSyncSpv() {
+  const qc = useQueryClient();
+  const path = useConnectionsPath();
+  return useMutation({
+    mutationFn: ({
+      connectionId,
+      zile,
+    }: {
+      connectionId: string;
+      zile: number;
+    }) =>
+      api<SpvSyncSummary>(spvPath(path, connectionId, '/sync'), {
+        method: 'POST',
+        json: { zile },
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['spv-archive'] }),
+  });
+}
+
+export function useDownloadSpvMessage() {
+  const path = useAccountantApiPath('/spv/archive');
+  return useMutation({
+    mutationFn: (message: { id: number; anafMessageId: string }) =>
+      downloadFile(
+        `${requirePath(path)}/${message.id}/download`,
+        `mesaj-${message.anafMessageId}.pdf`,
+      ),
+  });
+}
+
+export function useCreateSpvRequest() {
+  const qc = useQueryClient();
+  const path = useConnectionsPath();
+  return useMutation({
+    mutationFn: ({
+      connectionId,
+      ...dto
+    }: SpvRequestInput & { connectionId: string }) =>
+      api<SpvRequestResult>(spvPath(path, connectionId, '/requests'), {
+        method: 'POST',
+        json: dto,
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['spv-archive'] }),
   });
 }

@@ -13,8 +13,12 @@ import { Throttle } from '@nestjs/throttler';
 import { AccountantParamGuard } from '../auth/accountant-param.guard.js';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { ParseIdPipe } from '../common/parse-id.pipe.js';
-import { CaenService } from '../open-data/caen.service.js';
-import { CompaniesService } from './companies.service.js';
+import { CaenService } from '../open-data/services/caen.service.js';
+import { CompaniesService } from './services/companies.service.js';
+import {
+  ANAF_BULK_THROTTLE,
+  ANAF_LOOKUP_THROTTLE,
+} from '../common/constants.js';
 import type { Company } from './company.entity.js';
 import { toCompanyResponse } from './company-response.js';
 import {
@@ -22,9 +26,6 @@ import {
   CreateCompanyDto,
   UpdateCompanyDto,
 } from './dto/company.dto.js';
-
-const ANAF_LOOKUP_THROTTLE = { default: { limit: 20, ttl: 60_000 } };
-const ANAF_BULK_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
 
 @Controller('accountants/:accountantId/companies')
 @UseGuards(JwtAuthGuard, AccountantParamGuard)

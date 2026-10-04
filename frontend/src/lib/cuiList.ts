@@ -1,8 +1,5 @@
 import { isValidCui, normalizeCui } from './format';
 
-export const MAX_BULK_CUIS = 500;
-export const MAX_CUI_FILE_BYTES = 1024 * 1024;
-
 const SEPARATORS = /[,;\t\r\n]+/;
 
 function clean(cell: string): string {

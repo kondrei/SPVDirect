@@ -2,6 +2,7 @@ import type { DataSourceOptions } from 'typeorm';
 import { Accountant } from '../accountants/accountant.entity.js';
 import { AnafConnection } from '../anaf/anaf-connection.entity.js';
 import { AuthorizationLink } from '../anaf/authorization-links/authorization-link.entity.js';
+import { SpvMessage } from '../anaf/spv/spv-message.entity.js';
 import { ApiLog } from '../api-logs/api-log.entity.js';
 import { BannedEmail } from '../auth/banned-email.entity.js';
 import { Company } from '../companies/company.entity.js';
@@ -14,6 +15,7 @@ export const entities = [
   ApiLog,
   BannedEmail,
   Company,
+  SpvMessage,
 ];
 
 export function buildTypeOrmOptions(env: {

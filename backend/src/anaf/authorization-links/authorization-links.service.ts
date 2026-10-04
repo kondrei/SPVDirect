@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { createHash, randomBytes } from 'node:crypto';
 import { IsNull, Repository } from 'typeorm';
-import { CompaniesService } from '../../companies/companies.service.js';
+import { CompaniesService } from '../../companies/services/companies.service.js';
 import { Company } from '../../companies/company.entity.js';
 import { AuthorizationLink } from './authorization-link.entity.js';
 

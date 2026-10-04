@@ -3,7 +3,7 @@ import { RegistrationsController } from './registrations.controller.js';
 import type {
   PendingRegistration,
   RegistrationsService,
-} from './registrations.service.js';
+} from './services/registrations.service.js';
 
 const pending: PendingRegistration = {
   id: 7,

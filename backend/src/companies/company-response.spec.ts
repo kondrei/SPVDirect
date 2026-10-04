@@ -1,4 +1,4 @@
-import type { CaenService } from '../open-data/caen.service.js';
+import type { CaenService } from '../open-data/services/caen.service.js';
 import type { Company } from './company.entity.js';
 import { toCompanyResponse } from './company-response.js';
 

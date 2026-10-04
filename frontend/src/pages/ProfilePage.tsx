@@ -12,7 +12,7 @@ import { PageHead } from '../components/PageHead';
 import { QueryError } from '../components/QueryError';
 import { Alert, Button, Card, TextField } from '../components/ui';
 import { formatDate, isValidCui, normalizeCui } from '../lib/format';
-import { MIN_PASSWORD } from './RegisterPage';
+import { MIN_PASSWORD } from '../common/constants';
 
 const PROFESSIONAL_TITLES: Record<ProfessionalTitle, string> = {
   expert_contabil: 'Expert contabil',

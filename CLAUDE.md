@@ -67,9 +67,9 @@ A Stop hook (`.claude/settings.json` → `.claude/hooks/verify-backend.sh`) bloc
 - The USB token or cloud certificate is only used in the browser during logincert. After that, the stored tokens are enough.
 
 ## Key code paths
-- `src/anaf/anaf-oauth.service.ts`: authorize URL, code exchange, refresh, `getAccessToken()`.
-- `src/anaf/anaf-api.service.ts`: **the single gateway to api.anaf.ro**. It handles the ownership check, retry after a refresh on 401/403, and `api_logs` auditing. New ANAF features (e-Factura, e-Transport) must call `AnafApiService.request()`, never axios directly.
-- `src/anaf/anaf-oauth.controller.ts`: `/accountants/:accountantId/anaf/connect` (self), `/anaf/authorize/:token[/start]` (public authorization-link pages), `/anaf/callback`.
+- `src/anaf/services/anaf-oauth.service.ts`: authorize URL, code exchange, refresh, `getAccessToken()`.
+- `src/anaf/services/anaf-api.service.ts`: **the single gateway to api.anaf.ro**. It handles the ownership check, retry after a refresh on 401/403, and `api_logs` auditing. New ANAF features (e-Factura, e-Transport) must call `AnafApiService.request()`, never axios directly.
+- `src/anaf/controllers/anaf-oauth.controller.ts`: `/accountants/:accountantId/anaf/connect` (self), `/anaf/authorize/:token[/start]` (public authorization-link pages), `/anaf/callback`.
   - A signed short-lived cookie `spv_anaf_oauth` carries the OAuth state and the mode (`self` or `link`).
 - `src/anaf/authorization-links/`: one-time links (7 days) that let a company's certificate holder authorize for an accountant. Only the SHA-256 hash of the link token is stored.
 - `src/open-data/`: public data.gov.ro datasets through `DataGovRoService` (CKAN search). `CaenService` (ONRC CAEN names, cached 24 h). Never bundle these datasets in the repo.

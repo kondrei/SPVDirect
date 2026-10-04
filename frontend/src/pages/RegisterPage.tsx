@@ -1,11 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { useRegister } from '../api/hooks';
+import { MIN_PASSWORD } from '../common/constants';
 import { Alert, Button, TextField } from '../components/ui';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { loadRecaptcha } from '../lib/recaptcha';
-
-export const MIN_PASSWORD = 10;
 
 export function RegisterPage() {
   useDocumentTitle('Cont nou');

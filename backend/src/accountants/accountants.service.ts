@@ -6,10 +6,10 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { normalizeCaenCode, type CaenInfo } from '../open-data/caen.js';
-import { CaenService } from '../open-data/caen.service.js';
+import { CaenService } from '../open-data/services/caen.service.js';
 import { hashPassword, verifyPassword } from '../common/crypto/password.js';
-import { AnafCompanyLookupService } from '../companies/anaf-company-lookup.service.js';
-import { CUI_NOT_FOUND } from '../companies/companies.service.js';
+import { AnafCompanyLookupService } from '../companies/services/anaf-company-lookup.service.js';
+import { CUI_NOT_FOUND } from '../companies/services/companies.service.js';
 import { Accountant } from './accountant.entity.js';
 import type { ChangePasswordDto, UpdateProfileDto } from './dto/profile.dto.js';
 

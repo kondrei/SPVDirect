@@ -30,9 +30,18 @@ export const envValidationSchema = Joi.object({
     .default('https://logincert.anaf.ro/anaf-oauth2/v1/revoke'),
   ANAF_API_ENDPOINT: Joi.string().uri().default('https://api.anaf.ro'),
   ANAF_ENV: Joi.string().valid('test', 'prod').default('test'),
+  ANAF_SPV_ENDPOINT: Joi.string()
+    .uri()
+    .default('https://webserviced.anaf.ro/SPVWS2/rest'),
   ANAF_TVA_ENDPOINT: Joi.string()
     .uri()
     .default('https://webservicesp.anaf.ro/api/PlatitorTvaRest/v9/tva'),
+  SPV_STORAGE: Joi.string().valid('database', 'supabase').default('database'),
+  SUPABASE_URL: Joi.string().uri().empty(''),
+  SUPABASE_SERVICE_KEY: Joi.string().empty(''),
+  SUPABASE_SPV_BUCKET: Joi.string()
+    .pattern(/^[a-z0-9][a-z0-9-]{1,62}$/)
+    .default('spv-messages'),
   DATA_GOV_RO_API_URL: Joi.string()
     .uri()
     .default('https://data.gov.ro/api/3/action'),
@@ -53,7 +62,19 @@ export const envValidationSchema = Joi.object({
 
   HTTPS_KEY_FILE: Joi.string(),
   HTTPS_CERT_FILE: Joi.string(),
-}).and('HTTPS_KEY_FILE', 'HTTPS_CERT_FILE');
+})
+  .and('HTTPS_KEY_FILE', 'HTTPS_CERT_FILE')
+  .custom((env: Record<string, unknown>, helpers) => {
+    if (env.SPV_STORAGE !== 'supabase') return env;
+    for (const key of ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY']) {
+      if (!env[key]) {
+        return helpers.message({
+          custom: `"${key}" is required when SPV_STORAGE is supabase`,
+        });
+      }
+    }
+    return env;
+  });
 
 export interface Env {
   NODE_ENV: 'development' | 'test' | 'production';
@@ -72,7 +93,12 @@ export interface Env {
   ANAF_REVOKE_ENDPOINT: string;
   ANAF_API_ENDPOINT: string;
   ANAF_ENV: 'test' | 'prod';
+  ANAF_SPV_ENDPOINT: string;
   ANAF_TVA_ENDPOINT: string;
+  SPV_STORAGE: 'database' | 'supabase';
+  SUPABASE_URL?: string;
+  SUPABASE_SERVICE_KEY?: string;
+  SUPABASE_SPV_BUCKET: string;
   DATA_GOV_RO_API_URL: string;
   RECAPTCHA_SECRET_KEY: string;
   RECAPTCHA_MIN_SCORE: number;

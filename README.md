@@ -86,6 +86,12 @@ When the certificate belongs to the client company's legal representative:
 | GET | `/accountants/:accountantId/anaf/connections` | session | List certificates (no tokens returned) |
 | PATCH/DELETE | `/accountants/:accountantId/anaf/connections/:id` | session | Rename / remove |
 | GET | `/accountants/:accountantId/anaf/connections/:id/test` | session | Call ANAF TestOauth `hello` |
+| GET | `/accountants/:accountantId/anaf/connections/:id/spv/messages?zile=&cif=` | session | SPV `listaMesaje`: messages from the last 1–60 days, optionally for one CIF/CNP |
+| GET | `/accountants/:accountantId/anaf/connections/:id/spv/messages/:messageId/download` | session | SPV `descarcare`: the message PDF (id from the list) |
+| POST | `/accountants/:accountantId/anaf/connections/:id/spv/sync` | session | Pull the last `zile` (default 60) days of SPV messages from ANAF into the `spv_messages` table and save each PDF. Returns `{ fetched, added, downloaded, failed, pending }`; at most 100 PDFs per run |
+| GET | `/accountants/:accountantId/spv/archive?cif=&type=&companyId=&page=&pageSize=` | session | Saved messages (metadata and whether the PDF is stored), newest first |
+| GET | `/accountants/:accountantId/spv/archive/:id/download` | session | Saved PDF; if it was never stored, it is fetched from ANAF and saved |
+| POST | `/accountants/:accountantId/anaf/connections/:id/spv/requests` | session | SPV `cerere`: request a document or report. Body `{ tip, cui, an?, luna?, motiv?, numarInregistrare?, cuiPunctDeLucru? }`; returns `requestId`, which later appears as `requestId` on a message in the list |
 
 `AnafApiService.request()` is the single gateway to api.anaf.ro. It handles ownership checks, proactive refresh, retry after a refresh on 401/403, 429 mapping and `api_logs` auditing. The e-Factura and e-Transport modules will build on it.
 
@@ -101,6 +107,7 @@ The schema is managed by TypeORM migrations in `backend/src/database/migrations`
 | `anaf_connections` | One per authorized certificate: encrypted tokens, `cert_serial`, `roles`, expiries, status |
 | `companies` | Client CUIs per accountant (integer id from 1), the connection used for each, and ANAF VAT-registry data (typed columns + full record in `anaf_data` jsonb) |
 | `authorization_links` | Delegated-authorization links (only the SHA-256 of the token is stored) |
+| `spv_messages` | SPV messages kept per accountant (unique on ANAF message id), PDF in a `bytea` column (`SPV_STORAGE=database`, default) or in a private Supabase Storage bucket (`SPV_STORAGE=supabase`, path kept in `storage_path`), matched to a company by CIF. With Supabase Storage on, the same nightly job also moves PDFs still in the database to the bucket (set `SUPABASE_URL` and the server-side `SUPABASE_SERVICE_KEY`; the bucket `SUPABASE_SPV_BUCKET` is created on first use). A nightly job (03:00 Europe/Bucharest) syncs every active certificate, because ANAF only keeps messages for a limited time |
 | `api_logs` | Audit of every api.anaf.ro call and every VAT-registry lookup (service, endpoint, status, latency) |
 
 ---

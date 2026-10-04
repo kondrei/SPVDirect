@@ -8,14 +8,14 @@ import { QueryFailedError, type DataSource } from 'typeorm';
 import { Accountant } from '../../accountants/accountant.entity.js';
 import { verifyPassword } from '../../common/crypto/password.js';
 import { BannedEmail } from '../banned-email.entity.js';
-import type { RecaptchaService } from '../recaptcha.service.js';
+import type { RecaptchaService } from '../services/recaptcha.service.js';
 import { RegisterAccountantCommand } from './register-accountant.command.js';
 import {
   EMAIL_BANNED,
   RegisterAccountantHandler,
 } from './register-accountant.handler.js';
 import { AccountantRegisteredEvent } from './registration.events.js';
-import { hashApprovalToken } from './registrations.service.js';
+import { hashApprovalToken } from './services/registrations.service.js';
 
 const dto = {
   email: 'new@example.com',

@@ -3,8 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { randomBytes } from 'node:crypto';
 import { IsNull, Repository } from 'typeorm';
 import { Accountant } from '../../accountants/accountant.entity.js';
-import { RegistrationMailer } from './registration-mailer.service.js';
-import { hashApprovalToken } from './registrations.service.js';
+import { RegistrationMailer } from './services/registration-mailer.service.js';
+import { hashApprovalToken } from './services/registrations.service.js';
 import {
   ResendAdminApprovalCommand,
   type ResendResult,

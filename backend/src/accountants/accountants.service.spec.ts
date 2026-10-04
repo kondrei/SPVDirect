@@ -1,9 +1,9 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { Repository } from 'typeorm';
 import { describeCaen, parseCaenCsv } from '../open-data/caen.js';
-import type { CaenService } from '../open-data/caen.service.js';
+import type { CaenService } from '../open-data/services/caen.service.js';
 import { hashPassword, verifyPassword } from '../common/crypto/password.js';
-import type { AnafCompanyLookupService } from '../companies/anaf-company-lookup.service.js';
+import type { AnafCompanyLookupService } from '../companies/services/anaf-company-lookup.service.js';
 import { anafTvaRecord } from '../testing/anaf-tva-record.js';
 import { CAEN_CSV } from '../testing/caen-csv.js';
 import type { Accountant } from './accountant.entity.js';

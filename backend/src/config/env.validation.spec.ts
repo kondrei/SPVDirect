@@ -56,3 +56,50 @@ describe('envValidationSchema: registration and mail', () => {
     ).toBeUndefined();
   });
 });
+
+describe('envValidationSchema: SPV storage', () => {
+  it('defaults to the database and ignores empty Supabase values', () => {
+    const { value, error } = validate({
+      ...base,
+      SUPABASE_URL: '',
+      SUPABASE_SERVICE_KEY: '',
+    });
+    expect(error).toBeUndefined();
+    expect(value).toMatchObject({
+      SPV_STORAGE: 'database',
+      SUPABASE_SPV_BUCKET: 'spv-messages',
+    });
+  });
+
+  it.each(['SUPABASE_URL', 'SUPABASE_SERVICE_KEY'])(
+    'requires %s when SPV_STORAGE is supabase',
+    (key) => {
+      const env: Record<string, unknown> = {
+        ...base,
+        SPV_STORAGE: 'supabase',
+        SUPABASE_URL: 'https://abc.supabase.co',
+        SUPABASE_SERVICE_KEY: 'key',
+      };
+      delete env[key];
+      expect(validate(env).error?.message).toMatch(key);
+    },
+  );
+
+  it('accepts a full Supabase configuration', () => {
+    expect(
+      validate({
+        ...base,
+        SPV_STORAGE: 'supabase',
+        SUPABASE_URL: 'https://abc.supabase.co',
+        SUPABASE_SERVICE_KEY: 'key',
+      }).error,
+    ).toBeUndefined();
+  });
+
+  it('rejects an unknown storage mode and a bad bucket name', () => {
+    expect(validate({ ...base, SPV_STORAGE: 's3' }).error).toBeDefined();
+    expect(
+      validate({ ...base, SUPABASE_SPV_BUCKET: 'Bad Bucket' }).error,
+    ).toBeDefined();
+  });
+});

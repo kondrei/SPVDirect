@@ -1,6 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import type { Repository } from 'typeorm';
-import type { CompaniesService } from '../../companies/companies.service.js';
+import type { CompaniesService } from '../../companies/services/companies.service.js';
 import type { AuthorizationLink } from './authorization-link.entity.js';
 import {
   AuthorizationLinksService,
