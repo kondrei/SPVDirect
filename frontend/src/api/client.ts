@@ -78,3 +78,39 @@ export async function api<T>(
   if (!res.ok) throw new ApiError(res.status, errorMessage(res.status, body));
   return body as T;
 }
+
+export async function downloadFile(
+  path: string,
+  fallbackName: string,
+): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, { credentials: 'include' });
+  } catch {
+    throw new ApiError(
+      0,
+      'Nu se poate contacta serverul SPVDirect. Verificați conexiunea.',
+    );
+  }
+  if (!res.ok) {
+    let body: unknown = null;
+    try {
+      body = await res.json();
+    } catch {
+      body = null;
+    }
+    throw new ApiError(res.status, errorMessage(res.status, body));
+  }
+  const blob = await res.blob();
+  const match = /filename="?([^";]+)"?/.exec(
+    res.headers.get('content-disposition') ?? '',
+  );
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = match?.[1] ?? fallbackName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}

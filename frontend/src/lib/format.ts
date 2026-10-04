@@ -1,8 +1,6 @@
 import type { Status } from '../components/ui';
 import type { AnafConnection } from '../api/types';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-export const EXPIRING_DAYS = 30;
+import { DAY_MS, EXPIRING_DAYS } from '../common/constants';
 
 export function normalizeCui(value: string): string {
   return value.replace(/\s+/g, '').replace(/^RO/i, '');

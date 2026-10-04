@@ -4,7 +4,7 @@ import { escapeHtml, renderPage } from '../../common/html.js';
 import {
   PendingRegistration,
   RegistrationsService,
-} from './registrations.service.js';
+} from './services/registrations.service.js';
 
 type Decision = 'approve' | 'reject';
 

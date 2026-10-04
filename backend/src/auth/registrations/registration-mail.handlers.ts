@@ -1,5 +1,5 @@
 import { EventsHandler, IEventHandler } from '@nestjs/cqrs';
-import { RegistrationMailer } from './registration-mailer.service.js';
+import { RegistrationMailer } from './services/registration-mailer.service.js';
 import {
   AccountantApprovedEvent,
   AccountantRegisteredEvent,

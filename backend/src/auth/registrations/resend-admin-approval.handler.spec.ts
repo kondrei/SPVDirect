@@ -1,7 +1,7 @@
 import { IsNull, type Repository } from 'typeorm';
 import type { Accountant } from '../../accountants/accountant.entity.js';
-import type { RegistrationMailer } from './registration-mailer.service.js';
-import { hashApprovalToken } from './registrations.service.js';
+import type { RegistrationMailer } from './services/registration-mailer.service.js';
+import { hashApprovalToken } from './services/registrations.service.js';
 import { ResendAdminApprovalCommand } from './resend-admin-approval.command.js';
 import { ResendAdminApprovalHandler } from './resend-admin-approval.handler.js';
 

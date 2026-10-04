@@ -19,7 +19,7 @@ export class AdminApprovalRetryJob {
     private readonly commands: CommandBus,
     @InjectRepository(Accountant)
     private readonly accountants: Repository<Accountant>,
-  ) { }
+  ) {}
 
   @Cron(RETRY_SCHEDULE, { timeZone: 'Europe/Bucharest' })
   async run(): Promise<void> {

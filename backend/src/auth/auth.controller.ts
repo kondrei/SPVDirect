@@ -15,9 +15,10 @@ import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { AccountantsService } from '../accountants/accountants.service.js';
 import { Accountant } from '../accountants/accountant.entity.js';
-import { AuthService } from './auth.service.js';
+import { AuthService } from './services/auth.service.js';
 import { CurrentAccountantId } from './current-accountant.decorator.js';
 import { LoginDto, RegisterDto } from './dto/auth.dto.js';
+import { CREDENTIALS_THROTTLE } from '../common/constants.js';
 import { JwtAuthGuard } from './jwt-auth.guard.js';
 import { RegisterAccountantCommand } from './registrations/register-accountant.command.js';
 import {
@@ -25,8 +26,6 @@ import {
   SESSION_COOKIE,
   SESSION_TTL_SECONDS,
 } from './session.js';
-
-const CREDENTIALS_THROTTLE = { default: { limit: 10, ttl: 60_000 } };
 
 @Controller('auth')
 export class AuthController {

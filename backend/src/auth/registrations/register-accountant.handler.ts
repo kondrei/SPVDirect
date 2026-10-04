@@ -6,10 +6,10 @@ import { Accountant } from '../../accountants/accountant.entity.js';
 import { hashPassword } from '../../common/crypto/password.js';
 import { isUniqueViolation } from '../../common/db-errors.js';
 import { BannedEmail } from '../banned-email.entity.js';
-import { RecaptchaService } from '../recaptcha.service.js';
+import { RecaptchaService } from '../services/recaptcha.service.js';
 import { RegisterAccountantCommand } from './register-accountant.command.js';
 import { AccountantRegisteredEvent } from './registration.events.js';
-import { hashApprovalToken } from './registrations.service.js';
+import { hashApprovalToken } from './services/registrations.service.js';
 
 export const REGISTER_ACTION = 'register';
 export const EMAIL_TAKEN = 'Există deja un cont sau o cerere cu acest email';

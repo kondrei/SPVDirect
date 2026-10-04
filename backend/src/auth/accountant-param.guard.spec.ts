@@ -1,8 +1,8 @@
 import type { ExecutionContext } from '@nestjs/common';
 import { ForbiddenException } from '@nestjs/common';
 import { GUARDS_METADATA, PATH_METADATA } from '@nestjs/common/constants.js';
-import { AnafConnectionsController } from '../anaf/anaf-connections.controller.js';
-import { AnafOAuthController } from '../anaf/anaf-oauth.controller.js';
+import { AnafConnectionsController } from '../anaf/controllers/anaf-connections.controller.js';
+import { AnafOAuthController } from '../anaf/controllers/anaf-oauth.controller.js';
 import { AuthorizationLinksController } from '../anaf/authorization-links/authorization-links.controller.js';
 import { CompaniesController } from '../companies/companies.controller.js';
 import { AccountantParamGuard } from './accountant-param.guard.js';

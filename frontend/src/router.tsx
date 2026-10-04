@@ -11,6 +11,7 @@ import { LoginPage } from './pages/LoginPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { RegisterPage } from './pages/RegisterPage';
+import { SpvPage } from './pages/SpvPage';
 
 export const routes = [
   {
@@ -28,6 +29,7 @@ export const routes = [
       { path: 'companies', element: <CompaniesPage /> },
       { path: 'companies/:id', element: <CompanyPage /> },
       { path: 'connections', element: <ConnectionsPage /> },
+      { path: 'spv', element: <SpvPage /> },
       { path: 'profile', element: <ProfilePage /> },
       {
         path: 'efactura',

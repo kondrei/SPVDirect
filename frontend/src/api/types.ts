@@ -154,3 +154,51 @@ export interface FirmLookup {
   firmCaenCode: string | null;
   firmCaen: CaenInfo | null;
 }
+
+export interface ArchivedSpvMessage {
+  id: number;
+  anafMessageId: string;
+  cif: string | null;
+  type: string | null;
+  details: string | null;
+  requestId: string | null;
+  createdAt: string | null;
+  createdAtRaw: string | null;
+  companyId: number | null;
+  stored: boolean;
+  sizeBytes: number | null;
+  downloadedAt: string | null;
+}
+
+export interface SpvArchivePage {
+  items: ArchivedSpvMessage[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface SpvSyncSummary {
+  fetched: number;
+  added: number;
+  downloaded: number;
+  failed: number;
+  pending: number;
+}
+
+export interface SpvRequestInput {
+  tip: string;
+  cui: string;
+  an?: number;
+  luna?: number;
+  motiv?: string;
+  numarInregistrare?: string;
+  cuiPunctDeLucru?: string;
+}
+
+export interface SpvRequestResult {
+  requestId: string;
+  parameters: string | null;
+  certSerial: string | null;
+  cnp: string | null;
+  title: string | null;
+}

@@ -133,6 +133,7 @@ export function AppLayout() {
           title="Servicii SPV"
           onNavigate={close}
           items={[
+            { to: path('/spv'), label: 'Mesaje SPV', icon: 'download' },
             { to: path('/efactura'), label: 'e-Factura', icon: 'invoice' },
             { to: path('/etransport'), label: 'e-Transport', icon: 'truck' },
           ]}

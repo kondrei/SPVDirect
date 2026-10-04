@@ -6,7 +6,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
-import { CaenService } from './caen.service.js';
+import { CaenService } from './services/caen.service.js';
 
 @Controller('caen')
 @UseGuards(JwtAuthGuard)

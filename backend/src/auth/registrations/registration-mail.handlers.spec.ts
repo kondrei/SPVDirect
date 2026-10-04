@@ -2,7 +2,7 @@ import {
   AdminApprovalMailHandler,
   ApprovalNoticeMailHandler,
 } from './registration-mail.handlers.js';
-import type { RegistrationMailer } from './registration-mailer.service.js';
+import type { RegistrationMailer } from './services/registration-mailer.service.js';
 import {
   AccountantApprovedEvent,
   AccountantRegisteredEvent,

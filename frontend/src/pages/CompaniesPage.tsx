@@ -27,11 +27,10 @@ import {
   TextField,
   type Status,
 } from '../components/ui';
+import { MAX_BULK_CUIS, MAX_CUI_FILE_BYTES } from '../common/constants';
 import { useAppPath } from '../hooks/useAppPath';
 import {
   cuisFromFile,
-  MAX_BULK_CUIS,
-  MAX_CUI_FILE_BYTES,
   parseCuiList,
 } from '../lib/cuiList';
 import {
