@@ -7,3 +7,9 @@ export const ANAF_BULK_THROTTLE = { default: { limit: 5, ttl: MINUTE_MS } };
 export const ARCHIVE_THROTTLE = { default: { limit: 60, ttl: MINUTE_MS } };
 export const SPV_THROTTLE = { default: { limit: 30, ttl: MINUTE_MS } };
 export const SPV_REQUEST_THROTTLE = { default: { limit: 10, ttl: MINUTE_MS } };
+export const EFACTURA_THROTTLE = { default: { limit: 30, ttl: MINUTE_MS } };
+export const EFACTURA_UPLOAD_THROTTLE = {
+  default: { limit: 20, ttl: MINUTE_MS },
+};
+export const INVOICE_THROTTLE = { default: { limit: 30, ttl: MINUTE_MS } };
+export const INVOICE_MAIL_THROTTLE = { default: { limit: 10, ttl: MINUTE_MS } };

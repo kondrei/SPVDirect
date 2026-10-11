@@ -7,11 +7,15 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { AnafConnection } from '../../anaf/anaf-connection.entity.js';
-import { isUniqueViolation } from '../../common/db-errors.js';
+import {
+  isForeignKeyViolation,
+  isUniqueViolation,
+} from '../../common/db-errors.js';
+import { validateLogo } from '../helpers/company-logo.js';
 import {
   companyFieldsFromAnaf,
   type AnafTvaRecord,
-} from '../anaf-company-info.js';
+} from '../helpers/anaf-company-info.js';
 import { AnafCompanyLookupService } from './anaf-company-lookup.service.js';
 import { Company } from '../company.entity.js';
 import {
@@ -145,6 +149,10 @@ export class CompaniesService {
   ): Promise<Company> {
     const company = await this.get(accountantId, id);
     if (dto.name !== undefined) company.name = dto.name;
+    if (dto.iban !== undefined) company.iban = dto.iban;
+    if (dto.bankName !== undefined) company.bankName = dto.bankName;
+    if (dto.email !== undefined) company.email = dto.email;
+    if (dto.phone !== undefined) company.phone = dto.phone;
     if (dto.anafConnectionId !== undefined) {
       if (
         dto.anafConnectionId !== null &&
@@ -167,8 +175,61 @@ export class CompaniesService {
     );
   }
 
+  async setLogo(
+    accountantId: number,
+    id: number,
+    file: Buffer | undefined,
+  ): Promise<Company> {
+    const logo = validateLogo(file);
+    const company = await this.get(accountantId, id);
+    await this.companies.update(
+      { id: company.id },
+      { logo: logo.content, logoContentType: logo.contentType },
+    );
+    company.logoContentType = logo.contentType;
+    return company;
+  }
+
+  async getLogo(
+    accountantId: number,
+    id: number,
+  ): Promise<{ content: Buffer; contentType: string }> {
+    const company = await this.companies
+      .createQueryBuilder('c')
+      .addSelect('c.logo')
+      .where('c.id = :id AND c.accountantId = :accountantId', {
+        id,
+        accountantId,
+      })
+      .getOne();
+    if (!company) throw new NotFoundException('Firma nu a fost găsită');
+    if (!company.logo || !company.logoContentType) {
+      throw new NotFoundException('Firma nu are logo');
+    }
+    return { content: company.logo, contentType: company.logoContentType };
+  }
+
+  async removeLogo(accountantId: number, id: number): Promise<Company> {
+    const company = await this.get(accountantId, id);
+    await this.companies.update(
+      { id: company.id },
+      { logo: null, logoContentType: null },
+    );
+    company.logoContentType = null;
+    return company;
+  }
+
   async remove(accountantId: number, id: number): Promise<void> {
     const company = await this.get(accountantId, id);
-    await this.companies.remove(company);
+    try {
+      await this.companies.remove(company);
+    } catch (err) {
+      if (isForeignKeyViolation(err)) {
+        throw new ConflictException(
+          'Firma are facturi emise și nu poate fi ștearsă.',
+        );
+      }
+      throw err;
+    }
   }
 }

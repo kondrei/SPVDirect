@@ -4,7 +4,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { AccountantsService } from '../../accountants/accountants.service.js';
+import { AccountantsService } from '../../accountants/services/accountants.service.js';
 import { Accountant } from '../../accountants/accountant.entity.js';
 import { verifyPassword } from '../../common/crypto/password.js';
 import { LoginDto } from '../dto/auth.dto.js';

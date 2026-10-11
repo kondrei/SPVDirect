@@ -3,14 +3,19 @@ import { AccountRedirect } from './layout/AccountRedirect';
 import { AppLayout } from './layout/AppLayout';
 import { AuthLayout } from './layout/AuthLayout';
 import { ComingSoonPage } from './pages/ComingSoonPage';
-import { CompaniesPage } from './pages/CompaniesPage';
-import { CompanyPage } from './pages/CompanyPage';
+import { CompaniesPage } from './pages/companies/CompaniesPage';
+import { CompanyPage } from './pages/companies/CompanyPage';
 import { ConnectionsPage } from './pages/ConnectionsPage';
 import { DashboardPage } from './pages/DashboardPage';
-import { LoginPage } from './pages/LoginPage';
+import { EfacturaMessagesPage } from './pages/efactura/EfacturaMessagesPage';
+import { EfacturaPage } from './pages/efactura/EfacturaPage';
+import { EfacturaValidatorPage } from './pages/efactura/EfacturaValidatorPage';
+import { InvoiceNewPage } from './pages/invoices/InvoiceNewPage';
+import { InvoicesPage } from './pages/invoices/InvoicesPage';
+import { LoginPage } from './pages/auth/LoginPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ProfilePage } from './pages/ProfilePage';
-import { RegisterPage } from './pages/RegisterPage';
+import { RegisterPage } from './pages/auth/RegisterPage';
 import { SpvPage } from './pages/SpvPage';
 
 export const routes = [
@@ -29,18 +34,13 @@ export const routes = [
       { path: 'companies', element: <CompaniesPage /> },
       { path: 'companies/:id', element: <CompanyPage /> },
       { path: 'connections', element: <ConnectionsPage /> },
+      { path: 'invoices', element: <InvoicesPage /> },
+      { path: 'invoices/new', element: <InvoiceNewPage /> },
       { path: 'spv', element: <SpvPage /> },
       { path: 'profile', element: <ProfilePage /> },
-      {
-        path: 'efactura',
-        element: (
-          <ComingSoonPage
-            title="e-Factura"
-            icon="invoice"
-            what="Încărcarea facturilor XML, starea mesajelor și descărcarea facturilor primite vin în faza 2."
-          />
-        ),
-      },
+      { path: 'efactura', element: <EfacturaPage /> },
+      { path: 'efactura/messages', element: <EfacturaMessagesPage /> },
+      { path: 'efactura/validator', element: <EfacturaValidatorPage /> },
       {
         path: 'etransport',
         element: (

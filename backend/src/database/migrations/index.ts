@@ -7,6 +7,9 @@ import { AccountApproval1790700000000 } from './1790700000000-AccountApproval.js
 import { AdminNotifiedAt1790800000000 } from './1790800000000-AdminNotifiedAt.js';
 import { SpvMessages1790900000000 } from './1790900000000-SpvMessages.js';
 import { SpvMessageStoragePath1791000000000 } from './1791000000000-SpvMessageStoragePath.js';
+import { Invoices1791100000000 } from './1791100000000-Invoices.js';
+import { InvoiceStorno1791200000000 } from './1791200000000-InvoiceStorno.js';
+import { EfacturaUploads1791300000000 } from './1791300000000-EfacturaUploads.js';
 
 export const migrations = [
   InitialSchema1790200000000,
@@ -18,4 +21,7 @@ export const migrations = [
   AdminNotifiedAt1790800000000,
   SpvMessages1790900000000,
   SpvMessageStoragePath1791000000000,
+  Invoices1791100000000,
+  InvoiceStorno1791200000000,
+  EfacturaUploads1791300000000,
 ];

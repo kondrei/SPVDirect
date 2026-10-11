@@ -5,3 +5,7 @@ export const MAX_CUI_FILE_BYTES = 1024 * 1024;
 export const MAX_SPV_DAYS = 60;
 export const SPV_PAGE_SIZE = 25;
 export const MIN_PASSWORD = 10;
+
+export const INVOICE_PAGE_SIZE = 25;
+
+export const MAX_LOGO_BYTES = 512 * 1024;

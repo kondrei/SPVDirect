@@ -1,6 +1,10 @@
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { CreateCompaniesDto, MAX_BULK_CUIS } from './company.dto.js';
+import {
+  CreateCompaniesDto,
+  MAX_BULK_CUIS,
+  UpdateCompanyDto,
+} from './company.dto.js';
 
 async function check(body: Record<string, unknown>) {
   const dto = plainToInstance(CreateCompaniesDto, body);
@@ -47,5 +51,48 @@ describe('CreateCompaniesDto', () => {
     expect((await check({ cuis })).errors).toEqual([
       `Puteți adăuga cel mult ${MAX_BULK_CUIS} firme odată`,
     ]);
+  });
+});
+
+describe('UpdateCompanyDto invoicing details', () => {
+  async function checkUpdate(body: Record<string, unknown>) {
+    const dto = plainToInstance(UpdateCompanyDto, body);
+    const errors = await validate(dto, {
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    });
+    return {
+      dto,
+      errors: errors.flatMap((e) => Object.values(e.constraints ?? {})),
+    };
+  }
+
+  it('normalizes the IBAN and turns blank values into null', async () => {
+    const { dto, errors } = await checkUpdate({
+      iban: 'ro49 aaaa 1b31 0075 9384 0000',
+      bankName: '  ',
+      email: '',
+      phone: ' 0256 000 000 ',
+    });
+    expect(errors).toEqual([]);
+    expect(dto.iban).toBe('RO49AAAA1B31007593840000');
+    expect(dto.bankName).toBeNull();
+    expect(dto.email).toBeNull();
+    expect(dto.phone).toBe('0256 000 000');
+  });
+
+  it('rejects an invalid IBAN, email and phone', async () => {
+    const { errors } = await checkUpdate({
+      iban: 'RO12',
+      email: 'nu-este-email',
+      phone: 'abc',
+    });
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        'IBAN invalid',
+        'Adresa de email este invalidă',
+        'Număr de telefon invalid',
+      ]),
+    );
   });
 });

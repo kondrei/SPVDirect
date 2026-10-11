@@ -13,8 +13,8 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsString, MaxLength, MinLength } from 'class-validator';
 import { Repository } from 'typeorm';
-import { AccountantParamGuard } from '../../auth/accountant-param.guard.js';
-import { JwtAuthGuard } from '../../auth/jwt-auth.guard.js';
+import { AccountantParamGuard } from '../../auth/guards/accountant-param.guard.js';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard.js';
 import { ParseIdPipe } from '../../common/parse-id.pipe.js';
 import { AnafApiService } from '../services/anaf-api.service.js';
 import { AnafConnection } from '../anaf-connection.entity.js';

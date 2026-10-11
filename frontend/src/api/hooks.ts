@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { SPV_PAGE_SIZE } from '../common/constants';
+import { INVOICE_PAGE_SIZE, SPV_PAGE_SIZE } from '../common/constants';
 import { accountantPath } from '../hooks/useAppPath';
 import { recaptchaToken } from '../lib/recaptcha';
-import { api, API_URL, ApiError, downloadFile } from './client';
+import { api, API_URL, ApiError, downloadFile, fetchFile } from './client';
 import type {
   Accountant,
   AccountantProfile,
@@ -12,6 +12,19 @@ import type {
   CaenInfo,
   Company,
   ConnectionTestResult,
+  CreateInvoiceInput,
+  CreateStornoInput,
+  CreatedInvoice,
+  BuyerLookup,
+  Invoice,
+  InvoicePage,
+  InvoiceStats,
+  EfacturaMessageList,
+  EfacturaUpload,
+  EfacturaUploadPage,
+  MessageFilter,
+  UploadXmlInput,
+  XmlValidation,
   FirmLookup,
   ProfileUpdate,
   SpvArchivePage,
@@ -27,6 +40,8 @@ export const keys = {
   companies: ['companies'] as const,
   company: (id: number) => ['companies', id] as const,
   connections: ['connections'] as const,
+  invoices: ['invoices'] as const,
+  efactura: ['efactura'] as const,
 };
 
 export function useMe() {
@@ -247,11 +262,20 @@ export function useRefreshCompanyAnaf(id: number) {
   });
 }
 
+export interface CompanyUpdate {
+  name?: string;
+  anafConnectionId?: string | null;
+  iban?: string | null;
+  bankName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+}
+
 export function useUpdateCompany(id: number) {
   const qc = useQueryClient();
   const path = useCompaniesPath();
   return useMutation({
-    mutationFn: (dto: { name?: string; anafConnectionId?: string | null }) =>
+    mutationFn: (dto: CompanyUpdate) =>
       api<Company>(`${requirePath(path)}/${id}`, {
         method: 'PATCH',
         json: dto,
@@ -404,5 +428,341 @@ export function useCreateSpvRequest() {
         json: dto,
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['spv-archive'] }),
+  });
+}
+
+export function useCompanyLogoUrl(company: {
+  id: number;
+  hasLogo: boolean;
+  updatedAt: string;
+}) {
+  const path = useCompaniesPath();
+  if (!company.hasLogo || !path) return null;
+  return `${API_URL}${path}/${company.id}/logo?v=${encodeURIComponent(company.updatedAt)}`;
+}
+
+export function useUploadCompanyLogo(id: number) {
+  const qc = useQueryClient();
+  const path = useCompaniesPath();
+  return useMutation({
+    mutationFn: (file: File) => {
+      const body = new FormData();
+      body.append('logo', file);
+      return api<Company>(`${requirePath(path)}/${id}/logo`, {
+        method: 'PUT',
+        body,
+      });
+    },
+    onSuccess: (company) => {
+      qc.setQueryData(keys.company(id), (old: Company | undefined) =>
+        old ? { ...old, ...company, updatedAt: new Date().toISOString() } : company,
+      );
+      void qc.invalidateQueries({ queryKey: keys.companies, exact: true });
+    },
+  });
+}
+
+export function useRemoveCompanyLogo(id: number) {
+  const qc = useQueryClient();
+  const path = useCompaniesPath();
+  return useMutation({
+    mutationFn: () =>
+      api<Company>(`${requirePath(path)}/${id}/logo`, { method: 'DELETE' }),
+    onSuccess: (company) => {
+      qc.setQueryData(keys.company(id), company);
+      void qc.invalidateQueries({ queryKey: keys.companies, exact: true });
+    },
+  });
+}
+
+export interface InvoiceListQuery {
+  companyId?: number;
+  page: number;
+}
+
+export function useInvoiceStats() {
+  const path = useAccountantApiPath('/invoices');
+  return useQuery({
+    queryKey: [...keys.invoices, 'stats'] as const,
+    queryFn: () => api<InvoiceStats>(`${requirePath(path)}/stats`),
+    enabled: !!path,
+  });
+}
+
+export function useInvoices(query: InvoiceListQuery) {
+  const path = useAccountantApiPath('/invoices');
+  return useQuery({
+    queryKey: [...keys.invoices, query] as const,
+    queryFn: () => {
+      const params = new URLSearchParams({
+        page: String(query.page),
+        pageSize: String(INVOICE_PAGE_SIZE),
+      });
+      if (query.companyId) params.set('companyId', String(query.companyId));
+      return api<InvoicePage>(`${requirePath(path)}?${params}`);
+    },
+    enabled: !!path,
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function useBuyerLookup() {
+  const path = useAccountantApiPath('/invoices/buyer-lookup');
+  return useMutation({
+    mutationFn: (cui: string) =>
+      api<BuyerLookup>(`${requirePath(path)}/${encodeURIComponent(cui)}`),
+  });
+}
+
+export function useNextInvoiceNumber(companyId: number, series: string) {
+  const path = useAccountantApiPath('/invoices/next-number');
+  const valid = companyId > 0 && /^[A-Z0-9]{1,10}$/.test(series);
+  return useQuery({
+    queryKey: [...keys.invoices, 'next-number', companyId, series] as const,
+    queryFn: () =>
+      api<{ number: number }>(
+        `${requirePath(path)}?${new URLSearchParams({ companyId: String(companyId), series })}`,
+      ),
+    enabled: !!path && valid,
+  });
+}
+
+export function useCreateInvoice() {
+  const qc = useQueryClient();
+  const path = useAccountantApiPath('/invoices');
+  return useMutation({
+    mutationFn: (dto: CreateInvoiceInput) =>
+      api<CreatedInvoice>(requirePath(path), { method: 'POST', json: dto }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.invoices }),
+  });
+}
+
+export function useDownloadInvoice() {
+  const path = useAccountantApiPath('/invoices');
+  return useMutation({
+    mutationFn: ({
+      id,
+      format,
+      filename,
+    }: {
+      id: number;
+      format: 'pdf' | 'xml';
+      filename: string;
+    }) =>
+      downloadFile(`${requirePath(path)}/${id}/${format}`, `${filename}.${format}`),
+  });
+}
+
+export function useSaveInvoiceToStorage() {
+  const qc = useQueryClient();
+  const path = useAccountantApiPath('/invoices');
+  return useMutation({
+    mutationFn: (id: number) =>
+      api<Invoice>(`${requirePath(path)}/${id}/store`, { method: 'POST' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.invoices }),
+  });
+}
+
+export function useSendInvoice() {
+  const qc = useQueryClient();
+  const path = useAccountantApiPath('/invoices');
+  return useMutation({
+    mutationFn: ({ id, to }: { id: number; to?: string }) =>
+      api<Invoice>(`${requirePath(path)}/${id}/send`, {
+        method: 'POST',
+        json: to ? { to } : {},
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.invoices }),
+  });
+}
+
+export function useInvoice(id: number | null) {
+  const path = useAccountantApiPath('/invoices');
+  return useQuery({
+    queryKey: [...keys.invoices, 'detail', id] as const,
+    queryFn: () => api<Invoice>(`${requirePath(path)}/${id}`),
+    enabled: !!path && id !== null,
+  });
+}
+
+export function useCreateStorno() {
+  const qc = useQueryClient();
+  const path = useAccountantApiPath('/invoices');
+  return useMutation({
+    mutationFn: ({ id, ...dto }: CreateStornoInput & { id: number }) =>
+      api<CreatedInvoice>(`${requirePath(path)}/${id}/storno`, {
+        method: 'POST',
+        json: dto,
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.invoices }),
+  });
+}
+
+export function useEfacturaUploads(query: {
+  companyId?: number;
+  page: number;
+  pageSize?: number;
+}) {
+  const path = useAccountantApiPath('/efactura/uploads');
+  return useQuery({
+    queryKey: [...keys.efactura, 'uploads', query] as const,
+    queryFn: () => {
+      const params = new URLSearchParams({
+        page: String(query.page),
+        pageSize: String(query.pageSize ?? INVOICE_PAGE_SIZE),
+      });
+      if (query.companyId) params.set('companyId', String(query.companyId));
+      return api<EfacturaUploadPage>(`${requirePath(path)}?${params}`);
+    },
+    enabled: !!path,
+  });
+}
+
+export function useUploadInvoiceToAnaf() {
+  const qc = useQueryClient();
+  const path = useAccountantApiPath('/efactura/invoices');
+  return useMutation({
+    mutationFn: (invoiceId: number) =>
+      api<EfacturaUpload>(`${requirePath(path)}/${invoiceId}/upload`, {
+        method: 'POST',
+        json: {},
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.efactura }),
+  });
+}
+
+export function useValidateInvoice() {
+  const path = useAccountantApiPath('/efactura/invoices');
+  return useMutation({
+    mutationFn: (invoiceId: number) =>
+      api<XmlValidation>(`${requirePath(path)}/${invoiceId}/validate`, {
+        method: 'POST',
+      }),
+  });
+}
+
+export function useUploadXml() {
+  const qc = useQueryClient();
+  const path = useAccountantApiPath('/efactura/uploads');
+  return useMutation({
+    mutationFn: ({ file, ...fields }: UploadXmlInput) => {
+      const body = new FormData();
+      body.append('file', file);
+      for (const [key, value] of Object.entries(fields)) {
+        if (value !== undefined) body.append(key, String(value));
+      }
+      return api<EfacturaUpload>(requirePath(path), { method: 'POST', body });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.efactura }),
+  });
+}
+
+export function useRefreshUpload() {
+  const qc = useQueryClient();
+  const path = useAccountantApiPath('/efactura/uploads');
+  return useMutation({
+    mutationFn: (id: number) =>
+      api<EfacturaUpload>(`${requirePath(path)}/${id}/refresh`, {
+        method: 'POST',
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.efactura }),
+  });
+}
+
+export function useDownloadUpload() {
+  const path = useAccountantApiPath('/efactura/uploads');
+  return useMutation({
+    mutationFn: (id: number) =>
+      downloadFile(`${requirePath(path)}/${id}/download`, `efactura-${id}.zip`),
+  });
+}
+
+export interface MessagesQuery {
+  companyId: number | undefined;
+  filtru?: MessageFilter;
+  zile: number;
+}
+
+export function useEfacturaMessages(query: MessagesQuery) {
+  const path = useAccountantApiPath('/efactura/companies');
+  return useQuery({
+    queryKey: [...keys.efactura, 'messages', query] as const,
+    queryFn: () => {
+      const params = new URLSearchParams({ zile: String(query.zile) });
+      if (query.filtru) params.set('filtru', query.filtru);
+      return api<EfacturaMessageList>(
+        `${requirePath(path)}/${query.companyId}/messages?${params}`,
+      );
+    },
+    enabled: !!path && !!query.companyId,
+    retry: false,
+  });
+}
+
+export function useDownloadMessage() {
+  const path = useAccountantApiPath('/efactura/companies');
+  return useMutation({
+    mutationFn: ({
+      companyId,
+      messageId,
+    }: {
+      companyId: number;
+      messageId: string;
+    }) =>
+      downloadFile(
+        `${requirePath(path)}/${companyId}/messages/${messageId}/download`,
+        `efactura-${messageId}.zip`,
+      ),
+  });
+}
+
+export function useValidateXml() {
+  const path = useAccountantApiPath('/efactura/validate');
+  return useMutation({
+    mutationFn: ({
+      file,
+      standard,
+    }: {
+      file: File;
+      standard: 'FACT1' | 'FCN';
+    }) => {
+      const body = new FormData();
+      body.append('file', file);
+      body.append('standard', standard);
+      return api<XmlValidation>(requirePath(path), { method: 'POST', body });
+    },
+  });
+}
+
+export function useTransformXml() {
+  const path = useAccountantApiPath('/efactura/transform');
+  const invoicesPath = useAccountantApiPath('/invoices');
+  return useMutation({
+    mutationFn: async ({
+      file,
+      invoiceId,
+      standard,
+      skipValidation,
+    }: {
+      file?: File;
+      invoiceId?: number;
+      standard: 'FACT1' | 'FCN';
+      skipValidation: boolean;
+    }) => {
+      const source =
+        file ??
+        (await fetchFile(
+          `${requirePath(invoicesPath)}/${invoiceId}/xml`,
+          'factura.xml',
+        ));
+      const body = new FormData();
+      body.append('file', source);
+      body.append('standard', standard);
+      body.append('skipValidation', String(skipValidation));
+      return downloadFile(requirePath(path), 'factura.pdf', {
+        method: 'POST',
+        body,
+      });
+    },
   });
 }

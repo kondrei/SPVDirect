@@ -12,8 +12,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { AccountantParamGuard } from '../../../auth/accountant-param.guard.js';
-import { JwtAuthGuard } from '../../../auth/jwt-auth.guard.js';
+import { AccountantParamGuard } from '../../../auth/guards/accountant-param.guard.js';
+import { JwtAuthGuard } from '../../../auth/guards/jwt-auth.guard.js';
 import {
   SPV_REQUEST_THROTTLE,
   SPV_THROTTLE,
