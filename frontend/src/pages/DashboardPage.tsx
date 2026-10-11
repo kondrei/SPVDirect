@@ -3,6 +3,7 @@ import {
   useCompanies,
   useConnections,
   useConnectUrl,
+  useInvoiceStats,
   useMe,
 } from '../api/hooks';
 import type { AnafConnection } from '../api/types';
@@ -22,8 +23,11 @@ import { useAppPath } from '../hooks/useAppPath';
 import {
   connectionStatus,
   daysUntil,
+  formatAmount,
   formatCui,
+  formatMonth,
   groupSerial,
+  pluralFacturi,
   pluralFirme,
   pluralZile,
 } from '../lib/format';
@@ -44,6 +48,7 @@ export function DashboardPage() {
   const me = useMe();
   const companies = useCompanies();
   const connections = useConnections();
+  const invoiceStats = useInvoiceStats();
   const appPath = useAppPath();
   const connectUrl = useConnectUrl();
   const today = todayFmt.format(new Date());
@@ -65,6 +70,11 @@ export function DashboardPage() {
   const companiesOn = (c: AnafConnection) =>
     list.filter((co) => co.anafConnectionId === c.id).length;
   const name = firstName(me.data?.name ?? null);
+  const stats = invoiceStats.data;
+  const peak = stats ? Math.max(...stats.months.map((m) => m.grossRon), 0) : 0;
+  const trend = stats
+    ? stats.month.grossRon - stats.previousMonth.grossRon
+    : 0;
 
   return (
     <>
@@ -161,6 +171,87 @@ export function DashboardPage() {
           value="—"
           note="e-Transport vine în faza 2"
         />
+      </div>
+
+      {invoiceStats.isError ? (
+        <QueryError
+          error={invoiceStats.error}
+          retry={() => invoiceStats.refetch()}
+        />
+      ) : null}
+      <div className="grid-2-1">
+        <div className="grid-stats grid-stats-2">
+          <Stat
+            icon="invoice"
+            label="Facturi emise luna aceasta"
+            value={stats ? stats.month.invoices : '—'}
+            note={
+              stats
+                ? stats.month.stornos
+                  ? `${stats.month.stornos} stornări`
+                  : `${pluralFacturi(stats.year.invoices)} în acest an`
+                : undefined
+            }
+          />
+          <Stat
+            icon="invoice"
+            label="Facturat luna aceasta"
+            value={stats ? `${formatAmount(stats.month.grossRon)} RON` : '—'}
+            note={
+              stats
+                ? `${trend >= 0 ? '+' : '−'}${formatAmount(Math.abs(trend))} față de luna trecută`
+                : undefined
+            }
+          />
+          <Stat
+            icon="invoice"
+            label="TVA colectat luna aceasta"
+            value={stats ? `${formatAmount(stats.month.vatRon)} RON` : '—'}
+            note={
+              stats ? `${formatAmount(stats.month.netRon)} RON fără TVA` : undefined
+            }
+          />
+          <Stat
+            icon="invoice"
+            label="Facturat în acest an"
+            value={stats ? `${formatAmount(stats.year.grossRon)} RON` : '—'}
+            note={
+              stats
+                ? `${pluralFacturi(stats.year.invoices)}, ${stats.year.stornos} stornări`
+                : undefined
+            }
+          />
+        </div>
+        <Card
+          title="Facturare, ultimele 6 luni"
+          actions={
+            <ButtonLink size="sm" variant="ghost" to={appPath('/invoices')}>
+              Toate facturile
+            </ButtonLink>
+          }
+        >
+          {invoiceStats.isPending ? (
+            <div className="muted">Se încarcă…</div>
+          ) : stats ? (
+            <ol className="bars">
+              {stats.months.map((m) => (
+                <li
+                  key={m.month}
+                  className="bar-col"
+                  aria-label={`${formatMonth(m.month)} ${m.month.slice(0, 4)}: ${formatAmount(m.grossRon)} RON, ${pluralFacturi(m.invoices)}`}
+                >
+                  <div
+                    className="bar"
+                    style={{
+                      height: `${peak > 0 ? Math.max(2, (Math.max(m.grossRon, 0) / peak) * 100) : 2}%`,
+                    }}
+                  />
+                  <span className="muted small">{formatMonth(m.month)}</span>
+                </li>
+              ))}
+            </ol>
+          ) : null}
+        </Card>
       </div>
 
       <div className="grid-2-1">

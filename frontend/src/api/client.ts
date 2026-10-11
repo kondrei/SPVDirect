@@ -5,11 +5,13 @@ export const API_URL = (import.meta.env.VITE_API_URL ?? '/api').replace(
 
 export class ApiError extends Error {
   readonly status: number;
+  readonly details: string[];
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, details: string[] = []) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.details = details;
   }
 }
 
@@ -40,6 +42,18 @@ export function errorMessage(status: number, body: unknown): string {
       ? 'Serverul nu răspunde. Reîncercați în câteva momente.'
       : 'Cererea nu a putut fi procesată.')
   );
+}
+
+export function errorDetails(body: unknown): string[] {
+  if (body && typeof body === 'object' && 'errors' in body) {
+    const e = (body as { errors: unknown }).errors;
+    if (Array.isArray(e)) return e.filter((x): x is string => typeof x === 'string');
+  }
+  return [];
+}
+
+export function detailsOf(err: unknown): string[] {
+  return err instanceof ApiError ? err.details : [];
 }
 
 export async function api<T>(
@@ -75,17 +89,20 @@ export async function api<T>(
       body = text;
     }
   }
-  if (!res.ok) throw new ApiError(res.status, errorMessage(res.status, body));
+  if (!res.ok) {
+    throw new ApiError(
+      res.status,
+      errorMessage(res.status, body),
+      errorDetails(body),
+    );
+  }
   return body as T;
 }
 
-export async function downloadFile(
-  path: string,
-  fallbackName: string,
-): Promise<void> {
+async function fetchOk(path: string, init: RequestInit): Promise<Response> {
   let res: Response;
   try {
-    res = await fetch(`${API_URL}${path}`, { credentials: 'include' });
+    res = await fetch(`${API_URL}${path}`, { ...init, credentials: 'include' });
   } catch {
     throw new ApiError(
       0,
@@ -99,8 +116,28 @@ export async function downloadFile(
     } catch {
       body = null;
     }
-    throw new ApiError(res.status, errorMessage(res.status, body));
+    throw new ApiError(
+      res.status,
+      errorMessage(res.status, body),
+      errorDetails(body),
+    );
   }
+  return res;
+}
+
+export async function fetchFile(path: string, name: string): Promise<File> {
+  const res = await fetchOk(path, {});
+  return new File([await res.blob()], name, {
+    type: res.headers.get('content-type') ?? 'application/xml',
+  });
+}
+
+export async function downloadFile(
+  path: string,
+  fallbackName: string,
+  init: RequestInit = {},
+): Promise<void> {
+  const res = await fetchOk(path, init);
   const blob = await res.blob();
   const match = /filename="?([^";]+)"?/.exec(
     res.headers.get('content-disposition') ?? '',

@@ -1,6 +1,6 @@
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import type { AccountantsService } from '../../accountants/accountants.service.js';
+import type { AccountantsService } from '../../accountants/services/accountants.service.js';
 import { hashPassword } from '../../common/crypto/password.js';
 import { ACCOUNT_PENDING, AuthService } from './auth.service.js';
 import { SESSION_AUDIENCE } from '../session.js';

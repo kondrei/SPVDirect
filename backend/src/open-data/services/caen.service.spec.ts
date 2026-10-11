@@ -2,7 +2,7 @@ import { NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants.js';
 import type { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
-import { JwtAuthGuard } from '../../auth/jwt-auth.guard.js';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard.js';
 import { CAEN_CSV, CAEN_SEARCH } from '../../testing/caen-csv.js';
 import { CaenController } from '../caen.controller.js';
 import { CAEN_RETRY_MS, CAEN_TTL_MS, CaenService } from './caen.service.js';

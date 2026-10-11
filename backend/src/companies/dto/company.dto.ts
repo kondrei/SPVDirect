@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsEmail,
   IsOptional,
   IsString,
   IsUUID,
@@ -42,7 +43,47 @@ export class CreateCompaniesDto {
   cuis: string[];
 }
 
-export class UpdateCompanyDto {
+export function normalizeIban(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  const compact = value.replace(/\s+/g, '').toUpperCase();
+  return compact === '' ? null : compact;
+}
+
+function blankToNull(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  return trimmed === '' ? null : trimmed;
+}
+
+export class UpdateCompanyInvoiceDetailsDto {
+  @IsOptional()
+  @Transform(({ value }) => normalizeIban(value))
+  @ValidateIf((_, v) => v !== null)
+  @Matches(/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/, { message: 'IBAN invalid' })
+  iban?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => blankToNull(value))
+  @ValidateIf((_, v) => v !== null)
+  @IsString()
+  @MaxLength(100)
+  bankName?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => blankToNull(value))
+  @ValidateIf((_, v) => v !== null)
+  @IsEmail({}, { message: 'Adresa de email este invalidă' })
+  @MaxLength(255)
+  email?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => blankToNull(value))
+  @ValidateIf((_, v) => v !== null)
+  @Matches(/^[0-9+().\s-]{3,30}$/, { message: 'Număr de telefon invalid' })
+  phone?: string | null;
+}
+
+export class UpdateCompanyDto extends UpdateCompanyInvoiceDetailsDto {
   @IsOptional()
   @IsString()
   @MinLength(1)

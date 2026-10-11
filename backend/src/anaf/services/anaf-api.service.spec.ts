@@ -53,3 +53,33 @@ describe('AnafApiService base URL', () => {
     );
   });
 });
+
+describe('AnafApiService allowStatuses', () => {
+  const req = {
+    accountantId: 1,
+    connectionId: 'c',
+    service: 'EFACTURA',
+    path: '/p',
+  };
+
+  it('returns an allowed 4xx answer instead of throwing', async () => {
+    const { service, request } = setup();
+    request.mockResolvedValue({ status: 400, data: { message: 'x' } });
+    const res = await service.request({ ...req, allowStatuses: [400] });
+    expect(res.status).toBe(400);
+  });
+
+  it('still throws for a 4xx answer that is not allowed', async () => {
+    const { service, request } = setup();
+    request.mockResolvedValue({ status: 400, data: {} });
+    await expect(service.request(req)).rejects.toThrow('ANAF a răspuns cu 400');
+  });
+
+  it('never lets 429 through', async () => {
+    const { service, request } = setup();
+    request.mockResolvedValue({ status: 429, data: {} });
+    await expect(
+      service.request({ ...req, allowStatuses: [429] }),
+    ).rejects.toThrow('1000 de cereri');
+  });
+});

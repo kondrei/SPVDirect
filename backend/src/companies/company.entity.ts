@@ -6,7 +6,7 @@ import {
   Unique,
   UpdateDateColumn,
 } from 'typeorm';
-import type { AnafTvaRecord } from './anaf-company-info.js';
+import type { AnafTvaRecord } from './helpers/anaf-company-info.js';
 
 @Entity('companies')
 @Unique('uq_companies_accountant_cui', ['accountantId', 'cui'])
@@ -56,6 +56,29 @@ export class Company {
 
   @Column({ type: 'boolean', nullable: true })
   inactive: boolean | null;
+
+  @Column({ type: 'varchar', length: 34, nullable: true })
+  iban: string | null;
+
+  @Column({ name: 'bank_name', type: 'text', nullable: true })
+  bankName: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  email: string | null;
+
+  @Column({ type: 'varchar', length: 30, nullable: true })
+  phone: string | null;
+
+  @Column({ type: 'bytea', nullable: true, select: false })
+  logo: Buffer | null;
+
+  @Column({
+    name: 'logo_content_type',
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+  })
+  logoContentType: string | null;
 
   @Column({ name: 'anaf_data', type: 'jsonb', nullable: true })
   anafData: AnafTvaRecord | null;

@@ -3,11 +3,19 @@ import { ConfigService } from '@nestjs/config';
 import { createTransport, type Transporter } from 'nodemailer';
 import type { Env } from '../../config/env.validation.js';
 
+export interface MailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType: string;
+}
+
 export interface MailMessage {
   to: string;
+  replyTo?: string;
   subject: string;
   text: string;
   html: string;
+  attachments?: MailAttachment[];
 }
 
 @Injectable()

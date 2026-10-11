@@ -3,7 +3,7 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { isAxiosError } from 'axios';
 import { ApiLogsService } from '../../api-logs/api-logs.service.js';
-import type { AnafTvaRecord, AnafTvaResponse } from '../anaf-company-info.js';
+import type { AnafTvaRecord, AnafTvaResponse } from '../helpers/anaf-company-info.js';
 
 export const MIN_INTERVAL_MS = 1_000;
 export const MAX_CUIS_PER_REQUEST = 100;

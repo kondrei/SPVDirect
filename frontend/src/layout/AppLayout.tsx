@@ -130,11 +130,33 @@ export function AppLayout() {
           ]}
         />
         <NavGroup
+          title="Facturare"
+          onNavigate={close}
+          items={[
+            { to: path('/invoices'), label: 'Facturi', icon: 'invoice' },
+            {
+              to: path('/efactura'),
+              label: 'Trimise la ANAF',
+              icon: 'upload',
+              end: true,
+            },
+            {
+              to: path('/efactura/messages'),
+              label: 'Mesaje e-Factura',
+              icon: 'download',
+            },
+            {
+              to: path('/efactura/validator'),
+              label: 'Validator XML',
+              icon: 'check',
+            },
+          ]}
+        />
+        <NavGroup
           title="Servicii SPV"
           onNavigate={close}
           items={[
             { to: path('/spv'), label: 'Mesaje SPV', icon: 'download' },
-            { to: path('/efactura'), label: 'e-Factura', icon: 'invoice' },
             { to: path('/etransport'), label: 'e-Transport', icon: 'truck' },
           ]}
         />

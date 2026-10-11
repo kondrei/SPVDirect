@@ -3,8 +3,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { OpenDataModule } from '../open-data/open-data.module.js';
 import { CompaniesModule } from '../companies/companies.module.js';
 import { Accountant } from './accountant.entity.js';
-import { AccountantsController } from './accountants.controller.js';
-import { AccountantsService } from './accountants.service.js';
+import { AccountantsController } from './controllers/accountants.controller.js';
+import { AccountantsService } from './services/accountants.service.js';
 
 @Module({
   imports: [

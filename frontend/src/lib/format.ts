@@ -83,3 +83,30 @@ export function initials(name: string | null, email: string): string {
 export function groupSerial(serial: string): string {
   return serial.replace(/\s+/g, '').replace(/(.{4})(?=.)/g, '$1 ');
 }
+
+const amountFmt = new Intl.NumberFormat('ro-RO', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+  useGrouping: 'always',
+});
+
+export function formatAmount(value: number): string {
+  return amountFmt.format(value);
+}
+
+const monthFmt = new Intl.DateTimeFormat('ro-RO', {
+  month: 'short',
+  timeZone: 'UTC',
+});
+
+export function formatMonth(month: string): string {
+  const [year, number] = month.split('-').map(Number);
+  return monthFmt.format(new Date(Date.UTC(year, number - 1, 1)));
+}
+
+export function formatIsoDate(iso: string): string {
+  const [year, month, day] = iso.split('-');
+  return `${day}.${month}.${year}`;
+}
+
+export const pluralFacturi = (n: number) => plural(n, 'factură', 'facturi');

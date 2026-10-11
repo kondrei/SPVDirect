@@ -6,6 +6,8 @@ import { SpvMessage } from '../anaf/spv/spv-message.entity.js';
 import { ApiLog } from '../api-logs/api-log.entity.js';
 import { BannedEmail } from '../auth/banned-email.entity.js';
 import { Company } from '../companies/company.entity.js';
+import { EfacturaUpload } from '../efactura/efactura-upload.entity.js';
+import { Invoice } from '../invoices/invoice.entity.js';
 import { migrations } from '../database/migrations/index.js';
 
 export const entities = [
@@ -15,6 +17,8 @@ export const entities = [
   ApiLog,
   BannedEmail,
   Company,
+  EfacturaUpload,
+  Invoice,
   SpvMessage,
 ];
 

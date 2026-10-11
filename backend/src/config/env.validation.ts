@@ -36,12 +36,18 @@ export const envValidationSchema = Joi.object({
   ANAF_TVA_ENDPOINT: Joi.string()
     .uri()
     .default('https://webservicesp.anaf.ro/api/PlatitorTvaRest/v9/tva'),
+  ANAF_EFACTURA_VALIDATE_ENDPOINT: Joi.string()
+    .uri()
+    .default('https://webservicesp.anaf.ro/prod/FCTEL/rest'),
   SPV_STORAGE: Joi.string().valid('database', 'supabase').default('database'),
   SUPABASE_URL: Joi.string().uri().empty(''),
   SUPABASE_SERVICE_KEY: Joi.string().empty(''),
   SUPABASE_SPV_BUCKET: Joi.string()
     .pattern(/^[a-z0-9][a-z0-9-]{1,62}$/)
     .default('spv-messages'),
+  SUPABASE_INVOICE_BUCKET: Joi.string()
+    .pattern(/^[a-z0-9][a-z0-9-]{1,62}$/)
+    .default('invoices'),
   DATA_GOV_RO_API_URL: Joi.string()
     .uri()
     .default('https://data.gov.ro/api/3/action'),
@@ -95,10 +101,12 @@ export interface Env {
   ANAF_ENV: 'test' | 'prod';
   ANAF_SPV_ENDPOINT: string;
   ANAF_TVA_ENDPOINT: string;
+  ANAF_EFACTURA_VALIDATE_ENDPOINT: string;
   SPV_STORAGE: 'database' | 'supabase';
   SUPABASE_URL?: string;
   SUPABASE_SERVICE_KEY?: string;
   SUPABASE_SPV_BUCKET: string;
+  SUPABASE_INVOICE_BUCKET: string;
   DATA_GOV_RO_API_URL: string;
   RECAPTCHA_SECRET_KEY: string;
   RECAPTCHA_MIN_SCORE: number;

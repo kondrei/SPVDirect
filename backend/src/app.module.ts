@@ -14,6 +14,8 @@ import { CompaniesModule } from './companies/companies.module.js';
 import { Env, envValidationSchema } from './config/env.validation.js';
 import { buildTypeOrmOptions } from './config/typeorm.config.js';
 import { HealthController } from './health.controller.js';
+import { EfacturaModule } from './efactura/efactura.module.js';
+import { InvoicesModule } from './invoices/invoices.module.js';
 import { OpenDataModule } from './open-data/open-data.module.js';
 
 @Module({
@@ -38,6 +40,8 @@ import { OpenDataModule } from './open-data/open-data.module.js';
     AccountantsModule,
     OpenDataModule,
     CompaniesModule,
+    InvoicesModule,
+    EfacturaModule,
     ApiLogsModule,
     AnafModule,
   ],

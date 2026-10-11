@@ -78,7 +78,8 @@ When the certificate belongs to the client company's legal representative:
 | GET/POST | `/accountants/:accountantId/companies` | session | List / add client company by CUI (without RO); name and details come from ANAF's VAT registry, 400 if the CUI is unknown. Company responses include `caen` (the CAEN code's name) |
 | POST | `/accountants/:accountantId/companies/bulk` | session | Add up to 500 companies at once: `{ "cuis": [...] }`. ANAF is queried in batches of 100; returns one `{ cui, status: created, exists or not_found, company? }` per unique CUI |
 | POST | `/accountants/:accountantId/companies/:id/anaf-refresh` | session | Re-read the company's data from ANAF's VAT registry |
-| GET/PATCH/DELETE | `/accountants/:accountantId/companies/:id` | session | Read / rename / attach connection / delete |
+| GET/PATCH/DELETE | `/accountants/:accountantId/companies/:id` | session | Read / update (name, certificate, and the IBAN, bank, email and phone printed on invoices) / delete. Delete answers 409 when the company has issued invoices |
+| PUT/GET/DELETE | `/accountants/:accountantId/companies/:id/logo` | session | Company logo for invoices: multipart field `logo`, PNG or JPEG up to 512 KB (checked by file signature). Company responses carry `hasLogo` |
 | POST | `/accountants/:accountantId/companies/:id/authorization-links` | session | One-time link for the certificate holder |
 | GET | `/accountants/:accountantId/anaf/connect` | session | Start OAuth with your own certificate |
 | GET | `/anaf/authorize/:token` | link | Landing page for authorization links |
@@ -91,9 +92,30 @@ When the certificate belongs to the client company's legal representative:
 | POST | `/accountants/:accountantId/anaf/connections/:id/spv/sync` | session | Pull the last `zile` (default 60) days of SPV messages from ANAF into the `spv_messages` table and save each PDF. Returns `{ fetched, added, downloaded, failed, pending }`; at most 100 PDFs per run |
 | GET | `/accountants/:accountantId/spv/archive?cif=&type=&companyId=&page=&pageSize=` | session | Saved messages (metadata and whether the PDF is stored), newest first |
 | GET | `/accountants/:accountantId/spv/archive/:id/download` | session | Saved PDF; if it was never stored, it is fetched from ANAF and saved |
+| GET | `/accountants/:accountantId/invoices?companyId=&page=&pageSize=` | session | Issued invoices, newest first (summary rows) |
+| GET | `/accountants/:accountantId/invoices/buyer-lookup/:cui` | session | Buyer data from ANAF's VAT registry (name, address, reg. com., IBAN, VAT status) to prefill the invoice |
+| GET | `/accountants/:accountantId/invoices/next-number?companyId=&series=` | session | Next free number in a series |
+| POST | `/accountants/:accountantId/invoices` | session | Issue an invoice for one of the accountant's companies. Optional `saveToStorage` (PDF to Supabase Storage) and `sendToEmail` (PDF attached). Answers `{ invoice, storageError, emailError }`: a failed follow-up never undoes the invoice |
+| GET | `/accountants/:accountantId/invoices/:id` | session | Full invoice (seller and buyer as issued, lines, VAT breakdown, totals) |
+| GET | `/accountants/:accountantId/invoices/:id/pdf` · `/xml` | session | PDF (the stored copy when there is one) / UBL 2.1 CIUS-RO XML |
+| POST | `/accountants/:accountantId/efactura/invoices/:invoiceId/upload` | session | Send an issued invoice to ANAF (UBL). The XML is checked first with ANAF's validator (400 with `errors` when it fails; skipped when the validator is down). 409 when the invoice is already `processing` or `ok` at ANAF. Returns the upload record with the ANAF `uploadIndex` |
+| POST | `/accountants/:accountantId/efactura/uploads` | session | Send an XML file (multipart `file`, max 10 MB) for a company: `companyId`, `standard` (UBL, CN, CII, RASP), optional `extern`, `autofactura`, `executare`, `b2c` (uses `uploadb2c`) |
+| GET | `/accountants/:accountantId/efactura/uploads` | session | Uploads of the accountant, newest first. Query: `companyId`, `invoiceId`, `page`, `pageSize` |
+| GET | `/accountants/:accountantId/efactura/uploads/:id` | session | One upload |
+| POST | `/accountants/:accountantId/efactura/uploads/:id/refresh` | session | Ask ANAF for the state (`stareMesaj`): `processing`, `ok`, `nok` or `rejected`. A final state is returned without calling ANAF again (limit: 100 queries per message per day) |
+| GET | `/accountants/:accountantId/efactura/uploads/:id/download` | session | ANAF's answer as a zip (`descarcare`; limit: 10 downloads per message per day) |
+| GET | `/accountants/:accountantId/efactura/companies/:companyId/messages` | session | Messages from ANAF with the company certificate. Query: `zile` (1–60, default 30), `filtru` (E errors, P received, T sent, R buyer message), or `startTime` + `endTime` (Unix ms) + `pagina` for the paginated list |
+| GET | `/accountants/:accountantId/efactura/companies/:companyId/messages/:messageId/download` | session | Download a message (an invoice received, or an error report) as a zip |
+| POST | `/accountants/:accountantId/efactura/validate` | session | Validate an XML with ANAF's public validator (multipart `file`, optional `standard` FACT1 or FCN). Returns `{ valid, messages, traceId }` |
+| POST | `/accountants/:accountantId/efactura/invoices/:invoiceId/validate` | session | Same, for the XML of an issued invoice |
+| POST | `/accountants/:accountantId/efactura/transform` | session | XML to PDF with ANAF's public converter (multipart `file`, `standard`, `skipValidation`) |
+| GET | `/accountants/:accountantId/invoices/stats` | session | Dashboard statistics in RON: this month, previous month and year to date (invoices, stornos, net, VAT, gross; stornos net against invoices) and the last 6 months |
+| POST | `/accountants/:accountantId/invoices/:id/storno` | session | Issue a storno invoice (negative quantities and amounts, referencing the original). Body, all optional: `issueDate`, `series`, `notes`, `lines: [{ lineIndex, quantity }]` for a partial storno (default: everything still left), `saveToStorage`, `sendToEmail`. 409 when nothing is left to reverse or a line would be reversed past its quantity; a storno cannot be stornoed. `GET /invoices/:id` returns `remainingQuantities` per line |
+| POST | `/accountants/:accountantId/invoices/:id/store` | session | Save the PDF to Supabase Storage |
+| POST | `/accountants/:accountantId/invoices/:id/send` | session | Email the PDF: `{ "to"?: "..." }`, defaults to the buyer's email |
 | POST | `/accountants/:accountantId/anaf/connections/:id/spv/requests` | session | SPV `cerere`: request a document or report. Body `{ tip, cui, an?, luna?, motiv?, numarInregistrare?, cuiPunctDeLucru? }`; returns `requestId`, which later appears as `requestId` on a message in the list |
 
-`AnafApiService.request()` is the single gateway to api.anaf.ro. It handles ownership checks, proactive refresh, retry after a refresh on 401/403, 429 mapping and `api_logs` auditing. The e-Factura and e-Transport modules will build on it.
+`AnafApiService.request()` is the single gateway to api.anaf.ro. It handles ownership checks, proactive refresh, retry after a refresh on 401/403, 429 mapping and `api_logs` auditing. The e-Factura module (`src/efactura/`) is built on it; e-Transport will be too.
 
 ---
 
@@ -108,6 +130,7 @@ The schema is managed by TypeORM migrations in `backend/src/database/migrations`
 | `companies` | Client CUIs per accountant (integer id from 1), the connection used for each, and ANAF VAT-registry data (typed columns + full record in `anaf_data` jsonb) |
 | `authorization_links` | Delegated-authorization links (only the SHA-256 of the token is stored) |
 | `spv_messages` | SPV messages kept per accountant (unique on ANAF message id), PDF in a `bytea` column (`SPV_STORAGE=database`, default) or in a private Supabase Storage bucket (`SPV_STORAGE=supabase`, path kept in `storage_path`), matched to a company by CIF. With Supabase Storage on, the same nightly job also moves PDFs still in the database to the bucket (set `SUPABASE_URL` and the server-side `SUPABASE_SERVICE_KEY`; the bucket `SUPABASE_SPV_BUCKET` is created on first use). A nightly job (03:00 Europe/Bucharest) syncs every active certificate, because ANAF only keeps messages for a limited time |
+| `invoices` | Issued invoices, unique on company + series + number. Seller and buyer are stored as they were on the issue date (jsonb), with lines, VAT breakdown and totals; `storage_path` points to the PDF in the private bucket `SUPABASE_INVOICE_BUCKET` when the user chose to save it; `emailed_to` / `emailed_at` record the last send. A storno invoice points to the invoice it reverses (`storno_of_*`). A company with invoices cannot be deleted (invoices must be kept) |
 | `api_logs` | Audit of every api.anaf.ro call and every VAT-registry lookup (service, endpoint, status, latency) |
 
 ---
@@ -160,8 +183,9 @@ Then open `https://localhost:3000/accountants/<your id>/anaf/connect` in the bro
 ## Roadmap
 
 - [x] Phase 1: backend scaffold, accounts, ANAF OAuth (self + authorization links), schema
-- [ ] Phase 2: e-Factura (upload, stareMesaj, listaMesajeFactura, descarcare) and e-Transport modules
-- [ ] Phase 3: React frontend. Done: Login, Dashboard, Companies, Connections. Still to do: Invoices and Transport, which wait for Phase 2.
+- [x] Phase 2, e-Factura: upload, stareMesaj, listaMesajeFactura (plain and paginated), descarcare, validation and XML to PDF. Not done: ANAF's signature validation service.
+- [ ] Phase 2, e-Transport module
+- [ ] Phase 3: React frontend. Done: Login, Dashboard, Companies, Connections. Invoices (Facturi): issue fiscal invoices as PDF and CIUS-RO XML. e-Factura: send invoices and XML files, state, messages, validator. Still to do: e-Transport.
 - [ ] Phase 4: a background job for proactive token refresh and expiry notifications, plus rate limiting for ANAF calls (1000 per minute)
 - [ ] Phase 5: Azure deployment, CI/CD
 

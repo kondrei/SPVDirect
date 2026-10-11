@@ -1,4 +1,4 @@
-import type { Key, ReactNode } from 'react';
+import { Fragment, type Key, type ReactNode } from 'react';
 
 export interface Column<R> {
   key: string;
@@ -13,6 +13,8 @@ export interface DataTableProps<R> {
   rows: R[];
   rowKey: (row: R) => Key;
   caption: string;
+  stack?: boolean;
+  rowNote?: (row: R) => ReactNode;
 }
 
 export function DataTable<R>({
@@ -20,10 +22,12 @@ export function DataTable<R>({
   rows,
   rowKey,
   caption,
+  stack,
+  rowNote,
 }: DataTableProps<R>) {
   return (
     <div className="spv-table-wrap">
-      <table className="spv-table">
+      <table className={stack ? 'spv-table spv-table-stack' : 'spv-table'}>
         <caption className="spv-sr-only">{caption}</caption>
         <thead>
           <tr>
@@ -39,11 +43,15 @@ export function DataTable<R>({
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
-            <tr key={rowKey(r)}>
+          {rows.map((r) => {
+            const note = rowNote?.(r);
+            return (
+            <Fragment key={rowKey(r)}>
+            <tr>
               {columns.map((c) => (
                 <td
                   key={c.key}
+                  data-label={typeof c.header === 'string' ? c.header : undefined}
                   className={
                     c.align === 'num'
                       ? 'spv-num'
@@ -58,7 +66,14 @@ export function DataTable<R>({
                 </td>
               ))}
             </tr>
-          ))}
+            {note ? (
+              <tr className="spv-row-note">
+                <td colSpan={columns.length}>{note}</td>
+              </tr>
+            ) : null}
+            </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>

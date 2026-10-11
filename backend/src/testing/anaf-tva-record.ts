@@ -1,4 +1,4 @@
-import type { AnafTvaRecord } from '../companies/anaf-company-info.js';
+import type { AnafTvaRecord } from '../companies/helpers/anaf-company-info.js';
 
 export function anafTvaRecord(
   cui = 12345678,

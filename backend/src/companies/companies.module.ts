@@ -5,7 +5,7 @@ import { AnafConnection } from '../anaf/anaf-connection.entity.js';
 import { ApiLogsModule } from '../api-logs/api-logs.module.js';
 import { OpenDataModule } from '../open-data/open-data.module.js';
 import { AnafCompanyLookupService } from './services/anaf-company-lookup.service.js';
-import { CompaniesController } from './companies.controller.js';
+import { CompaniesController } from './controllers/companies.controller.js';
 import { CompaniesService } from './services/companies.service.js';
 import { Company } from './company.entity.js';
 

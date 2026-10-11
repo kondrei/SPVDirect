@@ -27,6 +27,7 @@ export interface AnafRequest {
   responseType?: ResponseType;
   companyId?: number;
   baseUrl?: string;
+  allowStatuses?: number[];
 }
 
 @Injectable()
@@ -75,6 +76,7 @@ export class AnafApiService {
         HttpStatus.FORBIDDEN,
       );
     }
+    if (req.allowStatuses?.includes(res.status)) return res;
     if (res.status >= 400) {
       throw new BadGatewayException(`ANAF a răspuns cu ${res.status}`);
     }
