@@ -10,6 +10,7 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       strictPort: true,
+      allowedHosts: ['.loca.lt'],
       proxy: {
         '/api': {
           target,
@@ -23,6 +24,7 @@ export default defineConfig(({ mode }) => {
       environment: 'jsdom',
       setupFiles: ['./src/test/setup.ts'],
       css: false,
+      testTimeout: 20000,
     },
   };
 });

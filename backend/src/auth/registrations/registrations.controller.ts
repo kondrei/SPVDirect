@@ -1,5 +1,7 @@
 import { Controller, Get, HttpCode, Param, Post, Res } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
+import { PUBLIC_LINK_THROTTLE } from '../../common/constants.js';
 import { escapeHtml, renderPage } from '../../common/html.js';
 import {
   PendingRegistration,
@@ -27,6 +29,7 @@ const CONFIRM: Record<
 };
 
 @Controller('auth/registrations')
+@Throttle(PUBLIC_LINK_THROTTLE)
 export class RegistrationsController {
   constructor(private readonly registrations: RegistrationsService) {}
 

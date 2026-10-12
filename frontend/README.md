@@ -47,8 +47,8 @@ src/
   api/          client.ts (fetch wrapper, ApiError, Romanian messages) · hooks.ts (TanStack Query) · types.ts
   components/ui design-system components: Button, Badge/StatusBadge, TextField, Card, Alert, DataTable, Stat, Icon, Wordmark
   components/   app pieces: PageHead, EmptyState, QueryError, ConfirmButton, CopyField; invoices/ (SendPanel, StornoPanel, company invoicing cards) and efactura/ (status badge) hold the feature ones
-  layout/       AppLayout (sidebar, session guard) · AuthLayout
-  pages/        grouped by feature (auth/, companies/, invoices/, efactura/) plus the standalone pages: Login, Register, Panou, Firme, Firmă, Certificate ANAF, Mesaje SPV (list, download, document request), Facturi (list, issue, PDF/XML, email, Storage), e-Factura (uploads, ANAF messages, validator), e-Transport (placeholder)
+  layout/       AppLayout (sidebar, session guard) · AccountRedirect
+  pages/        grouped by feature (auth/, companies/, invoices/, efactura/) plus the standalone pages: Landing (`/`, with the Autentificare / Cont nou tabs at `/?auth=login|register`; `/login` and `/register` redirect there), Panou, Firme, Firmă, Certificate ANAF, Mesaje SPV (list, download, document request), Facturi (list, issue, PDF/XML, email, Storage), e-Factura (uploads, ANAF messages, validator), e-Transport (placeholder)
   lib/format.ts CUI rules (mirror the backend DTO), dates in Europe/Bucharest, Romanian plurals, certificate status
   styles/       tokens.css (generated from the design system) · components.css · app.css
 ```

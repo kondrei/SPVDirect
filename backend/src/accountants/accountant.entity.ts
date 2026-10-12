@@ -50,6 +50,9 @@ export class Accountant {
   @Column({ name: 'admin_notified_at', type: 'timestamptz', nullable: true })
   adminNotifiedAt: Date | null;
 
+  @Column({ name: 'password_changed_at', type: 'timestamptz', nullable: true })
+  passwordChangedAt: Date | null;
+
   @Column({ type: 'varchar', length: 30, nullable: true })
   phone: string | null;
 

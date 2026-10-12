@@ -8,7 +8,7 @@ export function AccountRedirect() {
   if (me.isPending) return <div className="loading">Se încarcă…</div>;
   if (!me.data) {
     const next = encodeURIComponent(location.pathname + location.search);
-    return <Navigate to={`/login?next=${next}`} replace />;
+    return <Navigate to={`/?auth=login&next=${next}`} replace />;
   }
   const rest = location.pathname === '/' ? '' : location.pathname;
   return (

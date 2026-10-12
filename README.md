@@ -66,6 +66,7 @@ When the certificate belongs to the client company's legal representative:
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | GET | `/health` | none | Liveness |
+| GET | `/public/stats` | none | Landing-page counters: active accountants, companies, invoices, invoices accepted in e-Factura, SPV messages, ANAF certificates. Aggregates only, 30 requests/min per IP. Cached on the server until a counted table changes (5 min at most); browsers must revalidate (`no-cache`) |
 | POST | `/auth/register` | none | Request an account (reCAPTCHA v3 `captchaToken`). Answers 202; the account stays pending and `ADMIN_EMAIL` gets approve/reject links |
 | GET · POST | `/auth/registrations/:token/approve` · `/reject` | link | Admin links from the email. GET shows a confirmation page, POST acts. Reject deletes the request and adds the email to `banned_emails` |
 | POST | `/auth/login` | none | Log in (sets cookie). 403 while the account is pending |
@@ -74,7 +75,7 @@ When the certificate belongs to the client company's legal representative:
 | GET/PATCH | `/accountants/:accountantId/profile` | session | Read / update name, phone, CECCAR membership (title, card number, branch), CCF card number, practice name, CUI and CAEN code (response includes the CAEN name) |
 | GET | `/accountants/:accountantId/profile/firm-lookup/:cui` | session | Read the practice's name and CAEN code from ANAF's VAT registry (nothing is saved) |
 | GET | `/caen/:code` | session | CAEN class name (Rev. 3 first, Rev. 2 fallback), 404 if unknown |
-| POST | `/accountants/:accountantId/password` | session | Change password (needs the current one; 400 if it is wrong) |
+| POST | `/accountants/:accountantId/password` | session | Change password (needs the current one; 400 if it is wrong). Ends every other session and re-issues the cookie |
 | GET/POST | `/accountants/:accountantId/companies` | session | List / add client company by CUI (without RO); name and details come from ANAF's VAT registry, 400 if the CUI is unknown. Company responses include `caen` (the CAEN code's name) |
 | POST | `/accountants/:accountantId/companies/bulk` | session | Add up to 500 companies at once: `{ "cuis": [...] }`. ANAF is queried in batches of 100; returns one `{ cui, status: created, exists or not_found, company? }` per unique CUI |
 | POST | `/accountants/:accountantId/companies/:id/anaf-refresh` | session | Re-read the company's data from ANAF's VAT registry |
@@ -175,7 +176,7 @@ curl -k -c jar -H "Content-Type: application/json" \
   https://localhost:3000/auth/login
 curl -k -b jar https://localhost:3000/auth/me
 ```
-Register from the React app (`/register`), since it needs a reCAPTCHA token, then approve the account from the email sent to `ADMIN_EMAIL`.
+Register from the React app (the **Cont nou** tab on the landing page, `/?auth=register`), since it needs a reCAPTCHA token, then approve the account from the email sent to `ADMIN_EMAIL`.
 Then open `https://localhost:3000/accountants/<your id>/anaf/connect` in the browser where you're logged in (the id is in the `/auth/me` response; accept the self-signed certificate warning once), pick the certificate, and call `GET /accountants/<your id>/anaf/connections/:id/test`. You should see a response starting with `Hello, SPVDirect`.
 
 ---
