@@ -10,11 +10,13 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { randomBytes } from 'node:crypto';
 import { AccountantParamGuard } from '../../auth/guards/accountant-param.guard.js';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard.js';
 import { cookieOptions } from '../../auth/session.js';
+import { PUBLIC_LINK_THROTTLE } from '../../common/constants.js';
 import { escapeHtml, renderPage } from '../../common/html.js';
 import { ParseIdPipe } from '../../common/parse-id.pipe.js';
 import { CompaniesService } from '../../companies/services/companies.service.js';
@@ -62,6 +64,7 @@ export class AnafOAuthController {
   }
 
   @Get('anaf/authorize/:token')
+  @Throttle(PUBLIC_LINK_THROTTLE)
   async linkLanding(@Param('token') token: string, @Res() res: Response) {
     const lookup = await this.links.findByToken(token);
     if (!lookup.ok) {
@@ -91,6 +94,7 @@ export class AnafOAuthController {
   }
 
   @Get('anaf/authorize/:token/start')
+  @Throttle(PUBLIC_LINK_THROTTLE)
   async linkStart(@Param('token') token: string, @Res() res: Response) {
     const lookup = await this.links.findByToken(token);
     if (!lookup.ok) {
@@ -105,6 +109,7 @@ export class AnafOAuthController {
   }
 
   @Get('anaf/callback')
+  @Throttle(PUBLIC_LINK_THROTTLE)
   async callback(
     @Query('code') code: string | undefined,
     @Query('state') state: string | undefined,

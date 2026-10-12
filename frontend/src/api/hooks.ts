@@ -27,6 +27,7 @@ import type {
   XmlValidation,
   FirmLookup,
   ProfileUpdate,
+  PublicStats,
   SpvArchivePage,
   SpvRequestInput,
   SpvRequestResult,
@@ -43,6 +44,16 @@ export const keys = {
   invoices: ['invoices'] as const,
   efactura: ['efactura'] as const,
 };
+
+export function usePublicStats() {
+  return useQuery({
+    queryKey: ['public-stats'],
+    queryFn: () => api<PublicStats>('/public/stats'),
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+  });
+}
 
 export function useMe() {
   return useQuery({

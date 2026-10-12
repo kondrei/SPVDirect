@@ -58,3 +58,74 @@ describe('AuthService', () => {
     ).resolves.toMatchObject({ sub: '1', aud: SESSION_AUDIENCE });
   });
 });
+
+describe('AuthService.validateLogin timing', () => {
+  it('still runs a password check for an unknown email', async () => {
+    const crypto = await import('../../common/crypto/password.js');
+    const verify = vi.spyOn(crypto, 'verifyPassword');
+    const service = await setup(null);
+    await expect(
+      service.validateLogin({ email: 'nobody@example.com', password }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(verify).toHaveBeenCalledWith(
+      password,
+      expect.stringMatching(/^scrypt\$/),
+    );
+    verify.mockRestore();
+  });
+});
+
+describe('AuthService.isSessionValid', () => {
+  function withState(state: Record<string, unknown> | null) {
+    const accountants = {
+      findSessionState: vi.fn().mockResolvedValue(state),
+    } as unknown as AccountantsService;
+    return new AuthService(accountants, jwt);
+  }
+
+  const changedAt = new Date('2026-10-01T10:00:00.700Z');
+  const changedAtSeconds = Math.floor(changedAt.getTime() / 1000);
+
+  it('accepts an active accountant who never changed the password', async () => {
+    await expect(
+      withState({ status: 'active', passwordChangedAt: null }).isSessionValid(
+        1,
+        123,
+      ),
+    ).resolves.toBe(true);
+  });
+
+  it('rejects a deleted accountant', async () => {
+    await expect(withState(null).isSessionValid(1, 123)).resolves.toBe(false);
+  });
+
+  it('rejects a pending accountant', async () => {
+    await expect(
+      withState({ status: 'pending', passwordChangedAt: null }).isSessionValid(
+        1,
+        123,
+      ),
+    ).resolves.toBe(false);
+  });
+
+  it('rejects a session issued before the last password change', async () => {
+    const service = withState({
+      status: 'active',
+      passwordChangedAt: changedAt,
+    });
+    await expect(
+      service.isSessionValid(1, changedAtSeconds - 1),
+    ).resolves.toBe(false);
+    await expect(service.isSessionValid(1, undefined)).resolves.toBe(false);
+  });
+
+  it('accepts a session issued in the same second as the change', async () => {
+    const service = withState({
+      status: 'active',
+      passwordChangedAt: changedAt,
+    });
+    await expect(service.isSessionValid(1, changedAtSeconds)).resolves.toBe(
+      true,
+    );
+  });
+});

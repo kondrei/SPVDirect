@@ -1,7 +1,6 @@
 import { createBrowserRouter } from 'react-router';
 import { AccountRedirect } from './layout/AccountRedirect';
 import { AppLayout } from './layout/AppLayout';
-import { AuthLayout } from './layout/AuthLayout';
 import { ComingSoonPage } from './pages/ComingSoonPage';
 import { CompaniesPage } from './pages/companies/CompaniesPage';
 import { CompanyPage } from './pages/companies/CompanyPage';
@@ -12,20 +11,16 @@ import { EfacturaPage } from './pages/efactura/EfacturaPage';
 import { EfacturaValidatorPage } from './pages/efactura/EfacturaValidatorPage';
 import { InvoiceNewPage } from './pages/invoices/InvoiceNewPage';
 import { InvoicesPage } from './pages/invoices/InvoicesPage';
-import { LoginPage } from './pages/auth/LoginPage';
+import { AuthRedirect } from './pages/landing/AuthRedirect';
+import { LandingPage } from './pages/LandingPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ProfilePage } from './pages/ProfilePage';
-import { RegisterPage } from './pages/auth/RegisterPage';
 import { SpvPage } from './pages/SpvPage';
 
 export const routes = [
-  {
-    element: <AuthLayout />,
-    children: [
-      { path: '/login', element: <LoginPage /> },
-      { path: '/register', element: <RegisterPage /> },
-    ],
-  },
+  { path: '/', element: <LandingPage /> },
+  { path: '/login', element: <AuthRedirect tab="login" /> },
+  { path: '/register', element: <AuthRedirect tab="register" /> },
   {
     path: '/accountants/:accountantId',
     element: <AppLayout />,

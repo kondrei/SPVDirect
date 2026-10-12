@@ -129,15 +129,34 @@ const company = (over: Record<string, unknown> = {}) => ({
 });
 
 describe('session', () => {
-  it('sends signed-out users to /login and keeps where they were going', async () => {
+  it('sends signed-out users to the login tab of the landing page and keeps where they were going', async () => {
     const { router } = renderApp('/companies', {
       'GET /auth/me': { status: 401, body: { message: 'Unauthorized' } },
     });
-    await waitFor(() => expect(router.state.location.pathname).toBe('/login'));
-    expect(router.state.location.search).toBe('?next=%2Fcompanies');
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'));
+    expect(router.state.location.search).toBe('?auth=login&next=%2Fcompanies');
     expect(
-      await screen.findByRole('heading', { name: 'Autentificare' }),
-    ).toBeInTheDocument();
+      await screen.findByRole('tab', { name: 'Autentificare' }),
+    ).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: 'Intră în cont' })).toBeInTheDocument();
+  });
+
+  it('keeps old /login and /register links working', async () => {
+    const { router } = renderApp('/register?next=%2Finvoices', {
+      'GET /auth/me': { status: 401 },
+    });
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'));
+    expect(router.state.location.search).toBe('?auth=register&next=%2Finvoices');
+    expect(await screen.findByRole('tab', { name: 'Cont nou' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('sends a signed-in accountant from the login tab to the requested page', async () => {
+    const { router } = renderApp('/?auth=login&next=%2Faccountants%2F1%2Fcompanies', {
+      'GET /auth/me': { status: 200, body: ME },
+      'GET /accountants/1/companies': { status: 200, body: [] },
+      'GET /accountants/1/anaf/connections': { status: 200, body: [] },
+    });
+    await waitFor(() => expect(router.state.location.pathname).toBe('/accountants/1/companies'));
   });
 
   it('logs in and returns to the requested page', async () => {
@@ -176,15 +195,65 @@ describe('session', () => {
     expect(router.state.location.search).toBe('?add=1');
   });
 
-  it('opens the dashboard of the signed-in accountant from /', async () => {
-    const { router } = renderApp('/', {
+  it('goes from the dashboard to the landing page through the wordmark and back', async () => {
+    const user = userEvent.setup();
+    const { router } = renderApp('/accountants/1', {
       'GET /auth/me': { status: 200, body: ME },
+      'GET /public/stats': {
+        status: 200,
+        body: {
+          accountants: 1,
+          companies: 0,
+          invoices: 0,
+          efacturaUploads: 0,
+          spvMessages: 0,
+          anafConnections: 0,
+          updatedAt: '2026-10-12T08:30:00Z',
+        },
+      },
       'GET /accountants/1/companies': { status: 200, body: [] },
       'GET /accountants/1/anaf/connections': { status: 200, body: [] },
     });
-    await waitFor(() =>
-      expect(router.state.location.pathname).toBe('/accountants/1'),
-    );
+    const brand = await screen.findAllByRole('link', { name: 'SPVDirect, pagina principală' });
+    await user.click(brand[0]);
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'));
+    const open = await screen.findAllByRole('link', { name: 'Deschide aplicația' });
+    expect(screen.queryByRole('tab', { name: 'Autentificare' })).not.toBeInTheDocument();
+    await user.click(open[0]);
+    await waitFor(() => expect(router.state.location.pathname).toBe('/accountants/1'));
+  });
+
+  it('switches between the login and register tabs from the header and the keyboard', async () => {
+    const user = userEvent.setup();
+    const { router } = renderApp('/', {
+      'GET /auth/me': { status: 401 },
+      'GET /public/stats': { status: 429 },
+    });
+    const login = await screen.findByRole('tab', { name: 'Autentificare' });
+    expect(login).toHaveAttribute('aria-selected', 'true');
+    await user.click(screen.getAllByRole('button', { name: 'Creează cont' })[0]);
+    expect(screen.getByRole('tab', { name: 'Cont nou' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tabpanel')).toContainElement(screen.getByRole('button', { name: 'Trimite cererea' }));
+    expect(router.state.location.search).toBe('?auth=register');
+    screen.getByRole('tab', { name: 'Cont nou' }).focus();
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('tab', { name: 'Autentificare' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Autentificare' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Intră în cont' })).toBeInTheDocument();
+  });
+
+  it('opens the dashboard after a login without a target page', async () => {
+    const user = userEvent.setup();
+    const { router } = renderApp('/login', {
+      'GET /auth/me': { status: 401 },
+      'POST /auth/login': { status: 200, body: ME },
+      'GET /accountants/1/companies': { status: 200, body: [] },
+      'GET /accountants/1/anaf/connections': { status: 200, body: [] },
+    });
+    await user.type(await screen.findByLabelText('Email'), 'andrei@cabinet.ro');
+    await user.type(screen.getByLabelText('Parolă'), 'a-long-password');
+    await user.click(screen.getByRole('button', { name: 'Intră în cont' }));
+    await waitFor(() => expect(router.state.location.pathname).toBe('/accountants/1'));
   });
 
   it('does not show another accountant’s pages', async () => {
@@ -205,7 +274,7 @@ describe('session', () => {
   it('sends the registration with a reCAPTCHA token and waits for approval', async () => {
     const user = userEvent.setup();
     let body = '';
-    const { router } = renderApp('/register', {
+    const { router } = renderApp('/?auth=register', {
       'GET /auth/me': { status: 401 },
       'POST /auth/register': (init) => {
         body = String(init?.body);
@@ -226,7 +295,9 @@ describe('session', () => {
       name: 'Ana Pop',
       captchaToken: 'captcha-token',
     });
-    expect(router.state.location.pathname).toBe('/register');
+    expect(router.state.location.pathname).toBe('/');
+    await user.click(screen.getByRole('button', { name: 'Înapoi la autentificare' }));
+    expect(screen.getByRole('tab', { name: 'Autentificare' })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('does not register when reCAPTCHA cannot load', async () => {
@@ -234,7 +305,7 @@ describe('session', () => {
     vi.mocked(recaptchaToken).mockRejectedValueOnce(
       new Error('Verificarea anti-robot nu s-a putut încărca.'),
     );
-    const { calls } = renderApp('/register', {
+    const { calls } = renderApp('/?auth=register', {
       'GET /auth/me': { status: 401 },
     });
     await user.type(await screen.findByLabelText('Email'), 'ana@cabinet.ro');
@@ -248,7 +319,7 @@ describe('session', () => {
 
   it('shows the backend message when login fails', async () => {
     const user = userEvent.setup();
-    renderApp('/login', {
+    renderApp('/', {
       'GET /auth/me': { status: 401 },
       'POST /auth/login': {
         status: 401,

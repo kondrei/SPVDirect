@@ -1,10 +1,8 @@
-import { ValidationPipe } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import cookieParser from 'cookie-parser';
-import helmet from 'helmet';
 import { AppModule } from './app.module.js';
+import { configureApp } from './app.setup.js';
 import { loadHttpsOptions } from './config/https.js';
 
 async function bootstrap() {
@@ -14,23 +12,11 @@ async function bootstrap() {
   });
   const config = app.get(ConfigService);
 
-  app.set('trust proxy', 1);
-  app.use(
-    helmet({
-      strictTransportSecurity: config.get('NODE_ENV') === 'production',
-    }),
-  );
-  app.use(cookieParser());
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
-  app.enableCors({
-    origin: config.getOrThrow<string>('FRONTEND_URL'),
-    credentials: true,
+  const production = config.get('NODE_ENV') === 'production';
+  if (production) app.set('trust proxy', 1);
+  configureApp(app, {
+    frontendUrl: config.getOrThrow<string>('FRONTEND_URL'),
+    production,
   });
   app.enableShutdownHooks();
 

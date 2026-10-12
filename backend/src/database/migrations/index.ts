@@ -10,6 +10,7 @@ import { SpvMessageStoragePath1791000000000 } from './1791000000000-SpvMessageSt
 import { Invoices1791100000000 } from './1791100000000-Invoices.js';
 import { InvoiceStorno1791200000000 } from './1791200000000-InvoiceStorno.js';
 import { EfacturaUploads1791300000000 } from './1791300000000-EfacturaUploads.js';
+import { PasswordChangedAt1791400000000 } from './1791400000000-PasswordChangedAt.js';
 
 export const migrations = [
   InitialSchema1790200000000,
@@ -24,4 +25,5 @@ export const migrations = [
   Invoices1791100000000,
   InvoiceStorno1791200000000,
   EfacturaUploads1791300000000,
+  PasswordChangedAt1791400000000,
 ];

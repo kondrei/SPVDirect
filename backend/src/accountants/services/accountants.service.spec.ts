@@ -214,8 +214,9 @@ describe('AccountantsService.changePassword', () => {
     return setup(accountant({ passwordHash: await hashPassword(current) }));
   }
 
-  it('stores a new scrypt hash', async () => {
+  it('stores a new scrypt hash and the time of the change', async () => {
     const { service, repo, qb } = await withPassword();
+    const before = Date.now();
     await service.changePassword(1, {
       currentPassword: current,
       newPassword: 'new-password-456',
@@ -223,12 +224,13 @@ describe('AccountantsService.changePassword', () => {
     expect(qb.where).toHaveBeenCalledWith('a.id = :id', { id: 1 });
     const [criteria, data] = repo.update.mock.calls[0] as [
       unknown,
-      { passwordHash: string },
+      { passwordHash: string; passwordChangedAt: Date },
     ];
     expect(criteria).toEqual({ id: 1 });
     await expect(
       verifyPassword('new-password-456', data.passwordHash),
     ).resolves.toBe(true);
+    expect(data.passwordChangedAt.getTime()).toBeGreaterThanOrEqual(before);
   });
 
   it('rejects a wrong current password', async () => {
@@ -261,5 +263,23 @@ describe('AccountantsService.changePassword', () => {
         newPassword: 'new-password-456',
       }),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('AccountantsService.findSessionState', () => {
+  it('reads only the columns the session check needs', async () => {
+    const findOne = vi.fn().mockResolvedValue({ id: 1, status: 'active' });
+    const service = new AccountantsService(
+      { findOne } as unknown as Repository<Accountant>,
+      {} as AnafCompanyLookupService,
+      {} as CaenService,
+    );
+    await expect(service.findSessionState(1)).resolves.toMatchObject({
+      status: 'active',
+    });
+    expect(findOne).toHaveBeenCalledWith({
+      where: { id: 1 },
+      select: { id: true, status: true, passwordChangedAt: true },
+    });
   });
 });

@@ -17,6 +17,7 @@ import { HealthController } from './health.controller.js';
 import { EfacturaModule } from './efactura/efactura.module.js';
 import { InvoicesModule } from './invoices/invoices.module.js';
 import { OpenDataModule } from './open-data/open-data.module.js';
+import { PublicStatsModule } from './public-stats/public-stats.module.js';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { OpenDataModule } from './open-data/open-data.module.js';
     EfacturaModule,
     ApiLogsModule,
     AnafModule,
+    PublicStatsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  Link,
   NavLink,
   Navigate,
   Outlet,
@@ -80,7 +81,7 @@ export function AppLayout() {
   if (me.isPending) return <div className="loading">Se încarcă…</div>;
   if (!me.data) {
     const next = encodeURIComponent(location.pathname + location.search);
-    return <Navigate to={`/login?next=${next}`} replace />;
+    return <Navigate to={`/?auth=login&next=${next}`} replace />;
   }
 
   const withoutCert =
@@ -96,7 +97,9 @@ export function AppLayout() {
   return (
     <div className={navOpen ? 'app nav-open' : 'app'}>
       <header className="app-topbar">
-        <Wordmark />
+        <Link to="/" className="brand-link" aria-label="SPVDirect, pagina principală">
+          <Wordmark />
+        </Link>
         <Button
           variant="ghost"
           size="sm"
@@ -109,7 +112,9 @@ export function AppLayout() {
       </header>
       <nav id="app-nav" className="spv-side" aria-label="Navigare principală">
         <div className="spv-side-brand">
-          <Wordmark />
+          <Link to="/" className="brand-link" aria-label="SPVDirect, pagina principală" onClick={close}>
+            <Wordmark />
+          </Link>
         </div>
         <NavGroup
           onNavigate={close}
@@ -189,7 +194,7 @@ export function AppLayout() {
             title="Deconectare"
             onClick={() =>
               logout.mutate(undefined, {
-                onSettled: () => navigate('/login', { replace: true }),
+                onSettled: () => navigate('/', { replace: true }),
               })
             }
           >

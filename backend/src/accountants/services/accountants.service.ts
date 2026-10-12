@@ -55,6 +55,15 @@ export class AccountantsService {
     return this.accountants.findOneBy({ id });
   }
 
+  findSessionState(
+    id: number,
+  ): Promise<Pick<Accountant, 'status' | 'passwordChangedAt'> | null> {
+    return this.accountants.findOne({
+      where: { id },
+      select: { id: true, status: true, passwordChangedAt: true },
+    });
+  }
+
   findByEmailWithPassword(email: string): Promise<Accountant | null> {
     return this.accountants
       .createQueryBuilder('a')
@@ -122,7 +131,10 @@ export class AccountantsService {
     }
     await this.accountants.update(
       { id },
-      { passwordHash: await hashPassword(dto.newPassword) },
+      {
+        passwordHash: await hashPassword(dto.newPassword),
+        passwordChangedAt: new Date(),
+      },
     );
   }
 

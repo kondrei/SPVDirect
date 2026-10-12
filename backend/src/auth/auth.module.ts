@@ -49,6 +49,6 @@ import { ResendAdminApprovalHandler } from './registrations/resend-admin-approva
     ResendAdminApprovalHandler,
     AdminApprovalRetryJob,
   ],
-  exports: [JwtModule, JwtAuthGuard],
+  exports: [JwtModule, JwtAuthGuard, AuthService],
 })
 export class AuthModule {}
