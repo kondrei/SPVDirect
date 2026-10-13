@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { numericTransformer } from '../common/numeric.transformer.js';
 import type {
+  Currency,
   InvoiceLine,
   InvoiceParty,
   PaymentMethod,
@@ -17,6 +18,8 @@ import type {
 @Entity('invoices')
 @Unique('uq_invoices_company_series_number', ['companyId', 'series', 'number'])
 @Index('idx_invoices_accountant_issued', ['accountantId', 'issueDate'])
+@Index('idx_invoices_company_buyer_cui', { synchronize: false })
+@Index('idx_invoices_accountant_buyer_cui', { synchronize: false })
 export class Invoice {
   @PrimaryGeneratedColumn('identity', {
     type: 'integer',
@@ -47,7 +50,7 @@ export class Invoice {
   dueDate: string | null;
 
   @Column({ type: 'varchar', length: 3, default: 'RON' })
-  currency: string;
+  currency: Currency;
 
   @Column({
     name: 'exchange_rate',

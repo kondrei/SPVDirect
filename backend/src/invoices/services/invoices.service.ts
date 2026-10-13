@@ -32,6 +32,11 @@ import {
   statsWindowStart,
   type InvoiceStats,
 } from '../helpers/invoice-stats.js';
+import {
+  distinctLineSuggestions,
+  SUGGESTION_INVOICE_LIMIT,
+  type LineSuggestion,
+} from '../helpers/invoice-line-suggestions.js';
 import { InvoiceMailer } from './invoice-mailer.service.js';
 import { renderInvoicePdf, type InvoiceLogo } from '../builders/invoice-pdf.js';
 import { renderInvoiceXml } from '../builders/invoice-xml.js';
@@ -61,6 +66,15 @@ export interface InvoiceSummary {
   emailedTo: string | null;
   emailedAt: string | null;
 }
+
+type BuyerStatus = Pick<BuyerLookup, 'vatPayer' | 'inactive' | 'eFactura'> & {
+  anafChecked: boolean;
+};
+
+export type FoundBuyer = BuyerLookup &
+  BuyerStatus & {
+    source: 'invoice' | 'company' | 'anaf';
+  };
 
 export interface InvoicePage {
   items: InvoiceSummary[];
@@ -127,6 +141,61 @@ export class InvoicesService {
     return buyerFromAnaf(record);
   }
 
+  async findBuyer(accountantId: number, cui: string): Promise<FoundBuyer> {
+    const last = await this.invoicesToBuyer(accountantId, cui)
+      .select(['invoice.id', 'invoice.buyer'])
+      .limit(1)
+      .getOne();
+    if (last) {
+      return {
+        ...last.buyer,
+        ...(await this.anafStatus(accountantId, cui)),
+        source: 'invoice',
+      };
+    }
+    const company = await this.companies.findByCui(accountantId, cui);
+    if (company?.address?.trim()) {
+      return {
+        ...sellerFromCompany(company),
+        inactive: company.inactive,
+        eFactura: company.eFactura,
+        anafChecked: false,
+        source: 'company',
+      };
+    }
+    return {
+      ...(await this.lookupBuyer(accountantId, cui)),
+      anafChecked: true,
+      source: 'anaf',
+    };
+  }
+
+  private async anafStatus(
+    accountantId: number,
+    cui: string,
+  ): Promise<BuyerStatus | Omit<BuyerStatus, 'vatPayer'>> {
+    try {
+      const record = await this.anaf.lookup(accountantId, cui);
+      if (record) {
+        const { vatPayer, inactive, eFactura } = buyerFromAnaf(record);
+        return { vatPayer, inactive, eFactura, anafChecked: true };
+      }
+    } catch (error) {
+      this.logger.warn(`ANAF status check failed for buyer: ${String(error)}`);
+    }
+    return { inactive: null, eFactura: null, anafChecked: false };
+  }
+
+  private invoicesToBuyer(accountantId: number, buyerCui: string) {
+    return this.invoices
+      .createQueryBuilder('invoice')
+      .where('invoice.accountantId = :accountantId', { accountantId })
+      .andWhere("invoice.buyer ->> 'cui' = :buyerCui", { buyerCui })
+      .andWhere('invoice.stornoOfInvoiceId IS NULL')
+      .orderBy('invoice.issueDate', 'DESC')
+      .addOrderBy('invoice.id', 'DESC');
+  }
+
   async nextNumber(
     accountantId: number,
     companyId: number,
@@ -170,6 +239,25 @@ export class InvoicesService {
       page: filter.page,
       pageSize: filter.pageSize,
     };
+  }
+
+  async lineSuggestions(
+    accountantId: number,
+    companyId: number,
+    buyerCui: string,
+  ): Promise<LineSuggestion[]> {
+    await this.companies.get(accountantId, companyId);
+    const rows = await this.invoicesToBuyer(accountantId, buyerCui)
+      .select([
+        'invoice.id',
+        'invoice.lines',
+        'invoice.currency',
+        'invoice.issueDate',
+      ])
+      .andWhere('invoice.companyId = :companyId', { companyId })
+      .limit(SUGGESTION_INVOICE_LIMIT)
+      .getMany();
+    return distinctLineSuggestions(rows);
   }
 
   async stats(accountantId: number): Promise<InvoiceStats> {

@@ -239,9 +239,25 @@ export interface InvoiceParty {
   vatPayer: boolean;
 }
 
+export interface LineSuggestion {
+  description: string;
+  quantity: number;
+  unit: InvoiceUnit;
+  unitPrice: number;
+  vatRate: number;
+  vatCategory: VatCategory;
+  currency: InvoiceCurrency;
+  issueDate: string;
+}
+
 export interface BuyerLookup extends InvoiceParty {
   inactive: boolean | null;
   eFactura: boolean | null;
+}
+
+export interface FoundBuyer extends BuyerLookup {
+  anafChecked: boolean;
+  source: 'invoice' | 'company' | 'anaf';
 }
 
 export interface InvoiceLine {

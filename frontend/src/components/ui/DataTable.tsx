@@ -15,6 +15,7 @@ export interface DataTableProps<R> {
   caption: string;
   stack?: boolean;
   rowNote?: (row: R) => ReactNode;
+  onRowClick?: (row: R) => void;
 }
 
 export function DataTable<R>({
@@ -24,6 +25,7 @@ export function DataTable<R>({
   caption,
   stack,
   rowNote,
+  onRowClick,
 }: DataTableProps<R>) {
   return (
     <div className="spv-table-wrap">
@@ -47,7 +49,18 @@ export function DataTable<R>({
             const note = rowNote?.(r);
             return (
             <Fragment key={rowKey(r)}>
-            <tr>
+            <tr
+              className={onRowClick ? 'spv-row-clickable' : undefined}
+              onClick={
+                onRowClick
+                  ? (e) => {
+                      if (!(e.target as Element).closest('button, a, input, select')) {
+                        onRowClick(r);
+                      }
+                    }
+                  : undefined
+              }
+            >
               {columns.map((c) => (
                 <td
                   key={c.key}

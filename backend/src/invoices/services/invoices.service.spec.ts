@@ -124,6 +124,173 @@ describe('InvoicesService.lookupBuyer', () => {
   });
 });
 
+function withQueryBuilder(rows: Partial<Invoice>[]) {
+  const ctx = setup();
+  const qb = {
+    select: vi.fn().mockReturnThis(),
+    where: vi.fn().mockReturnThis(),
+    andWhere: vi.fn().mockReturnThis(),
+    orderBy: vi.fn().mockReturnThis(),
+    addOrderBy: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
+    getOne: vi.fn().mockResolvedValue(rows[0] ?? null),
+    getMany: vi.fn().mockResolvedValue(rows),
+  };
+  Object.assign(ctx.invoices, { createQueryBuilder: vi.fn(() => qb) });
+  return { ...ctx, qb };
+}
+
+function expectInvoicesToBuyer(qb: ReturnType<typeof withQueryBuilder>['qb']) {
+  expect(qb.where).toHaveBeenCalledWith('invoice.accountantId = :accountantId', {
+    accountantId: 1,
+  });
+  expect(qb.andWhere).toHaveBeenCalledWith("invoice.buyer ->> 'cui' = :buyerCui", {
+    buyerCui: '87654321',
+  });
+  expect(qb.andWhere).toHaveBeenCalledWith('invoice.stornoOfInvoiceId IS NULL');
+  expect(qb.orderBy).toHaveBeenCalledWith('invoice.issueDate', 'DESC');
+  expect(qb.addOrderBy).toHaveBeenCalledWith('invoice.id', 'DESC');
+}
+
+describe('InvoicesService.findBuyer', () => {
+  function withSaved({
+    invoice = null,
+    company = null,
+  }: { invoice?: Partial<Invoice> | null; company?: Company | null } = {}) {
+    const ctx = withQueryBuilder(invoice ? [invoice] : []);
+    Object.assign(ctx.companies, {
+      findByCui: vi.fn().mockResolvedValue(company),
+    });
+    return ctx;
+  }
+
+  it('takes the buyer from the accountant’s latest invoice to that CUI, with the current ANAF status', async () => {
+    const invoice = sampleInvoice({
+      buyer: {
+        ...sampleInvoice().buyer,
+        cui: '87654321',
+        email: 'client@exemplu.ro',
+        vatPayer: false,
+      },
+    });
+    const { service, qb, anaf } = withSaved({ invoice });
+    const record = anafTvaRecord(87654321);
+    record.stare_inactiv.statusInactivi = true;
+    anaf.lookup.mockResolvedValue(record);
+    const buyer = await service.findBuyer(1, '87654321');
+    expectInvoicesToBuyer(qb);
+    expect(qb.limit).toHaveBeenCalledWith(1);
+    expect(anaf.lookup).toHaveBeenCalledWith(1, '87654321');
+    expect(buyer).toEqual({
+      ...invoice.buyer,
+      vatPayer: true,
+      inactive: true,
+      eFactura: true,
+      anafChecked: true,
+      source: 'invoice',
+    });
+  });
+
+  it('keeps the saved buyer, marked as not checked at ANAF, when ANAF fails or does not know the CUI', async () => {
+    const invoice = sampleInvoice({
+      buyer: { ...sampleInvoice().buyer, cui: '87654321' },
+    });
+    for (const answer of [
+      () => Promise.reject(new BadGatewayException('ANAF indisponibil')),
+      () => Promise.resolve(null),
+    ]) {
+      const { service, anaf } = withSaved({ invoice });
+      anaf.lookup.mockImplementation(answer);
+      expect(await service.findBuyer(1, '87654321')).toEqual({
+        ...invoice.buyer,
+        inactive: null,
+        eFactura: null,
+        anafChecked: false,
+        source: 'invoice',
+      });
+    }
+  });
+
+  it('falls back to the accountant’s own company with that CUI', async () => {
+    const { service, companies, anaf } = withSaved({
+      company: Object.assign({}, COMPANY, { inactive: false, eFactura: true }),
+    });
+    const buyer = await service.findBuyer(1, '12345678');
+    expect(
+      (companies as unknown as { findByCui: ReturnType<typeof vi.fn> }).findByCui,
+    ).toHaveBeenCalledWith(1, '12345678');
+    expect(buyer).toMatchObject({
+      name: 'AGRO VEST SRL',
+      cui: '12345678',
+      address: COMPANY.address,
+      vatPayer: true,
+      inactive: false,
+      eFactura: true,
+      anafChecked: false,
+      source: 'company',
+    });
+    expect(anaf.lookup).not.toHaveBeenCalled();
+  });
+
+  it('asks ANAF when nothing is saved, or the saved company has no address', async () => {
+    for (const company of [
+      null,
+      Object.assign({}, COMPANY, { address: null }),
+      Object.assign({}, COMPANY, { address: '   ' }),
+    ]) {
+      const { service, anaf } = withSaved({ company });
+      const buyer = await service.findBuyer(1, '87654321');
+      expect(anaf.lookup).toHaveBeenCalledWith(1, '87654321');
+      expect(buyer).toMatchObject({
+        cui: '87654321',
+        anafChecked: true,
+        source: 'anaf',
+      });
+    }
+  });
+
+  it('answers 400 when the CUI is nowhere, not even at ANAF', async () => {
+    const { service, anaf } = withSaved();
+    anaf.lookup.mockResolvedValue(null);
+    await expect(service.findBuyer(1, '99999999')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+});
+
+describe('InvoicesService.lineSuggestions', () => {
+  it('reads the lines of the last invoices for that company and buyer, never stornos', async () => {
+    const invoice = sampleInvoice();
+    const { service, companies, qb } = withQueryBuilder([invoice]);
+    const result = await service.lineSuggestions(1, 7, '87654321');
+    expect(companies.get).toHaveBeenCalledWith(1, 7);
+    expectInvoicesToBuyer(qb);
+    expect(qb.andWhere).toHaveBeenCalledWith('invoice.companyId = :companyId', {
+      companyId: 7,
+    });
+    expect(qb.limit).toHaveBeenCalledWith(50);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      description: invoice.lines[0].description,
+      unitPrice: invoice.lines[0].unitPrice,
+      currency: 'RON',
+      issueDate: '2026-10-04',
+    });
+  });
+
+  it('answers 404 before querying when the company is not the accountant’s', async () => {
+    const { service, companies, invoices } = withQueryBuilder([]);
+    companies.get.mockRejectedValue(new NotFoundException('Firma nu a fost găsită'));
+    await expect(service.lineSuggestions(1, 99, '87654321')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(
+      (invoices as unknown as { createQueryBuilder: ReturnType<typeof vi.fn> })
+        .createQueryBuilder,
+    ).not.toHaveBeenCalled();
+  });
+});
+
 describe('InvoicesService.stats', () => {
   it('reads only the accountant rows from the window start and aggregates them', async () => {
     const { service, invoices } = setup();

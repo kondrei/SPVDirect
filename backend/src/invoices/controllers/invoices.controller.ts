@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
@@ -20,10 +19,11 @@ import {
   INVOICE_THROTTLE,
 } from '../../common/constants.js';
 import { ParseIdPipe } from '../../common/parse-id.pipe.js';
-import { normalizeCui } from '../../companies/dto/company.dto.js';
+import { ParseCuiPipe } from '../../companies/dto/company.dto.js';
 import {
   CreateInvoiceDto,
   CreateStornoDto,
+  LineSuggestionsQuery,
   ListInvoicesQuery,
   NextNumberQuery,
   SendInvoiceDto,
@@ -70,13 +70,18 @@ export class InvoicesController {
   @Throttle(ANAF_LOOKUP_THROTTLE)
   lookupBuyer(
     @Param('accountantId', ParseIdPipe) accountantId: number,
-    @Param('cui') cui: string,
+    @Param('cui', ParseCuiPipe) cui: string,
   ) {
-    const normalized = normalizeCui(cui);
-    if (typeof normalized !== 'string' || !/^\d{2,10}$/.test(normalized)) {
-      throw new BadRequestException('CUI invalid');
-    }
-    return this.invoices.lookupBuyer(accountantId, normalized);
+    return this.invoices.lookupBuyer(accountantId, cui);
+  }
+
+  @Get('buyers/:cui')
+  @Throttle(ANAF_LOOKUP_THROTTLE)
+  findBuyer(
+    @Param('accountantId', ParseIdPipe) accountantId: number,
+    @Param('cui', ParseCuiPipe) cui: string,
+  ) {
+    return this.invoices.findBuyer(accountantId, cui);
   }
 
   @Get('next-number')
@@ -92,6 +97,19 @@ export class InvoicesController {
         query.series,
       ),
     };
+  }
+
+  @Get('line-suggestions')
+  @Throttle(INVOICE_THROTTLE)
+  lineSuggestions(
+    @Param('accountantId', ParseIdPipe) accountantId: number,
+    @Query() query: LineSuggestionsQuery,
+  ) {
+    return this.invoices.lineSuggestions(
+      accountantId,
+      query.companyId,
+      query.buyerCui,
+    );
   }
 
   @Post()

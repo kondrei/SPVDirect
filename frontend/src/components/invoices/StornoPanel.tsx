@@ -6,13 +6,9 @@ import {
 } from '../../api/hooks';
 import type { InvoiceSummary } from '../../api/types';
 import { formatAmount } from '../../lib/format';
-import { invoiceNumber, todayIso } from '../../lib/invoice';
+import { invoiceFilename, invoiceNumber, todayIso } from '../../lib/invoice';
 import { QueryError } from '../QueryError';
 import { Alert, Button, Card, TextAreaField, TextField } from '../ui';
-
-function filename(series: string, number: number) {
-  return `factura-${series}-${String(number).padStart(6, '0')}`;
-}
 
 function parseQuantity(value: string): number {
   const text = value.trim().replace(',', '.');
@@ -88,7 +84,7 @@ function StornoForm({
 
   if (create.isSuccess) {
     const created = create.data.invoice;
-    const name = filename(created.series, created.number);
+    const name = invoiceFilename(created);
     const createdLabel = invoiceNumber(created.series, created.number);
     return (
       <Card title={`Factura ${label} a fost stornată`}>

@@ -36,6 +36,7 @@ export type Status =
   | 'yes'
   | 'no'
   | 'inactive'
+  | 'unverified'
   | 'added'
   | 'duplicate'
   | 'notFound';
@@ -56,6 +57,7 @@ export const STATUS: Record<
   yes: { tone: 'success', icon: 'check', label: 'Da' },
   no: { tone: 'neutral', icon: 'x', label: 'Nu' },
   inactive: { tone: 'danger', icon: 'alert', label: 'Contribuabil inactiv' },
+  unverified: { tone: 'warning', icon: 'alert', label: 'Status neverificat la ANAF' },
   added: { tone: 'success', icon: 'check', label: 'Adăugată' },
   duplicate: { tone: 'neutral', icon: 'info', label: 'Exista deja' },
   notFound: { tone: 'danger', icon: 'x', label: 'Negăsit la ANAF' },

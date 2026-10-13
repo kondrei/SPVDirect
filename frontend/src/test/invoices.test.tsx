@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ME, renderApp } from './render';
@@ -178,6 +178,78 @@ describe('Facturi list', () => {
     await user.click(screen.getByRole('button', { name: 'Trimite' }));
     expect(await screen.findByText('Emailul a fost trimis.')).toBeInTheDocument();
     expect(body).toEqual({ to: 'client@exemplu.ro' });
+  });
+
+  describe('preview', () => {
+    const listApi = () => ({
+      ...base(),
+      'GET /accountants/1/invoices?page=1&pageSize=25': {
+        status: 200,
+        body: { items: [SUMMARY], total: 1, page: 1, pageSize: 25 },
+      },
+      'GET /accountants/1/invoices/3/pdf': { status: 200, body: {} },
+    });
+
+    function stubObjectUrls() {
+      const create = vi.fn(() => 'blob:factura-3');
+      const revoke = vi.fn();
+      Object.assign(URL, { createObjectURL: create, revokeObjectURL: revoke });
+      return { create, revoke };
+    }
+
+    it('opens the PDF of the invoice clicked in the list and closes it again', async () => {
+      const user = userEvent.setup();
+      const { revoke } = stubObjectUrls();
+      const { calls } = renderApp('/accountants/1/invoices', listApi());
+      await user.click(await screen.findByRole('button', { name: 'Previzualizează FCT 000012' }));
+
+      const dialog = screen.getByRole('dialog', { name: 'Factura FCT 000012' });
+      expect(dialog).toHaveFocus();
+      expect(within(dialog).getByText(/CLIENT EXEMPLU SRL · 04.10.2026 · 1.210,50 RON/)).toBeInTheDocument();
+      expect(
+        await within(dialog).findByTitle('Previzualizare factura FCT 000012'),
+      ).toHaveAttribute('src', 'blob:factura-3');
+      expect(calls).toContain('GET /accountants/1/invoices/3/pdf');
+
+      await user.click(within(dialog).getByRole('button', { name: 'Închide' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(revoke).toHaveBeenCalledWith('blob:factura-3');
+      expect(screen.getByRole('button', { name: 'Previzualizează FCT 000012' })).toHaveFocus();
+    });
+
+    it('opens from a click anywhere on the row and closes with Escape', async () => {
+      const user = userEvent.setup();
+      stubObjectUrls();
+      renderApp('/accountants/1/invoices', listApi());
+      await user.click(await screen.findByText('CLIENT EXEMPLU SRL'));
+      expect(screen.getByRole('dialog', { name: 'Factura FCT 000012' })).toBeInTheDocument();
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('does not open when an action button of the invoice is used', async () => {
+      const user = userEvent.setup();
+      stubObjectUrls();
+      renderApp('/accountants/1/invoices', listApi());
+      await user.click(
+        await screen.findByRole('button', { name: /Trimite pe email FCT 000012/ }),
+      );
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('says so when the PDF cannot be loaded', async () => {
+      const user = userEvent.setup();
+      stubObjectUrls();
+      renderApp('/accountants/1/invoices', {
+        ...listApi(),
+        'GET /accountants/1/invoices/3/pdf': {
+          status: 404,
+          body: { message: 'Factura nu a fost găsită' },
+        },
+      });
+      await user.click(await screen.findByRole('button', { name: 'Previzualizează FCT 000012' }));
+      expect(await screen.findByText('Factura nu a putut fi afișată.')).toBeInTheDocument();
+    });
   });
 
   it('saves a not yet stored invoice to storage', async () => {
@@ -376,6 +448,15 @@ describe('Factură nouă', () => {
     expect(screen.getByLabelText('Denumire')).toBeEnabled();
   });
 
+  it('shows example placeholders in the text fields', async () => {
+    renderApp('/accountants/1/invoices/new', base());
+    await screen.findByRole('heading', { name: 'Factură nouă' });
+    expect(screen.getByLabelText('Denumire')).toHaveAttribute('placeholder', 'Exemplu SRL');
+    expect(screen.getByLabelText('IBAN')).toHaveAttribute('placeholder');
+    expect(screen.getByLabelText('Denumire (linia 1)')).toHaveAttribute('placeholder');
+    expect(screen.getByLabelText('Mențiuni pe factură')).toHaveAttribute('placeholder');
+  });
+
   it('rejects an invalid CUI without calling ANAF', async () => {
     const user = userEvent.setup();
     const { calls } = renderApp('/accountants/1/invoices/new', base());
@@ -384,8 +465,12 @@ describe('Factură nouă', () => {
     await user.clear(screen.getByLabelText('CUI'));
     await user.type(screen.getByLabelText('CUI'), 'abc');
     await user.click(screen.getByRole('button', { name: 'Caută la ANAF' }));
-    expect(await screen.findByText(/CUI invalid/)).toBeInTheDocument();
+    const cui = screen.getByLabelText('CUI');
+    expect(cui).toHaveAccessibleDescription(/CUI invalid/);
+    expect(cui).toHaveAttribute('aria-invalid', 'true');
     expect(calls.some((c) => c.includes('buyer-lookup'))).toBe(false);
+    await user.type(cui, '1');
+    expect(cui).toHaveAccessibleDescription('Lăsați gol pentru persoane fizice.');
   });
 
   it('validates the lines before posting', async () => {
@@ -443,6 +528,333 @@ describe('Factură nouă', () => {
     });
     expect(await screen.findByText('Firma nu are adresă.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Emite factura' })).toBeDisabled();
+  });
+
+  describe('buyer filled when the CUI field is left', () => {
+    const FOUND = '/accountants/1/invoices/buyers/87654321';
+
+    it('fills the buyer from the last invoice to that CUI without asking ANAF', async () => {
+      const user = userEvent.setup();
+      const { calls } = renderApp('/accountants/1/invoices/new', {
+        ...base(),
+        [`GET ${FOUND}`]: {
+          status: 200,
+          body: {
+            ...BUYER,
+            email: 'client@exemplu.ro',
+            anafChecked: true,
+            source: 'invoice',
+          },
+        },
+      });
+      await screen.findByRole('heading', { name: 'Factură nouă' });
+      await user.type(screen.getByLabelText('CUI'), 'RO 87654321');
+      await user.tab();
+
+      await waitFor(() =>
+        expect(screen.getByLabelText('Denumire')).toHaveValue('CLIENT EXEMPLU SRL'),
+      );
+      expect(screen.getByLabelText('Adresa')).toHaveValue(BUYER.address);
+      expect(screen.getByLabelText('IBAN')).toHaveValue(BUYER.iban);
+      expect(screen.getByLabelText('Email')).toHaveValue('client@exemplu.ro');
+      expect(screen.getByText('Plătitor de TVA')).toBeInTheDocument();
+      expect(screen.getByText('Înregistrat în RO e-Factura')).toBeInTheDocument();
+      expect(screen.queryByText('Status neverificat la ANAF')).not.toBeInTheDocument();
+      expect(
+        screen.getByText(
+          'Date preluate din ultima factură emisă acestui client, cu statusul actual din ANAF.',
+        ),
+      ).toBeInTheDocument();
+      expect(calls.filter((c) => c.includes('buyer-lookup'))).toEqual([]);
+
+      await user.click(screen.getByLabelText('CUI'));
+      await user.tab();
+      expect(calls.filter((c) => c === `GET ${FOUND}`)).toHaveLength(1);
+    });
+
+    it('flags the status as not checked when ANAF did not answer for a saved buyer', async () => {
+      const user = userEvent.setup();
+      renderApp('/accountants/1/invoices/new', {
+        ...base(),
+        [`GET ${FOUND}`]: {
+          status: 200,
+          body: {
+            ...BUYER,
+            inactive: null,
+            eFactura: null,
+            anafChecked: false,
+            source: 'invoice',
+          },
+        },
+      });
+      await screen.findByRole('heading', { name: 'Factură nouă' });
+      await user.type(screen.getByLabelText('CUI'), '87654321');
+      await user.tab();
+      expect(await screen.findByText('Status neverificat la ANAF')).toBeInTheDocument();
+      expect(screen.getByText(/ANAF nu a răspuns/)).toBeInTheDocument();
+      expect(screen.queryByText(/RO e-Factura/)).not.toBeInTheDocument();
+    });
+
+    it('shows a buyer that is not registered in RO e-Factura', async () => {
+      const user = userEvent.setup();
+      renderApp('/accountants/1/invoices/new', {
+        ...base(),
+        [`GET ${FOUND}`]: {
+          status: 200,
+          body: { ...BUYER, eFactura: false, anafChecked: true, source: 'anaf' },
+        },
+      });
+      await screen.findByRole('heading', { name: 'Factură nouă' });
+      await user.type(screen.getByLabelText('CUI'), '87654321');
+      await user.tab();
+      expect(await screen.findByText('Neînregistrat în RO e-Factura')).toBeInTheDocument();
+    });
+
+    it('says where the data came from when the backend had to ask ANAF', async () => {
+      const user = userEvent.setup();
+      renderApp('/accountants/1/invoices/new', {
+        ...base(),
+        [`GET ${FOUND}`]: { status: 200, body: { ...BUYER, source: 'anaf' } },
+      });
+      await screen.findByRole('heading', { name: 'Factură nouă' });
+      await user.type(screen.getByLabelText('CUI'), '87654321');
+      await user.tab();
+      expect(await screen.findByText('Date preluate din ANAF.')).toBeInTheDocument();
+      expect(screen.getByLabelText('Denumire')).toHaveValue('CLIENT EXEMPLU SRL');
+    });
+
+    it('shows why when the CUI is found nowhere', async () => {
+      const user = userEvent.setup();
+      renderApp('/accountants/1/invoices/new', {
+        ...base(),
+        [`GET ${FOUND}`]: {
+          status: 400,
+          body: { message: 'CUI-ul nu există în registrul ANAF.' },
+        },
+      });
+      await screen.findByRole('heading', { name: 'Factură nouă' });
+      await user.type(screen.getByLabelText('CUI'), '87654321');
+      await user.tab();
+      expect(await screen.findByText('Clientul nu a fost găsit.')).toBeInTheDocument();
+      expect(screen.getByText('CUI-ul nu există în registrul ANAF.')).toBeInTheDocument();
+    });
+
+    it('does not search on leaving an empty or invalid CUI, nor when Caută la ANAF is clicked', async () => {
+      const user = userEvent.setup();
+      const { calls } = renderApp('/accountants/1/invoices/new', {
+        ...base(),
+        'GET /accountants/1/invoices/buyer-lookup/87654321': { status: 200, body: BUYER },
+      });
+      await screen.findByRole('heading', { name: 'Factură nouă' });
+      await user.click(screen.getByLabelText('CUI'));
+      await user.tab();
+      await user.type(screen.getByLabelText('CUI'), 'RO 1');
+      await user.tab();
+      await user.clear(screen.getByLabelText('CUI'));
+      await user.type(screen.getByLabelText('CUI'), '87654321');
+      await user.click(screen.getByRole('button', { name: 'Caută la ANAF' }));
+      expect(await screen.findByText('Date preluate din ANAF.')).toBeInTheDocument();
+      expect(calls.filter((c) => c.includes('/invoices/buyers/'))).toEqual([]);
+    });
+
+    it('still fills on leaving the CUI after a press on Caută la ANAF that did not click', async () => {
+      const user = userEvent.setup();
+      const { calls } = renderApp('/accountants/1/invoices/new', {
+        ...base(),
+        [`GET ${FOUND}`]: { status: 200, body: { ...BUYER, source: 'invoice' } },
+      });
+      await screen.findByRole('heading', { name: 'Factură nouă' });
+      const searchButton = screen.getByRole('button', { name: 'Caută la ANAF' });
+      fireEvent.pointerDown(searchButton);
+      await user.type(screen.getByLabelText('CUI'), '87654321');
+      await user.tab();
+      await waitFor(() => expect(calls).toContain(`GET ${FOUND}`));
+
+      await user.clear(screen.getByLabelText('CUI'));
+      await user.type(screen.getByLabelText('CUI'), '12345678');
+      fireEvent.pointerDown(searchButton);
+      fireEvent.pointerCancel(searchButton);
+      await user.tab();
+      await waitFor(() =>
+        expect(calls).toContain('GET /accountants/1/invoices/buyers/12345678'),
+      );
+    });
+  });
+
+  describe('lines billed before to the same buyer', () => {
+    const SUGGESTION_LIST = 'Facturate anterior acestui client';
+    const SUGGESTIONS = [
+      {
+        description: 'Servicii de contabilitate',
+        quantity: 1,
+        unit: 'luni',
+        unitPrice: 1500.5,
+        vatRate: 21,
+        vatCategory: 'S',
+        currency: 'RON',
+        issueDate: '2026-09-30',
+      },
+      {
+        description: 'Chirie birou',
+        quantity: 2,
+        unit: 'luni',
+        unitPrice: 800,
+        vatRate: 0,
+        vatCategory: 'E',
+        currency: 'RON',
+        issueDate: '2026-09-30',
+      },
+      {
+        description: 'Consultanță externă',
+        quantity: 3,
+        unit: 'ore',
+        unitPrice: 100,
+        vatRate: 21,
+        vatCategory: 'S',
+        currency: 'EUR',
+        issueDate: '2026-08-31',
+      },
+    ];
+
+    const api = (extra: Record<string, unknown> = {}) => ({
+      ...base(),
+      'GET /accountants/1/invoices/line-suggestions?companyId=7&buyerCui=87654321': {
+        status: 200,
+        body: SUGGESTIONS,
+      },
+      ...extra,
+    });
+
+    it('lists them when the description is clicked and fills the line from the one picked', async () => {
+      const user = userEvent.setup();
+      let sent: Record<string, unknown> = {};
+      renderApp(
+        '/accountants/1/invoices/new',
+        api({
+          'GET /accountants/1/invoices/buyer-lookup/87654321': {
+            status: 200,
+            body: BUYER,
+          },
+          'POST /accountants/1/invoices': (init: RequestInit | undefined) => {
+            sent = JSON.parse(String(init?.body));
+            return { status: 201, body: CREATED };
+          },
+        }),
+      );
+      await screen.findByRole('heading', { name: 'Factură nouă' });
+      await user.type(screen.getByLabelText('CUI'), 'RO 87654321');
+      await user.click(screen.getByRole('button', { name: 'Caută la ANAF' }));
+      await waitFor(() =>
+        expect(screen.getByLabelText('Denumire')).toHaveValue('CLIENT EXEMPLU SRL'),
+      );
+
+      const description = screen.getByLabelText('Denumire (linia 1)');
+      await waitFor(async () => {
+        await user.click(description);
+        expect(screen.getByRole('list', { name: SUGGESTION_LIST })).toBeInTheDocument();
+      });
+      const list = screen.getByRole('list', { name: SUGGESTION_LIST });
+      const options = within(list).getAllByRole('button');
+      expect(options.map((o) => o.textContent)).toEqual([
+        expect.stringContaining('Servicii de contabilitate'),
+        expect.stringContaining('Chirie birou'),
+      ]);
+      expect(options[0]).toHaveTextContent('1 luni × 1.500,50 RON · ultima dată 30.09.2026');
+
+      await user.click(options[0]);
+      expect(screen.queryByRole('list', { name: SUGGESTION_LIST })).not.toBeInTheDocument();
+      expect(description).toHaveValue('Servicii de contabilitate');
+      expect(screen.getByLabelText('Cantitate')).toHaveValue('1');
+      expect(screen.getByLabelText('U.M.')).toHaveValue('luni');
+      expect(screen.getByLabelText('Preț unitar (RON, fără TVA)')).toHaveValue('1500,5');
+
+      await user.clear(screen.getByLabelText('Cantitate'));
+      await user.type(screen.getByLabelText('Cantitate'), '3');
+      await user.click(screen.getByRole('button', { name: 'Emite factura' }));
+      await screen.findByText('Factura FCT 000012 a fost creată.');
+      expect(sent.lines).toEqual([
+        {
+          description: 'Servicii de contabilitate',
+          quantity: 3,
+          unit: 'luni',
+          unitPrice: 1500.5,
+          vatRate: 21,
+        },
+      ]);
+    });
+
+    it('filters by the typed text, picks with the keyboard and keeps a 0% reason', async () => {
+      const user = userEvent.setup();
+      renderApp('/accountants/1/invoices/new', api());
+      await screen.findByRole('heading', { name: 'Factură nouă' });
+      await user.type(screen.getByLabelText('CUI'), '87654321');
+
+      const description = screen.getByLabelText('Denumire (linia 1)');
+      await waitFor(async () => {
+        await user.click(description);
+        expect(screen.getByRole('list', { name: SUGGESTION_LIST })).toBeInTheDocument();
+      });
+      await user.type(description, 'chir');
+      const options = within(screen.getByRole('list', { name: SUGGESTION_LIST })).getAllByRole('button');
+      expect(options).toHaveLength(1);
+
+      await user.keyboard('{ArrowDown}{Enter}');
+      expect(description).toHaveValue('Chirie birou');
+      expect(screen.getByLabelText('Cantitate')).toHaveValue('2');
+      expect(screen.getByLabelText('Cota TVA')).toHaveValue('0');
+      expect(screen.getByLabelText('Motiv cotă 0%')).toHaveValue('E');
+    });
+
+    it('lists them when Denumire is reached with the keyboard and typed into', async () => {
+      const user = userEvent.setup();
+      renderApp('/accountants/1/invoices/new', api());
+      await screen.findByRole('heading', { name: 'Factură nouă' });
+      await user.type(screen.getByLabelText('CUI'), '87654321');
+      const description = screen.getByLabelText('Denumire (linia 1)');
+      description.focus();
+      await user.keyboard('serv');
+      const list = await screen.findByRole('list', { name: SUGGESTION_LIST });
+      expect(within(list).getAllByRole('button')).toHaveLength(1);
+    });
+
+    it('asks for them only when Denumire is used with a valid buyer CUI', async () => {
+      const user = userEvent.setup();
+      const { calls } = renderApp('/accountants/1/invoices/new', api());
+      const asked = () => calls.filter((c) => c.includes('line-suggestions')).length;
+      await screen.findByRole('heading', { name: 'Factură nouă' });
+      const description = screen.getByLabelText('Denumire (linia 1)');
+
+      await user.click(description);
+      expect(screen.queryByRole('list', { name: SUGGESTION_LIST })).not.toBeInTheDocument();
+      expect(asked()).toBe(0);
+
+      await user.type(screen.getByLabelText('CUI'), 'RO 87654321');
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      expect(asked()).toBe(0);
+
+      await user.click(description);
+      expect(
+        await screen.findByRole('list', { name: SUGGESTION_LIST }),
+      ).toBeInTheDocument();
+      expect(calls).toContain(
+        'GET /accountants/1/invoices/line-suggestions?companyId=7&buyerCui=87654321',
+      );
+      expect(asked()).toBe(1);
+    });
+
+    it('hides them once the buyer CUI changes, until Denumire is clicked again', async () => {
+      const user = userEvent.setup();
+      renderApp('/accountants/1/invoices/new', api());
+      await screen.findByRole('heading', { name: 'Factură nouă' });
+      await user.type(screen.getByLabelText('CUI'), '87654321');
+      const description = screen.getByLabelText('Denumire (linia 1)');
+      await user.click(description);
+      await screen.findByRole('list', { name: SUGGESTION_LIST });
+
+      await user.type(screen.getByLabelText('CUI'), '9');
+      await user.click(description);
+      expect(screen.queryByRole('list', { name: SUGGESTION_LIST })).not.toBeInTheDocument();
+    });
   });
 });
 

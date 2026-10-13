@@ -1,4 +1,4 @@
-import { Fragment, useState, type ReactNode } from 'react';
+import { Fragment, useCallback, useState, type ReactNode } from 'react';
 import { detailsOf } from '../../api/client';
 import {
   useCompanies,
@@ -16,6 +16,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { ErrorLog } from '../../components/ErrorLog';
 import { PageHead } from '../../components/PageHead';
 import { QueryError } from '../../components/QueryError';
+import { InvoicePreview } from '../../components/invoices/InvoicePreview';
 import { SendPanel } from '../../components/invoices/SendPanel';
 import { StornoPanel } from '../../components/invoices/StornoPanel';
 import {
@@ -35,11 +36,7 @@ import {
   formatIsoDate,
   pluralFacturi,
 } from '../../lib/format';
-import { invoiceNumber } from '../../lib/invoice';
-
-function filename(invoice: InvoiceSummary) {
-  return `factura-${invoice.series}-${String(invoice.number).padStart(6, '0')}`;
-}
+import { invoiceFilename, invoiceNumber } from '../../lib/invoice';
 
 export function InvoicesPage() {
   const appPath = useAppPath();
@@ -54,6 +51,8 @@ export function InvoicesPage() {
   const check = useValidateInvoice();
   const [sending, setSending] = useState<InvoiceSummary | null>(null);
   const [reversing, setReversing] = useState<InvoiceSummary | null>(null);
+  const [previewing, setPreviewing] = useState<InvoiceSummary | null>(null);
+  const closePreview = useCallback(() => setPreviewing(null), []);
 
   const anafState = new Map<number, EfacturaUpload>();
   for (const u of anafUploads.data?.items ?? []) {
@@ -70,7 +69,16 @@ export function InvoicesPage() {
       key: 'number',
       header: 'Factura',
       mono: true,
-      render: (i) => invoiceNumber(i.series, i.number),
+      render: (i) => (
+        <button
+          type="button"
+          className="link-button"
+          aria-label={`Previzualizează ${invoiceNumber(i.series, i.number)}`}
+          onClick={() => setPreviewing(i)}
+        >
+          {invoiceNumber(i.series, i.number)}
+        </button>
+      ),
     },
     ...(companyId
       ? []
@@ -160,7 +168,7 @@ export function InvoicesPage() {
           download.variables.format === 'pdf'
         }
         onClick={() =>
-          download.mutate({ id: i.id, format: 'pdf', filename: filename(i) })
+          download.mutate({ id: i.id, format: 'pdf', filename: invoiceFilename(i) })
         }
       >
         PDF
@@ -175,7 +183,7 @@ export function InvoicesPage() {
           download.variables.format === 'xml'
         }
         onClick={() =>
-          download.mutate({ id: i.id, format: 'xml', filename: filename(i) })
+          download.mutate({ id: i.id, format: 'xml', filename: invoiceFilename(i) })
         }
       >
         XML
@@ -365,6 +373,7 @@ export function InvoicesPage() {
                 rowKey={(i) => i.id}
                 stack
                 rowNote={rowNote}
+                onRowClick={setPreviewing}
               />
               <div className="spv-row">
                 <Button
@@ -389,6 +398,7 @@ export function InvoicesPage() {
           ) : null}
         </div>
       </Card>
+      {previewing ? <InvoicePreview invoice={previewing} onClose={closePreview} /> : null}
     </>
   );
 }

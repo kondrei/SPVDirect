@@ -85,3 +85,7 @@ export function todayIso(now: Date = new Date()): string {
 export function invoiceNumber(series: string, number: number): string {
   return `${series} ${String(number).padStart(6, '0')}`;
 }
+
+export function invoiceFilename(invoice: { series: string; number: number }): string {
+  return `factura-${invoice.series}-${String(invoice.number).padStart(6, '0')}`;
+}

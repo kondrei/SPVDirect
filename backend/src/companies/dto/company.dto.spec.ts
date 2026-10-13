@@ -1,8 +1,10 @@
+import { BadRequestException } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import {
   CreateCompaniesDto,
   MAX_BULK_CUIS,
+  ParseCuiPipe,
   UpdateCompanyDto,
 } from './company.dto.js';
 
@@ -94,5 +96,17 @@ describe('UpdateCompanyDto invoicing details', () => {
         'Număr de telefon invalid',
       ]),
     );
+  });
+});
+
+describe('ParseCuiPipe', () => {
+  const pipe = new ParseCuiPipe();
+
+  it('strips RO and spaces from a valid CUI', () => {
+    expect(pipe.transform(' ro 8765 4321 ')).toBe('87654321');
+  });
+
+  it.each(['1', '12345678901', 'ROabc', ''])('rejects %j with 400', (cui) => {
+    expect(() => pipe.transform(cui)).toThrow(BadRequestException);
   });
 });

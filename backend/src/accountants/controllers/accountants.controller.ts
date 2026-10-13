@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
@@ -26,7 +25,7 @@ import {
   PASSWORD_THROTTLE,
 } from '../../common/constants.js';
 import { ParseIdPipe } from '../../common/parse-id.pipe.js';
-import { normalizeCui } from '../../companies/dto/company.dto.js';
+import { ParseCuiPipe } from '../../companies/dto/company.dto.js';
 import { AccountantsService } from '../services/accountants.service.js';
 import { ChangePasswordDto, UpdateProfileDto } from '../dto/profile.dto.js';
 
@@ -60,13 +59,9 @@ export class AccountantsController {
   @Throttle(ANAF_LOOKUP_THROTTLE)
   lookupFirm(
     @Param('accountantId', ParseIdPipe) accountantId: number,
-    @Param('cui') cui: string,
+    @Param('cui', ParseCuiPipe) cui: string,
   ) {
-    const normalized = normalizeCui(cui);
-    if (typeof normalized !== 'string' || !/^\d{2,10}$/.test(normalized)) {
-      throw new BadRequestException('CUI invalid');
-    }
-    return this.accountants.lookupFirm(accountantId, normalized);
+    return this.accountants.lookupFirm(accountantId, cui);
   }
 
   @Post('password')
