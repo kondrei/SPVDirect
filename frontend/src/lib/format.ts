@@ -110,3 +110,7 @@ export function formatIsoDate(iso: string): string {
 }
 
 export const pluralFacturi = (n: number) => plural(n, 'factură', 'facturi');
+
+export function decimalText(value: number): string {
+  return String(value).replace('.', ',');
+}

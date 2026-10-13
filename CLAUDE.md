@@ -72,6 +72,7 @@ A Stop hook (`.claude/settings.json` → `.claude/hooks/verify-backend.sh`) bloc
 - `ThrottlerGuard` is global (120/min per IP). Every route gets a tighter `@Throttle(...)` from `common/constants.ts` when it calls ANAF, sends email, takes credentials or accepts a guessable token (`PUBLIC_LINK_THROTTLE` on registration and authorization links and the OAuth callback).
 - Public routes are `/health`, `/public/stats`, `/auth/register|login|logout`, `/auth/registrations/:token/*`, `/anaf/authorize/:token[/start]` and `/anaf/callback`. Everything else needs `JwtAuthGuard` (+ `AccountantParamGuard` under `/accountants/:accountantId`).
 - Queries use TypeORM parameters only. Never build SQL from request input.
+- Request input is validated before the handler runs, never by hand in a controller: query strings and bodies with DTOs (class-validator), path params with a `Parse*Pipe` (`ParseIdPipe`, `ParseCuiPipe`, `ParseAnafIdPipe`, ...) kept next to the DTOs. A DTO does not fit a single path param: `@Param()` validates the whole params object, and `forbidNonWhitelisted` would reject `accountantId`.
 - `/public/stats` (`src/public-stats/`) returns aggregate counts only, never rows or names. It is cached in memory for at most 5 minutes; `PublicStatsSubscriber` (a TypeORM subscriber) clears the cache after a committed insert or delete on a counted table, or an update to `accountants`/`efactura_uploads` (whose status is counted). Concurrent misses share one query batch, a load that started before an invalidation is never cached, and stale numbers are served if the database fails. Writes that bypass TypeORM (raw SQL, the Supabase console) show up when the 5 minutes run out.
 
 ## Key code paths
@@ -87,6 +88,8 @@ A Stop hook (`.claude/settings.json` → `.claude/hooks/verify-backend.sh`) bloc
 - `src/invoices/`: fiscal invoices (Facturi), art. 319 Cod fiscal. Seller = the `companies` row (IBAN, bank, email, phone, logo live there); buyer data is looked up from ANAF's VAT registry through `AnafCompanyLookupService` and editable before issuing.
   - Seller and buyer are snapshotted as jsonb on the invoice. Money is computed in integer cents: VAT per rate group (`invoice-calc.ts`). VAT rates depend on the delivery date (`vat-rates.ts`: 21/11/0 from 2025-08-01). A seller that is not a VAT payer gets category `O` and no VAT; rate 0 needs a reason (`E`, `Z`, `AE`); `vatOnCollection` prints "TVA la încasare".
   - `invoice-pdf.ts` (pdfkit, DejaVu Sans for ș/ț) and `invoice-xml.ts` (UBL 2.1 CIUS-RO, an invoice and a storno both pass ANAF's validator). Invoices are never deleted or edited; corrections are storno invoices (`invoice-storno.ts`): the same lines with negative quantities, `storno_of_*` columns pointing to the original, UBL type 380 with a `BillingReference`. Partial stornos are tracked per line (`stornoOfLine`) so a line can never be reversed past its quantity. VAT rounding is half away from zero so a storno mirrors the original to the cent.
+  - Leaving the buyer CUI field calls `GET /accountants/:accountantId/invoices/buyers/:cui` (`findBuyer`): the buyer snapshot of the accountant's latest non-storno invoice to that CUI (index `idx_invoices_accountant_buyer_cui`) with VAT payer, inactive and e-Factura status refreshed from ANAF (best-effort: when ANAF fails, inactive and e-Factura are null, VAT payer stays from the snapshot and `anafChecked` is false so the editor marks the status as unverified), else the accountant's own company with that CUI, else ANAF (`source` says which). "Caută la ANAF" (`buyer-lookup/:cui`) always asks ANAF.
+  - Lines stay jsonb on the invoice (an invoice is a frozen snapshot, read and written whole). `GET /accountants/:accountantId/invoices/line-suggestions?companyId&buyerCui` (`invoice-line-suggestions.ts`) returns the distinct lines (latest wins, per currency) from the last 50 non-storno invoices of that company to that buyer, served by the partial index `idx_invoices_company_buyer_cui`. The editor offers them under "Denumire" and fills the line. The VAT rate is kept only if it is still valid on the new delivery date.
   - Saving to Supabase Storage is per invoice and independent of `SPV_STORAGE` (`SupabaseStorage`, bucket `SUPABASE_INVOICE_BUCKET`). Email goes through `InvoiceMailer` (`api_logs` endpoint `invoice`); a failed email or upload is reported in the response and never undoes the invoice.
 
 - `src/efactura/`: RO e-Factura web services (`/{ANAF_ENV}/FCTEL/rest/...` on api.anaf.ro, OAuth through `AnafApiService`): `upload` / `uploadb2c` (body is the raw XML as `text/plain`, query `standard` UBL|CN|CII|RASP, `cif`), `stareMesaj`, `listaMesajeFactura`, `listaMesajePaginatieFactura`, `descarcare` (a zip). Validation (`validare/FACT1|FCN`) and XML to PDF (`transformare/...`) are public (`ANAF_EFACTURA_VALIDATE_ENDPOINT`, prod only, no OAuth) and are logged in `api_logs` without a connection.
@@ -103,3 +106,17 @@ A Stop hook (`.claude/settings.json` → `.claude/hooks/verify-backend.sh`) bloc
 ## Working notes
 - Git identity is configured (Andrei). The Phase 1 backend is in the "Initial commit" on `main`.
 - Work on feature branches. `main` is the base branch.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues for kondrei/SPVDirect (via `gh`). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default labels: needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one root `CONTEXT.md` plus `docs/adr/`. See `docs/agents/domain.md`.

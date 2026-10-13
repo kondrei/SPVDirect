@@ -73,10 +73,6 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
   const [touched, setTouched] = useState(false);
   const tooShort = password.length > 0 && password.length < MIN_PASSWORD;
 
-  useEffect(() => {
-    loadRecaptcha().catch(() => undefined);
-  }, []);
-
   const submit = (e: FormEvent) => {
     e.preventDefault();
     setTouched(true);
@@ -134,6 +130,12 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
 
 export function AuthPanel({ tab, onTab }: { tab: AuthTab; onTab: (tab: AuthTab) => void }) {
   const tabRefs = useRef<Partial<Record<AuthTab, HTMLButtonElement | null>>>({});
+
+  useEffect(() => {
+    loadRecaptcha().catch(() => undefined);
+    document.body.classList.add('recaptcha-on');
+    return () => document.body.classList.remove('recaptcha-on');
+  }, []);
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Home' && e.key !== 'End') return;

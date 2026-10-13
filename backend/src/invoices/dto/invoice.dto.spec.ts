@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { CreateInvoiceDto } from './invoice.dto.js';
+import { CreateInvoiceDto, LineSuggestionsQuery } from './invoice.dto.js';
 
 function body(overrides: Record<string, unknown> = {}) {
   return {
@@ -151,5 +151,27 @@ describe('CreateInvoiceDto', () => {
   it('rejects an invalid email to send to', async () => {
     const { messages } = await check(body({ sendToEmail: 'nu-este-email' }));
     expect(messages).toContain('Adresa de email este invalidă');
+  });
+});
+
+describe('LineSuggestionsQuery', () => {
+  async function query(input: Record<string, unknown>) {
+    const dto = plainToInstance(LineSuggestionsQuery, input);
+    const errors = await validate(dto, {
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    });
+    return { dto, errors };
+  }
+
+  it('reads the company id and strips RO and spaces from the buyer CUI', async () => {
+    const { dto, errors } = await query({ companyId: '7', buyerCui: 'RO 87654321' });
+    expect(errors).toHaveLength(0);
+    expect(dto).toMatchObject({ companyId: 7, buyerCui: '87654321' });
+  });
+
+  it('rejects an invalid CUI or a missing company', async () => {
+    expect((await query({ companyId: '7', buyerCui: 'abc' })).errors).toHaveLength(1);
+    expect((await query({ buyerCui: '87654321' })).errors).toHaveLength(1);
   });
 });

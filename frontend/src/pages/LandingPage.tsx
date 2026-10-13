@@ -238,6 +238,8 @@ export function LandingPage() {
                 Deschide aplicația
               </ButtonLink>
             </div>
+          ) : me.isPending ? (
+            <div className="spv-card landing-auth landing-auth-wait" id="cont" aria-busy="true" />
           ) : (
             <AuthPanel tab={tab} onTab={selectTab} />
           )}

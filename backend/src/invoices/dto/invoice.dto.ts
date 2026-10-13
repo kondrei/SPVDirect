@@ -20,6 +20,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import {
+  CUI_PATTERN,
   normalizeCui,
   normalizeIban,
 } from '../../companies/dto/company.dto.js';
@@ -60,7 +61,7 @@ export class InvoiceBuyerDto {
   @IsOptional()
   @Transform(({ value }) => normalizeCui(blankToNull(value)))
   @ValidateIf((_, v) => v !== null)
-  @Matches(/^\d{2,10}$/, { message: 'CUI cumpărător invalid' })
+  @Matches(CUI_PATTERN, { message: 'CUI cumpărător invalid' })
   cui?: string | null;
 
   @IsOptional()
@@ -298,6 +299,17 @@ export class NextNumberQuery {
     message: 'Seria poate avea 1–10 litere sau cifre',
   })
   series: string;
+}
+
+export class LineSuggestionsQuery {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  companyId: number;
+
+  @Transform(({ value }) => normalizeCui(value))
+  @Matches(CUI_PATTERN, { message: 'CUI cumpărător invalid' })
+  buyerCui: string;
 }
 
 export class StornoLineDto {

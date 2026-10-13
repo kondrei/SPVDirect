@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { INVOICE_PAGE_SIZE, SPV_PAGE_SIZE } from '../common/constants';
 import { accountantPath } from '../hooks/useAppPath';
+import { isValidCui } from '../lib/format';
 import { recaptchaToken } from '../lib/recaptcha';
 import { api, API_URL, ApiError, downloadFile, fetchFile } from './client';
 import type {
@@ -16,9 +17,11 @@ import type {
   CreateStornoInput,
   CreatedInvoice,
   BuyerLookup,
+  FoundBuyer,
   Invoice,
   InvoicePage,
   InvoiceStats,
+  LineSuggestion,
   EfacturaMessageList,
   EfacturaUpload,
   EfacturaUploadPage,
@@ -525,6 +528,14 @@ export function useBuyerLookup() {
   });
 }
 
+export function useFindBuyer() {
+  const path = useAccountantApiPath('/invoices/buyers');
+  return useMutation({
+    mutationFn: (cui: string) =>
+      api<FoundBuyer>(`${requirePath(path)}/${encodeURIComponent(cui)}`),
+  });
+}
+
 export function useNextInvoiceNumber(companyId: number, series: string) {
   const path = useAccountantApiPath('/invoices/next-number');
   const valid = companyId > 0 && /^[A-Z0-9]{1,10}$/.test(series);
@@ -533,6 +544,19 @@ export function useNextInvoiceNumber(companyId: number, series: string) {
     queryFn: () =>
       api<{ number: number }>(
         `${requirePath(path)}?${new URLSearchParams({ companyId: String(companyId), series })}`,
+      ),
+    enabled: !!path && valid,
+  });
+}
+
+export function useInvoiceLineSuggestions(companyId: number, buyerCui: string) {
+  const path = useAccountantApiPath('/invoices/line-suggestions');
+  const valid = companyId > 0 && isValidCui(buyerCui);
+  return useQuery({
+    queryKey: [...keys.invoices, 'line-suggestions', companyId, buyerCui] as const,
+    queryFn: () =>
+      api<LineSuggestion[]>(
+        `${requirePath(path)}?${new URLSearchParams({ companyId: String(companyId), buyerCui })}`,
       ),
     enabled: !!path && valid,
   });
@@ -561,6 +585,16 @@ export function useDownloadInvoice() {
       filename: string;
     }) =>
       downloadFile(`${requirePath(path)}/${id}/${format}`, `${filename}.${format}`),
+  });
+}
+
+export function useInvoicePdf(id: number) {
+  const path = useAccountantApiPath('/invoices');
+  return useQuery({
+    queryKey: [...keys.invoices, id, 'pdf'] as const,
+    queryFn: () => fetchFile(`${requirePath(path)}/${id}/pdf`, `factura-${id}.pdf`),
+    enabled: !!path,
+    staleTime: Infinity,
   });
 }
 

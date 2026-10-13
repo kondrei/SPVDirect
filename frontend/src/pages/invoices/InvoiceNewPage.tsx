@@ -1,10 +1,10 @@
 import { Fragment, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import {
-  useBuyerLookup,
   useCompanies,
   useCreateInvoice,
   useDownloadInvoice,
+  useInvoiceLineSuggestions,
   useNextInvoiceNumber,
   useSaveInvoiceToStorage,
   useUploadInvoiceToAnaf,
@@ -15,8 +15,10 @@ import type {
   Company,
   CreateInvoiceInput,
   CreatedInvoice,
+  FoundBuyer,
   InvoiceCurrency,
   InvoiceUnit,
+  LineSuggestion,
   PaymentMethod,
 } from '../../api/types';
 import { detailsOf } from '../../api/client';
@@ -24,6 +26,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { ErrorLog } from '../../components/ErrorLog';
 import { PageHead } from '../../components/PageHead';
 import { QueryError } from '../../components/QueryError';
+import { LineDescriptionField } from '../../components/invoices/LineDescriptionField';
 import { SendPanel } from '../../components/invoices/SendPanel';
 import { StornoPanel } from '../../components/invoices/StornoPanel';
 import {
@@ -36,7 +39,9 @@ import {
   TextField,
 } from '../../components/ui';
 import { useAppPath } from '../../hooks/useAppPath';
+import { useBuyerAutofill } from './useBuyerAutofill';
 import {
+  decimalText,
   formatAmount,
   formatCui,
   isValidCui,
@@ -47,6 +52,7 @@ import {
   computeTotals,
   CURRENCIES,
   INVOICE_UNITS,
+  invoiceFilename,
   invoiceNumber,
   PAYMENT_LABELS,
   todayIso,
@@ -114,6 +120,53 @@ function parseDecimal(value: string): number {
   return text === '' ? NaN : Number(text);
 }
 
+function lineFromSuggestion(
+  suggestion: LineSuggestion,
+  vatPayer: boolean,
+  rates: number[],
+): Partial<LineForm> {
+  const keepsRate =
+    vatPayer && suggestion.vatCategory !== 'O' && rates.includes(suggestion.vatRate);
+  return {
+    description: suggestion.description,
+    quantity: decimalText(suggestion.quantity),
+    unit: suggestion.unit,
+    unitPrice: decimalText(suggestion.unitPrice),
+    ...(keepsRate ? { vatRate: String(suggestion.vatRate) } : {}),
+    ...(keepsRate && suggestion.vatRate === 0 && suggestion.vatCategory in ZERO_VAT_REASONS
+      ? { zeroReason: suggestion.vatCategory as ZeroReason }
+      : {}),
+  };
+}
+
+function buyerSource(buyer: FoundBuyer): string {
+  if (buyer.source === 'company') return 'Date preluate din firmele dvs.';
+  if (buyer.source === 'anaf') return 'Date preluate din ANAF.';
+  return buyer.anafChecked
+    ? 'Date preluate din ultima factură emisă acestui client, cu statusul actual din ANAF.'
+    : 'Date preluate din ultima factură emisă acestui client. ANAF nu a răspuns: apăsați Caută la ANAF pentru a verifica statusul.';
+}
+
+function BuyerStatus({ buyer }: { buyer: FoundBuyer }) {
+  return (
+    <div className="spv-row">
+      <StatusBadge status={buyer.vatPayer ? 'yes' : 'no'}>
+        {buyer.vatPayer ? 'Plătitor de TVA' : 'Neplătitor de TVA'}
+      </StatusBadge>
+      {buyer.eFactura === null ? null : (
+        <StatusBadge status={buyer.eFactura ? 'yes' : 'no'}>
+          {buyer.eFactura ? 'Înregistrat în RO e-Factura' : 'Neînregistrat în RO e-Factura'}
+        </StatusBadge>
+      )}
+      {buyer.inactive ? <StatusBadge status="inactive" /> : null}
+      {buyer.source === 'invoice' && !buyer.anafChecked ? (
+        <StatusBadge status="unverified" />
+      ) : null}
+      <span className="muted small">{buyerSource(buyer)}</span>
+    </div>
+  );
+}
+
 function buyerFromLookup(found: BuyerLookup, previous: BuyerForm): BuyerForm {
   return {
     cui: found.cui ?? previous.cui,
@@ -121,7 +174,7 @@ function buyerFromLookup(found: BuyerLookup, previous: BuyerForm): BuyerForm {
     regCom: found.regCom ?? '',
     address: found.address,
     iban: found.iban ?? '',
-    email: previous.email,
+    email: found.email ?? previous.email,
     phone: found.phone ?? '',
     street: found.street,
     city: found.city,
@@ -207,7 +260,7 @@ function Created({
   const [panel, setPanel] = useState<'send' | 'storno' | null>(null);
   const { invoice } = result;
   const number = invoiceNumber(invoice.series, invoice.number);
-  const name = `factura-${invoice.series}-${String(invoice.number).padStart(6, '0')}`;
+  const name = invoiceFilename(invoice);
   return (
     <>
       <PageHead title="Factura a fost emisă" context={number} />
@@ -376,11 +429,24 @@ function InvoiceForm({ companies }: { companies: Company[] }) {
   const [sendEmail, setSendEmail] = useState(false);
   const [emailTo, setEmailTo] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [cuiError, setCuiError] = useState<string | undefined>();
   const [created, setCreated] = useState<CreatedInvoice | null>(null);
 
-  const lookup = useBuyerLookup();
+  const autofill = useBuyerAutofill(buyer.cui, (cui, found) =>
+    setBuyer((b) => (normalizeCui(b.cui) === cui ? buyerFromLookup(found, b) : b)),
+  );
+  const { lookup, findBuyer, found: foundBuyer } = autofill;
   const create = useCreateInvoice();
   const suggested = useNextInvoiceNumber(company.id, series.trim().toUpperCase());
+  const [suggestionsCui, setSuggestionsCui] = useState('');
+  const previousLines = useInvoiceLineSuggestions(company.id, suggestionsCui);
+  const suggestions =
+    suggestionsCui === normalizeCui(buyer.cui)
+      ? (previousLines.data ?? []).filter((s) => s.currency === currency)
+      : [];
+  const loadSuggestions = () => {
+    if (isValidCui(buyer.cui)) setSuggestionsCui(normalizeCui(buyer.cui));
+  };
 
   const rates = allowedVatRates(deliveryDate || todayIso());
   const exchange = currency === 'RON' ? null : parseDecimal(exchangeRate);
@@ -400,14 +466,9 @@ function InvoiceForm({ companies }: { companies: Company[] }) {
     setLines((all) => all.map((l) => (l.key === key ? { ...l, ...patch } : l)));
 
   const search = () => {
-    if (!isValidCui(buyer.cui)) {
-      setError('CUI invalid: folosiți 2–10 cifre, cu sau fără RO.');
-      return;
-    }
-    setError(null);
-    lookup.mutate(normalizeCui(buyer.cui), {
-      onSuccess: (found) => setBuyer((b) => buyerFromLookup(found, b)),
-    });
+    setCuiError(
+      autofill.search() ? undefined : 'CUI invalid: folosiți 2–10 cifre, cu sau fără RO.',
+    );
   };
 
   const validate = (): string | null => {
@@ -480,12 +541,13 @@ function InvoiceForm({ companies }: { companies: Company[] }) {
     setCreated(null);
     setNumber('');
     setBuyer(EMPTY_BUYER);
+    setCuiError(undefined);
     setLines([emptyLine('21')]);
     setNotes('');
     setSendEmail(false);
     setSaveToStorage(false);
     create.reset();
-    lookup.reset();
+    autofill.reset();
   };
 
   if (created) return <Created result={created} onAnother={reset} />;
@@ -527,6 +589,7 @@ function InvoiceForm({ companies }: { companies: Company[] }) {
                 value={series}
                 onChange={(e) => setSeries(e.target.value)}
                 maxLength={10}
+                placeholder="FCT"
               />
               <TextField
                 label="Număr"
@@ -534,7 +597,7 @@ function InvoiceForm({ companies }: { companies: Company[] }) {
                 inputMode="numeric"
                 value={number}
                 onChange={(e) => setNumber(e.target.value)}
-                placeholder={suggested.data ? String(suggested.data.number) : ''}
+                placeholder={suggested.data ? String(suggested.data.number) : '1'}
                 hint="Lăsați gol pentru următorul număr din serie."
               />
             </div>
@@ -600,6 +663,7 @@ function InvoiceForm({ companies }: { companies: Company[] }) {
                   inputMode="decimal"
                   value={exchangeRate}
                   onChange={(e) => setExchangeRate(e.target.value)}
+                  placeholder="4,9750"
                   hint="Necesar pentru TVA exprimat în RON."
                 />
               ) : null}
@@ -628,7 +692,7 @@ function InvoiceForm({ companies }: { companies: Company[] }) {
 
         <Card
           title="Cumpărător"
-          subtitle="Introduceți CUI-ul și completăm denumirea, adresa și IBAN-ul din ANAF."
+          subtitle="Introduceți CUI-ul: completăm datele din facturile anterioare, din firmele dvs. sau din ANAF."
         >
           <div className="stack">
             <div className="form-row">
@@ -636,42 +700,51 @@ function InvoiceForm({ companies }: { companies: Company[] }) {
                 label="CUI"
                 mono
                 value={buyer.cui}
-                onChange={(e) => setBuyerField({ cui: e.target.value })}
+                onChange={(e) => {
+                  setBuyerField({ cui: e.target.value });
+                  setCuiError(undefined);
+                }}
+                {...autofill.cuiFieldProps}
                 placeholder="RO 12345678"
                 hint="Lăsați gol pentru persoane fizice."
+                error={cuiError}
               />
               <Button
                 icon="search"
                 loading={lookup.isPending}
                 onClick={search}
+                {...autofill.searchButtonProps}
               >
                 Caută la ANAF
               </Button>
             </div>
+            {findBuyer.isPending ? (
+              <div className="muted small">Se caută clientul…</div>
+            ) : null}
+            {findBuyer.isError ? (
+              <Alert tone="danger" title="Clientul nu a fost găsit.">
+                {findBuyer.error.message}
+              </Alert>
+            ) : null}
             {lookup.isError ? (
               <Alert tone="danger" title="Căutarea la ANAF a eșuat.">
                 {lookup.error.message}
               </Alert>
             ) : null}
-            {lookup.isSuccess ? (
-              <div className="spv-row">
-                <StatusBadge status={lookup.data.vatPayer ? 'yes' : 'no'}>
-                  {lookup.data.vatPayer ? 'Plătitor de TVA' : 'Neplătitor de TVA'}
-                </StatusBadge>
-                {lookup.data.inactive ? <StatusBadge status="inactive" /> : null}
-              </div>
-            ) : null}
+            {foundBuyer ? <BuyerStatus buyer={foundBuyer} /> : null}
             <TextField
               label="Denumire"
               value={buyer.name}
               onChange={(e) => setBuyerField({ name: e.target.value })}
               maxLength={255}
+              placeholder="Exemplu SRL"
             />
             <TextField
               label="Adresa"
               value={buyer.address}
               onChange={(e) => setBuyerField({ address: e.target.value })}
               maxLength={500}
+              placeholder="Str. Exemplu nr. 1, București, Sector 1"
             />
             <div className="form-row">
               <TextField
@@ -679,12 +752,14 @@ function InvoiceForm({ companies }: { companies: Company[] }) {
                 mono
                 value={buyer.regCom}
                 onChange={(e) => setBuyerField({ regCom: e.target.value })}
+                placeholder="J40/1234/2020"
               />
               <TextField
                 label="IBAN"
                 mono
                 value={buyer.iban}
                 onChange={(e) => setBuyerField({ iban: e.target.value })}
+                placeholder="RO49 AAAA 1B31 0075 9384 0000"
               />
             </div>
             <div className="form-row">
@@ -693,12 +768,14 @@ function InvoiceForm({ companies }: { companies: Company[] }) {
                 type="email"
                 value={buyer.email}
                 onChange={(e) => setBuyerField({ email: e.target.value })}
+                placeholder="contabilitate@exemplu.ro"
                 hint="Folosit la trimiterea facturii pe email."
               />
               <TextField
                 label="Telefon"
                 value={buyer.phone}
                 onChange={(e) => setBuyerField({ phone: e.target.value })}
+                placeholder="0722 123 456"
               />
             </div>
           </div>
@@ -711,11 +788,14 @@ function InvoiceForm({ companies }: { companies: Company[] }) {
           <div className="stack">
             {lines.map((line, index) => (
               <div key={line.key} className="invoice-line">
-                <TextField
+                <LineDescriptionField
                   label={`Denumire (linia ${index + 1})`}
                   value={line.description}
-                  onChange={(e) => setLine(line.key, { description: e.target.value })}
-                  maxLength={500}
+                  suggestions={suggestions}
+                  onChange={(description) => setLine(line.key, { description })}
+                  onPick={(s) => setLine(line.key, lineFromSuggestion(s, vatPayer, rates))}
+                  placeholder="Servicii de contabilitate, luna octombrie"
+                  onOpen={loadSuggestions}
                 />
                 <div className="form-row">
                   <TextField
@@ -724,6 +804,7 @@ function InvoiceForm({ companies }: { companies: Company[] }) {
                     inputMode="decimal"
                     value={line.quantity}
                     onChange={(e) => setLine(line.key, { quantity: e.target.value })}
+                    placeholder="1"
                   />
                   <div className="spv-field">
                     <label
@@ -753,6 +834,7 @@ function InvoiceForm({ companies }: { companies: Company[] }) {
                     inputMode="decimal"
                     value={line.unitPrice}
                     onChange={(e) => setLine(line.key, { unitPrice: e.target.value })}
+                    placeholder="100,00"
                   />
                   {vatPayer ? (
                     <div className="spv-field">
@@ -841,6 +923,7 @@ function InvoiceForm({ companies }: { companies: Company[] }) {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 maxLength={500}
+                placeholder="Ex.: conform contractului nr. 12 din 01.09.2026"
               />
               <label className="check">
                 <input
@@ -867,6 +950,7 @@ function InvoiceForm({ companies }: { companies: Company[] }) {
                   type="email"
                   value={emailTo}
                   onChange={(e) => setEmailTo(e.target.value)}
+                  placeholder="contabilitate@exemplu.ro"
                 />
               ) : null}
             </div>

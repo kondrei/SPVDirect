@@ -1,5 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants.js';
+import { ParseCuiPipe } from '../../companies/dto/company.dto.js';
+import { paramPipes } from '../../testing/param-pipes.js';
 import { AccountantParamGuard } from '../../auth/guards/accountant-param.guard.js';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard.js';
 import { AccountantsController } from './accountants.controller.js';
@@ -24,13 +26,10 @@ describe('AccountantsController', () => {
     );
   });
 
-  it('normalizes the CUI before the ANAF lookup and rejects invalid ones', () => {
-    const service = { lookupFirm: vi.fn().mockResolvedValue({}) };
-    const controller = build(service);
-    void controller.lookupFirm(7, 'RO14399840');
-    expect(service.lookupFirm).toHaveBeenCalledWith(7, '14399840');
-    expect(() => controller.lookupFirm(7, 'abc')).toThrow(BadRequestException);
-    expect(service.lookupFirm).toHaveBeenCalledOnce();
+  it('validates the CUI with ParseCuiPipe before the ANAF lookup', () => {
+    expect(paramPipes(AccountantsController, 'lookupFirm', 'cui')).toContain(
+      ParseCuiPipe,
+    );
   });
 
   it('delegates to the service with the URL accountant id', async () => {

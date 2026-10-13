@@ -44,6 +44,17 @@ function setup({
   return { service, companies, anaf };
 }
 
+describe('CompaniesService.findByCui', () => {
+  it('looks only among the accountant’s companies', async () => {
+    const { service, companies } = setup({ stored: { id: 3, cui: '12345678' } });
+    expect(await service.findByCui(1, '12345678')).toMatchObject({ id: 3 });
+    expect(companies.findOneBy).toHaveBeenCalledWith({
+      accountantId: 1,
+      cui: '12345678',
+    });
+  });
+});
+
 describe('CompaniesService.create', () => {
   it('fills the company from the ANAF record', async () => {
     const { service, anaf } = setup();

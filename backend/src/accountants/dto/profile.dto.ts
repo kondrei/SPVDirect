@@ -9,7 +9,7 @@ import {
   MinLength,
   ValidateIf,
 } from 'class-validator';
-import { normalizeCui } from '../../companies/dto/company.dto.js';
+import { CUI_PATTERN, normalizeCui } from '../../companies/dto/company.dto.js';
 import {
   PROFESSIONAL_TITLES,
   type ProfessionalTitle,
@@ -78,7 +78,7 @@ export class UpdateProfileDto {
   @IsOptional()
   @Transform(({ value }) => blankToNull(normalizeCui(value)))
   @ValidateIf((_, v) => v !== null)
-  @Matches(/^\d{2,10}$/, { message: 'CUI invalid' })
+  @Matches(CUI_PATTERN, { message: 'CUI invalid' })
   firmCui?: string | null;
 
   @IsOptional()

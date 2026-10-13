@@ -54,6 +54,10 @@ export class CompaniesService {
     return company;
   }
 
+  findByCui(accountantId: number, cui: string): Promise<Company | null> {
+    return this.companies.findOneBy({ accountantId, cui });
+  }
+
   async create(accountantId: number, dto: CreateCompanyDto): Promise<Company> {
     if (await this.companies.existsBy({ accountantId, cui: dto.cui })) {
       throw new ConflictException('Firma cu acest CUI există deja');

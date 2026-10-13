@@ -1,3 +1,8 @@
+import {
+  BadRequestException,
+  Injectable,
+  type PipeTransform,
+} from '@nestjs/common';
 import { Transform } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -19,9 +24,22 @@ export function normalizeCui(value: unknown): unknown {
     : value;
 }
 
+export const CUI_PATTERN = /^\d{2,10}$/;
+
+@Injectable()
+export class ParseCuiPipe implements PipeTransform<string, string> {
+  transform(value: string): string {
+    const cui = normalizeCui(value);
+    if (typeof cui !== 'string' || !CUI_PATTERN.test(cui)) {
+      throw new BadRequestException('CUI invalid');
+    }
+    return cui;
+  }
+}
+
 export class CreateCompanyDto {
   @Transform(({ value }) => normalizeCui(value))
-  @Matches(/^\d{2,10}$/, { message: 'CUI invalid' })
+  @Matches(CUI_PATTERN, { message: 'CUI invalid' })
   cui: string;
 }
 
@@ -36,7 +54,7 @@ export class CreateCompaniesDto {
   @ArrayMaxSize(MAX_BULK_CUIS, {
     message: `Puteți adăuga cel mult ${MAX_BULK_CUIS} firme odată`,
   })
-  @Matches(/^\d{2,10}$/, {
+  @Matches(CUI_PATTERN, {
     each: true,
     message: 'Lista conține CUI-uri invalide',
   })

@@ -1,8 +1,18 @@
 import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { loadRecaptcha } from '../lib/recaptcha';
 import { ME, renderApp } from './render';
 
-afterEach(() => vi.unstubAllGlobals());
+vi.mock('../lib/recaptcha', () => ({
+  loadRecaptcha: vi.fn(() => Promise.resolve()),
+  recaptchaToken: vi.fn(() => Promise.resolve('captcha-token')),
+}));
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.mocked(loadRecaptcha).mockClear();
+});
 
 const STATS = {
   accountants: 42,
@@ -38,6 +48,43 @@ describe('landing page', () => {
     expect(screen.getByRole('tab', { name: 'Cont nou' })).toHaveAttribute('aria-selected', 'false');
     expect(screen.getByRole('figure', { name: /Captură din aplicația SPVDirect/ })).toBeInTheDocument();
     expect(calls).toContain('GET /public/stats');
+  });
+
+  it('loads reCAPTCHA as soon as the login tab is shown', async () => {
+    renderApp('/', {
+      'GET /auth/me': { status: 401 },
+      'GET /public/stats': { status: 200, body: STATS },
+    });
+    expect(await screen.findByRole('tab', { name: 'Autentificare' })).toHaveAttribute('aria-selected', 'true');
+    expect(loadRecaptcha).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not load reCAPTCHA for a signed-in accountant', async () => {
+    renderApp('/', {
+      'GET /auth/me': { status: 200, body: ME },
+      'GET /public/stats': { status: 200, body: STATS },
+    });
+    await screen.findAllByRole('link', { name: 'Deschide aplicația' });
+    expect(loadRecaptcha).not.toHaveBeenCalled();
+    expect(document.body).not.toHaveClass('recaptcha-on');
+  });
+
+  it('shows the reCAPTCHA badge only while the login card is on screen', async () => {
+    const user = userEvent.setup();
+    const { router } = renderApp('/', {
+      'GET /auth/me': { status: 401 },
+      'GET /public/stats': { status: 200, body: STATS },
+      'POST /auth/login': { status: 200, body: ME },
+      'GET /accountants/1/companies': { status: 200, body: [] },
+      'GET /accountants/1/anaf/connections': { status: 200, body: [] },
+    });
+    await screen.findByRole('tab', { name: 'Autentificare' });
+    expect(document.body).toHaveClass('recaptcha-on');
+    await user.type(screen.getByLabelText('Email'), 'andrei@cabinet.ro');
+    await user.type(screen.getByLabelText('Parolă'), 'a-long-password');
+    await user.click(screen.getByRole('button', { name: 'Intră în cont' }));
+    await waitFor(() => expect(router.state.location.pathname).toBe('/accountants/1'));
+    expect(document.body).not.toHaveClass('recaptcha-on');
   });
 
   it('keeps the page usable when the counters cannot be loaded', async () => {
