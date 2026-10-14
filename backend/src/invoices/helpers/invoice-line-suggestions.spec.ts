@@ -70,12 +70,23 @@ describe('distinctLineSuggestions', () => {
   it('keeps the most recent line when the same description repeats, ignoring case and spaces', () => {
     const result = distinctLineSuggestions([
       row([invoiceLine({ unitPrice: 1200 })], { issueDate: '2026-10-01' }),
-      row([invoiceLine({ description: ' servicii DE contabilitate ', unitPrice: 900 })], {
-        issueDate: '2026-09-01',
-      }),
+      row(
+        [
+          invoiceLine({
+            description: ' servicii DE contabilitate ',
+            unitPrice: 900,
+          }),
+        ],
+        {
+          issueDate: '2026-09-01',
+        },
+      ),
     ]);
     expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({ unitPrice: 1200, issueDate: '2026-10-01' });
+    expect(result[0]).toMatchObject({
+      unitPrice: 1200,
+      issueDate: '2026-10-01',
+    });
   });
 
   it('keeps the same description once per currency', () => {
@@ -102,6 +113,8 @@ describe('distinctLineSuggestions', () => {
     const lines = Array.from({ length: MAX_LINE_SUGGESTIONS + 5 }, (_, i) =>
       invoiceLine({ description: `Produs ${i}` }),
     );
-    expect(distinctLineSuggestions([row(lines)])).toHaveLength(MAX_LINE_SUGGESTIONS);
+    expect(distinctLineSuggestions([row(lines)])).toHaveLength(
+      MAX_LINE_SUGGESTIONS,
+    );
   });
 });

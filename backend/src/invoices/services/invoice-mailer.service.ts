@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ApiLogsService } from '../../api-logs/api-logs.service.js';
+import { trackApiCall } from '../../api-logs/track-api-call.js';
 import { escapeHtml } from '../../common/html.js';
 import {
   MailService,
@@ -28,31 +29,31 @@ export class InvoiceMailer {
   ) {}
 
   async send(invoice: Invoice, to: string, pdf: Buffer): Promise<void> {
-    const started = performance.now();
-    let statusCode: number | null = null;
-    let error: string | null = null;
-    try {
-      statusCode = await this.mail.send(this.message(invoice, to, pdf));
-    } catch (err) {
-      statusCode = smtpErrorCode(err);
-      error = (err as Error).message;
-      this.logger.error(
-        `Invoice ${invoice.id} email failed (accountant ${invoice.accountantId}): ${error}`,
-      );
-      throw err;
-    } finally {
-      await this.apiLogs.record({
+    await trackApiCall(
+      this.apiLogs,
+      {
         accountantId: invoice.accountantId,
         anafConnectionId: null,
         companyId: invoice.companyId,
         service: INVOICE_MAIL_LOG_SERVICE,
         method: 'SEND',
         endpoint: INVOICE_MAIL_LOG_ENDPOINT,
-        statusCode,
-        responseTimeMs: Math.round(performance.now() - started),
-        error,
-      });
-    }
+      },
+      async (outcome) => {
+        try {
+          outcome.statusCode = await this.mail.send(
+            this.message(invoice, to, pdf),
+          );
+        } catch (err) {
+          outcome.statusCode = smtpErrorCode(err);
+          outcome.error = (err as Error).message;
+          this.logger.error(
+            `Invoice ${invoice.id} email failed (accountant ${invoice.accountantId}): ${outcome.error}`,
+          );
+          throw err;
+        }
+      },
+    );
   }
 
   message(invoice: Invoice, to: string, pdf: Buffer): MailMessage {

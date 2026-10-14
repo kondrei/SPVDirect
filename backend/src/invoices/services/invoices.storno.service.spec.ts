@@ -1,14 +1,12 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
-import type { Repository } from 'typeorm';
-import type { AnafCompanyLookupService } from '../../companies/services/anaf-company-lookup.service.js';
-import type { CompaniesService } from '../../companies/services/companies.service.js';
 import { sampleInvoice } from '../../testing/invoice-fixtures.js';
 import { computeInvoice } from '../helpers/invoice-calc.js';
-import type { InvoiceFileStore } from './invoice-file-store.service.js';
-import type { InvoiceMailer } from './invoice-mailer.service.js';
-import { buildStornoLines, remainingQuantities } from '../helpers/invoice-storno.js';
+import {
+  buildStornoLines,
+  remainingQuantities,
+} from '../helpers/invoice-storno.js';
 import type { Invoice } from '../invoice.entity.js';
-import { InvoicesService } from './invoices.service.js';
+import { buildInvoiceServices } from '../../testing/invoice-services.js';
 
 function setup({
   original = sampleInvoice({ id: 3, number: 12 }),
@@ -25,6 +23,7 @@ function setup({
 } = {}) {
   const invoices = {
     findOneBy: vi.fn().mockResolvedValue(original),
+    findOne: vi.fn().mockResolvedValue(original),
     findBy: vi.fn().mockResolvedValue(stornos),
     find: vi
       .fn()
@@ -45,24 +44,44 @@ function setup({
   };
   const mailer = { send: vi.fn().mockResolvedValue(undefined) };
   const companies = { getLogo: vi.fn().mockResolvedValue(null) };
-  const service = new InvoicesService(
-    invoices as unknown as Repository<Invoice>,
-    companies as unknown as CompaniesService,
-    {} as AnafCompanyLookupService,
-    store as unknown as InvoiceFileStore,
-    mailer as unknown as InvoiceMailer,
-  );
+  const { service } = buildInvoiceServices({
+    invoices,
+    companies,
+    store,
+    mailer,
+  });
   return { service, invoices, store, mailer };
 }
 
-describe('InvoicesService.createStorno', () => {
+describe('InvoiceStornoService.createStorno', () => {
+  it('locks the original before reading earlier stornos, in one transaction', async () => {
+    const { service, invoices } = setup();
+    await service.createStorno(1, 3, { issueDate: '2026-10-10' });
+    expect(invoices.findOne.mock.invocationCallOrder[0]).toBeLessThan(
+      invoices.findBy.mock.invocationCallOrder[0],
+    );
+    expect(invoices.findOne.mock.invocationCallOrder[0]).toBeLessThan(
+      invoices.save.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('answers 404 for an invoice of another accountant', async () => {
+    const { service } = setup({ original: null });
+    await expect(
+      service.createStorno(1, 3, { issueDate: '2026-10-10' }),
+    ).rejects.toThrow('Factura nu a fost găsită');
+  });
+
   it('reverses the whole invoice with negative amounts and a reference to it', async () => {
     const { service, invoices } = setup();
     const { invoice } = await service.createStorno(1, 3, {
       issueDate: '2026-10-10',
     });
     const original = sampleInvoice();
-    expect(invoices.findOneBy).toHaveBeenCalledWith({ id: 3, accountantId: 1 });
+    expect(invoices.findOne).toHaveBeenCalledWith({
+      where: { id: 3, accountantId: 1 },
+      lock: { mode: 'pessimistic_write' },
+    });
     expect(invoices.create).toHaveBeenCalledWith(
       expect.objectContaining({
         accountantId: 1,

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router';
-import { useMe, usePublicStats } from '../api/hooks';
+import { useMe } from '../api/hooks/auth';
+import { usePublicStats } from '../api/hooks/publicStats';
 import type { PublicStats } from '../api/types';
 import {
   Badge,

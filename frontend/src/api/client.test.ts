@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { api, ApiError, errorMessage } from './client';
+import { api, ApiError, errorMessage, filenameFrom } from './client';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -82,5 +82,23 @@ describe('api', () => {
     const err = await api('/auth/me').catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect((err as ApiError).status).toBe(0);
+  });
+});
+
+describe('filenameFrom', () => {
+  it('prefers the UTF-8 encoded name', () => {
+    expect(
+      filenameFrom(
+        `attachment; filename="factura.pdf"; filename*=UTF-8''factur%C4%83-%C8%99.pdf`,
+      ),
+    ).toBe('factură-ș.pdf');
+  });
+
+  it('falls back to the plain name, then to nothing', () => {
+    expect(filenameFrom('attachment; filename="efactura-1.zip"')).toBe(
+      'efactura-1.zip',
+    );
+    expect(filenameFrom('attachment')).toBeNull();
+    expect(filenameFrom(null)).toBeNull();
   });
 });

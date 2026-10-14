@@ -1,3 +1,5 @@
+import { applyDecorators } from '@nestjs/common';
+import { blankToNull as blankText } from '../../common/text.js';
 import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -41,10 +43,19 @@ export const MAX_INVOICE_PAGE_SIZE = 100;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_MESSAGE = 'Data trebuie să fie în formatul AAAA-LL-ZZ';
 
+const SERIES = /^[A-Z0-9]{1,10}$/;
+
 function blankToNull(value: unknown): unknown {
-  if (typeof value !== 'string') return value;
-  const trimmed = value.trim();
-  return trimmed === '' ? null : trimmed;
+  return typeof value === 'string' ? blankText(value) : value;
+}
+
+function IsInvoiceSeries() {
+  return applyDecorators(
+    Transform(({ value }: { value: unknown }) =>
+      typeof value === 'string' ? value.trim().toUpperCase() : value,
+    ),
+    Matches(SERIES, { message: 'Seria poate avea 1–10 litere sau cifre' }),
+  );
 }
 
 function trimmed(value: unknown): unknown {
@@ -185,12 +196,7 @@ export class CreateInvoiceDto {
   @Min(1)
   companyId: number;
 
-  @Transform(({ value }) =>
-    typeof value === 'string' ? value.trim().toUpperCase() : value,
-  )
-  @Matches(/^[A-Z0-9]{1,10}$/, {
-    message: 'Seria poate avea 1–10 litere sau cifre',
-  })
+  @IsInvoiceSeries()
   series: string;
 
   @IsOptional()
@@ -292,12 +298,7 @@ export class NextNumberQuery {
   @Min(1)
   companyId: number;
 
-  @Transform(({ value }) =>
-    typeof value === 'string' ? value.trim().toUpperCase() : value,
-  )
-  @Matches(/^[A-Z0-9]{1,10}$/, {
-    message: 'Seria poate avea 1–10 litere sau cifre',
-  })
+  @IsInvoiceSeries()
   series: string;
 }
 
@@ -335,12 +336,7 @@ export class CreateStornoDto {
   issueDate?: string | null;
 
   @IsOptional()
-  @Transform(({ value }) =>
-    typeof value === 'string' ? value.trim().toUpperCase() : value,
-  )
-  @Matches(/^[A-Z0-9]{1,10}$/, {
-    message: 'Seria poate avea 1–10 litere sau cifre',
-  })
+  @IsInvoiceSeries()
   series?: string;
 
   @IsOptional()

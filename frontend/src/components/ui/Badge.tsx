@@ -31,6 +31,7 @@ export type Status =
   | 'ok'
   | 'nok'
   | 'processing'
+  | 'sending'
   | 'pending'
   | 'none'
   | 'yes'
@@ -39,7 +40,15 @@ export type Status =
   | 'unverified'
   | 'added'
   | 'duplicate'
-  | 'notFound';
+  | 'notFound'
+  | 'stored'
+  | 'emailed'
+  | 'storno'
+  | 'stornoed'
+  | 'messageError'
+  | 'messageReceived'
+  | 'messageSent'
+  | 'messageOther';
 
 export const STATUS: Record<
   Status,
@@ -52,6 +61,7 @@ export const STATUS: Record<
   ok: { tone: 'success', icon: 'check', label: 'Acceptată' },
   nok: { tone: 'danger', icon: 'x', label: 'Respinsă' },
   processing: { tone: 'warning', icon: 'clock', label: 'În prelucrare' },
+  sending: { tone: 'warning', icon: 'upload', label: 'Se trimite' },
   pending: { tone: 'neutral', icon: 'clock', label: 'În așteptare' },
   none: { tone: 'neutral', icon: 'link', label: 'Fără certificat' },
   yes: { tone: 'success', icon: 'check', label: 'Da' },
@@ -61,6 +71,14 @@ export const STATUS: Record<
   added: { tone: 'success', icon: 'check', label: 'Adăugată' },
   duplicate: { tone: 'neutral', icon: 'info', label: 'Exista deja' },
   notFound: { tone: 'danger', icon: 'x', label: 'Negăsit la ANAF' },
+  stored: { tone: 'success', icon: 'check', label: 'În Storage' },
+  emailed: { tone: 'brand', icon: 'check', label: 'Trimisă pe email' },
+  storno: { tone: 'warning', icon: 'alert', label: 'Stornare' },
+  stornoed: { tone: 'warning', icon: 'alert', label: 'Stornată' },
+  messageError: { tone: 'danger', icon: 'alert', label: 'Erori de validare' },
+  messageReceived: { tone: 'brand', icon: 'download', label: 'Factură primită' },
+  messageSent: { tone: 'success', icon: 'upload', label: 'Factură trimisă' },
+  messageOther: { tone: 'neutral', icon: 'info', label: 'Mesaj' },
 };
 
 export function StatusBadge({

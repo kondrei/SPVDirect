@@ -5,12 +5,19 @@ import {
   Index,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import type { AnafEnvironment } from '../anaf/anaf-environment.js';
 
-export type UploadStatus = 'processing' | 'ok' | 'nok' | 'rejected';
+export type UploadStatus = 'sending' | 'processing' | 'ok' | 'nok' | 'rejected';
+export const ACTIVE_UPLOAD_STATUSES: readonly UploadStatus[] = [
+  'sending',
+  'processing',
+  'ok',
+];
 export type EfacturaStandard = 'UBL' | 'CN' | 'CII' | 'RASP';
 
 @Entity('efactura_uploads')
 @Index('idx_efactura_uploads_accountant', ['accountantId', 'id'])
+@Index('uq_efactura_uploads_invoice_active', { synchronize: false })
 export class EfacturaUpload {
   @PrimaryGeneratedColumn('identity', {
     type: 'integer',
@@ -32,7 +39,7 @@ export class EfacturaUpload {
   anafConnectionId: string | null;
 
   @Column({ type: 'varchar', length: 4 })
-  environment: 'test' | 'prod';
+  environment: AnafEnvironment;
 
   @Column({ type: 'varchar', length: 4 })
   standard: EfacturaStandard;

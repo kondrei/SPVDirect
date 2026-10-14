@@ -8,14 +8,17 @@ import { AccountantsController } from './accountants.controller.js';
 import type { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
 import type { AuthService } from '../../auth/services/auth.service.js';
+import { SessionCookieService } from '../../auth/services/session-cookie.service.js';
 import { SESSION_COOKIE } from '../../auth/session.js';
 import type { AccountantsService } from '../services/accountants.service.js';
 
 function build(service: object, auth: object = {}) {
   return new AccountantsController(
     service as AccountantsService,
-    auth as AuthService,
-    { get: () => 'development' } as unknown as ConfigService,
+    new SessionCookieService(
+      auth as AuthService,
+      { get: () => 'development' } as unknown as ConfigService,
+    ),
   );
 }
 

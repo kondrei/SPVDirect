@@ -8,7 +8,9 @@ import {
   useNavigate,
   useParams,
 } from 'react-router';
-import { useCompanies, useConnections, useLogout, useMe } from '../api/hooks';
+import { useCompanies } from '../api/hooks/companies';
+import { useConnections } from '../api/hooks/connections';
+import { useLogout, useMe } from '../api/hooks/auth';
 import { EmptyState } from '../components/EmptyState';
 import {
   Button,

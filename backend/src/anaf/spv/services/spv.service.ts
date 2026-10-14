@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AnafApiService } from '../../services/anaf-api.service.js';
+import type { DownloadFile } from '../../../common/download-file.js';
 import type { CreateSpvRequestDto } from '../spv.dto.js';
 
 export const SPV_SERVICE = 'SPV';
@@ -61,11 +62,7 @@ export interface SpvRequestResult {
   title: string | null;
 }
 
-export interface SpvDocument {
-  content: Buffer;
-  contentType: string;
-  filename: string;
-}
+export type SpvDocument = DownloadFile;
 
 function textOrNull(value: string | number | null | undefined): string | null {
   return value === undefined || value === null || value === ''

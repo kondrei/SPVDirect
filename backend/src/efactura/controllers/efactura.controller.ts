@@ -8,7 +8,6 @@ import {
   Param,
   Post,
   Query,
-  StreamableFile,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -21,8 +20,10 @@ import {
   EFACTURA_THROTTLE,
   EFACTURA_UPLOAD_THROTTLE,
 } from '../../common/constants.js';
+import { attachment } from '../../common/download-file.js';
 import { ParseIdPipe } from '../../common/parse-id.pipe.js';
 import {
+  LatestUploadsQuery,
   ListMessagesQuery,
   ListUploadsQuery,
   MAX_XML_BYTES,
@@ -32,7 +33,8 @@ import {
   UploadXmlDto,
   ValidateXmlDto,
 } from '../dto/efactura.dto.js';
-import { EfacturaService, type EfacturaFile } from '../services/efactura.service.js';
+import { EfacturaService } from '../services/efactura.service.js';
+import { EfacturaValidator } from '../services/efactura-validator.service.js';
 
 const xmlFile = () =>
   FileInterceptor('file', { limits: { fileSize: MAX_XML_BYTES + 1 } });
@@ -41,23 +43,16 @@ function xmlOf(file: { buffer: Buffer } | undefined): string {
   if (!file?.buffer?.length) {
     throw new BadRequestException('Alegeți un fișier XML');
   }
-  if (file.buffer.length > MAX_XML_BYTES) {
-    throw new BadRequestException('Fișierul depășește 10 MB');
-  }
   return file.buffer.toString('utf8');
-}
-
-function asFile(file: EfacturaFile): StreamableFile {
-  return new StreamableFile(file.content, {
-    type: file.contentType,
-    disposition: `attachment; filename="${file.filename}"`,
-  });
 }
 
 @Controller('accountants/:accountantId/efactura')
 @UseGuards(JwtAuthGuard, AccountantParamGuard)
 export class EfacturaController {
-  constructor(private readonly efactura: EfacturaService) {}
+  constructor(
+    private readonly efactura: EfacturaService,
+    private readonly validator: EfacturaValidator,
+  ) {}
 
   @Get('uploads')
   @Throttle(EFACTURA_THROTTLE)
@@ -92,6 +87,15 @@ export class EfacturaController {
     });
   }
 
+  @Get('invoices/latest-uploads')
+  @Throttle(EFACTURA_THROTTLE)
+  latestForInvoices(
+    @Param('accountantId', ParseIdPipe) accountantId: number,
+    @Query() query: LatestUploadsQuery,
+  ) {
+    return this.efactura.latestForInvoices(accountantId, query.ids);
+  }
+
   @Get('uploads/:id')
   @Throttle(EFACTURA_THROTTLE)
   get(
@@ -118,7 +122,7 @@ export class EfacturaController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseIdPipe) id: number,
   ) {
-    return asFile(await this.efactura.download(accountantId, id));
+    return attachment(await this.efactura.download(accountantId, id));
   }
 
   @Post('invoices/:invoiceId/upload')
@@ -159,7 +163,7 @@ export class EfacturaController {
     @Param('companyId', ParseIdPipe) companyId: number,
     @Param('messageId', ParseAnafIdPipe) messageId: string,
   ) {
-    return asFile(
+    return attachment(
       await this.efactura.downloadMessage(accountantId, companyId, messageId),
     );
   }
@@ -173,7 +177,7 @@ export class EfacturaController {
     @Body() dto: ValidateXmlDto,
     @UploadedFile() file: { buffer: Buffer } | undefined,
   ) {
-    return this.efactura.validate(accountantId, xmlOf(file), dto.standard);
+    return this.validator.validate(accountantId, xmlOf(file), dto.standard);
   }
 
   @Post('transform')
@@ -186,8 +190,8 @@ export class EfacturaController {
     @Body() dto: TransformXmlDto,
     @UploadedFile() file: { buffer: Buffer } | undefined,
   ) {
-    return asFile(
-      await this.efactura.transform(
+    return attachment(
+      await this.validator.transform(
         accountantId,
         xmlOf(file),
         dto.standard,

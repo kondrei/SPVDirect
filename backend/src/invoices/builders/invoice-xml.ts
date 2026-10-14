@@ -33,9 +33,10 @@ function partyXml(
   showVatId: boolean,
 ): string {
   const id = vatId(party);
-  const taxScheme = party.vatPayer && showVatId
-    ? `<cac:PartyTaxScheme>${tag('cbc:CompanyID', id)}<cac:TaxScheme>${tag('cbc:ID', 'VAT')}</cac:TaxScheme></cac:PartyTaxScheme>`
-    : '';
+  const taxScheme =
+    party.vatPayer && showVatId
+      ? `<cac:PartyTaxScheme>${tag('cbc:CompanyID', id)}<cac:TaxScheme>${tag('cbc:ID', 'VAT')}</cac:TaxScheme></cac:PartyTaxScheme>`
+      : '';
   const contact =
     party.phone || party.email
       ? `<cac:Contact>${party.phone ? tag('cbc:Telephone', party.phone) : ''}${party.email ? tag('cbc:ElectronicMail', party.email) : ''}</cac:Contact>`

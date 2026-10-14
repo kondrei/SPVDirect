@@ -6,12 +6,8 @@ import {
   type FormEvent,
 } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
-import {
-  useCompanies,
-  useConnections,
-  useCreateCompanies,
-  useCreateCompany,
-} from '../../api/hooks';
+import { useCompanies, useCreateCompanies, useCreateCompany } from '../../api/hooks/companies';
+import { useConnections } from '../../api/hooks/connections';
 import type { BulkCompanyResult } from '../../api/types';
 import { EmptyState } from '../../components/EmptyState';
 import { PageHead } from '../../components/PageHead';
@@ -216,7 +212,7 @@ function AddCompanyForm({ onDone }: { onDone: () => void }) {
     >
       <form onSubmit={submit} noValidate className="stack">
         {failure ? (
-          <Alert tone="danger" title="Eroare server ANAF">
+          <Alert tone="danger" title="Firmele nu au fost adăugate.">
             {failure.message}
           </Alert>
         ) : null}

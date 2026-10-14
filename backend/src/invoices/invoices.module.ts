@@ -7,6 +7,10 @@ import { InvoiceFileStore } from './services/invoice-file-store.service.js';
 import { InvoiceMailer } from './services/invoice-mailer.service.js';
 import { Invoice } from './invoice.entity.js';
 import { InvoicesController } from './controllers/invoices.controller.js';
+import { InvoiceBuyersService } from './services/invoice-buyers.service.js';
+import { InvoiceDeliveryService } from './services/invoice-delivery.service.js';
+import { InvoiceNumbering } from './services/invoice-numbering.service.js';
+import { InvoiceStornoService } from './services/invoice-storno.service.js';
 import { InvoicesService } from './services/invoices.service.js';
 
 @Module({
@@ -17,7 +21,15 @@ import { InvoicesService } from './services/invoices.service.js';
     TypeOrmModule.forFeature([Invoice]),
   ],
   controllers: [InvoicesController],
-  providers: [InvoicesService, InvoiceFileStore, InvoiceMailer],
+  providers: [
+    InvoicesService,
+    InvoiceBuyersService,
+    InvoiceStornoService,
+    InvoiceDeliveryService,
+    InvoiceNumbering,
+    InvoiceFileStore,
+    InvoiceMailer,
+  ],
   exports: [InvoicesService],
 })
 export class InvoicesModule {}

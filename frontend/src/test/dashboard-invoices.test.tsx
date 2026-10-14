@@ -60,7 +60,7 @@ describe('Statistici facturi pe panou', () => {
     expect(
       await screen.findByText('Facturi emise luna aceasta'),
     ).toBeInTheDocument();
-    expect(await screen.findByText('1 stornări')).toBeInTheDocument();
+    expect(await screen.findByText('1 stornare')).toBeInTheDocument();
     expect(
       screen.getByText(/\+210,00 față de luna trecută/),
     ).toBeInTheDocument();

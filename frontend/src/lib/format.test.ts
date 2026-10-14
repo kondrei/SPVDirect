@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   connectionStatus,
   daysUntil,
-  formatAnafDate,
+  formatIsoDate,
   formatCui,
   formatDate,
   groupSerial,
@@ -98,8 +98,8 @@ describe('Romanian formatting', () => {
   it('groups serials in fours', () =>
     expect(groupSerial('4C000012A9F3')).toBe('4C00 0012 A9F3'));
   it('formats ANAF calendar dates and leaves other text alone', () => {
-    expect(formatAnafDate('2010-02-01')).toBe('01.02.2010');
-    expect(formatAnafDate('INREGISTRAT din data 27.01.1993')).toBe(
+    expect(formatIsoDate('2010-02-01')).toBe('01.02.2010');
+    expect(formatIsoDate('INREGISTRAT din data 27.01.1993')).toBe(
       'INREGISTRAT din data 27.01.1993',
     );
   });

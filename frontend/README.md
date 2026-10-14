@@ -44,18 +44,21 @@ Authorization links, including the page the certificate holder opens, are served
 
 ```
 src/
-  api/          client.ts (fetch wrapper, ApiError, Romanian messages) · hooks.ts (TanStack Query) · types.ts
+  api/          client.ts (fetch wrapper, ApiError, Romanian messages, file downloads) · types.ts · hooks/ (TanStack Query, one module per feature: auth, profile, companies, connections, spv, invoices, efactura, publicStats; queryKeys holds every key, accountantPath builds /accountants/:accountantId URLs)
   components/ui design-system components: Button, Badge/StatusBadge, TextField, Card, Alert, DataTable, Stat, Icon, Wordmark
-  components/   app pieces: PageHead, EmptyState, QueryError, ConfirmButton, CopyField; invoices/ (SendPanel, StornoPanel, company invoicing cards) and efactura/ (status badge) hold the feature ones
+  components/   app pieces: PageHead, EmptyState, QueryError, ConfirmButton, CopyField, SelectField; invoices/ (SendPanel, StornoPanel, company invoicing cards, useInvoiceActions + InvoiceActionResults shared by the list and the "invoice issued" screen) and efactura/ (status badge) hold the feature ones
   layout/       AppLayout (sidebar, session guard) · AccountRedirect
   pages/        grouped by feature (auth/, companies/, invoices/, efactura/) plus the standalone pages: Landing (`/`, with the Autentificare / Cont nou tabs at `/?auth=login|register`; `/login` and `/register` redirect there), Panou, Firme, Firmă, Certificate ANAF, Mesaje SPV (list, download, document request), Facturi (list, issue, PDF/XML, email, Storage), e-Factura (uploads, ANAF messages, validator), e-Transport (placeholder)
-  lib/format.ts CUI rules (mirror the backend DTO), dates in Europe/Bucharest, Romanian plurals, certificate status
+  pages/invoices/ InvoiceNewPage composes BuyerCard, InvoiceLinesCard and the options/totals cards around one reducer in invoiceForm.ts (form state, VAT rates realigned when the delivery date changes, validation, payload)
+  lib/format.ts CUI rules (mirror the backend DTO), dates in Europe/Bucharest, decimal input, Romanian plurals, certificate status
   styles/       tokens.css (generated from the design system) · components.css · app.css
 ```
 
 ## Conventions
 
 - **Styling:** use tokens only (`var(--brand)`, `var(--space-4)`). Never hard-code colours. Both themes must stay readable. The theme is `<html data-theme>`: it follows the OS until the user toggles it in the sidebar.
+- **Forms:** use `TextField`, `TextAreaField` and `SelectField`; never hand-write `<label>` + `<select className="spv-input">`.
+- **Session data:** query keys are not scoped by accountant, so logging in and any 401 drop every cached query except `me` and the public stats (`removeAccountData`). Keep it that way when adding queries.
 - **Status:** always show it through `StatusBadge` (tone, icon and word). A certificate is `expiring` when its refresh token ends within 30 days; this is derived in `lib/format.ts`, not stored.
 - **Copy:** Romanian with ș/ț (comma below), and imperative button labels ("Adaugă firmă"). Say what happened, then why, then what to do. Backend error messages are already Romanian and are shown as they are.
 - **Formats:** dates `DD.MM.YYYY` · CUI as `RO 12345678` in mono · amounts `12.480,00`.

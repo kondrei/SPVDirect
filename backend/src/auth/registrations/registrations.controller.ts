@@ -2,7 +2,12 @@ import { Controller, Get, HttpCode, Param, Post, Res } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { PUBLIC_LINK_THROTTLE } from '../../common/constants.js';
-import { escapeHtml, renderPage } from '../../common/html.js';
+import {
+  escapeHtml,
+  renderPage,
+  sendHtmlPage as send,
+} from '../../common/html.js';
+import { ParseLinkTokenPipe } from '../../common/parse-token.pipe.js';
 import {
   PendingRegistration,
   RegistrationsService,
@@ -34,18 +39,27 @@ export class RegistrationsController {
   constructor(private readonly registrations: RegistrationsService) {}
 
   @Get(':token/approve')
-  confirmApprove(@Param('token') token: string, @Res() res: Response) {
+  confirmApprove(
+    @Param('token', ParseLinkTokenPipe) token: string,
+    @Res() res: Response,
+  ) {
     return this.confirm(res, token, 'approve');
   }
 
   @Get(':token/reject')
-  confirmReject(@Param('token') token: string, @Res() res: Response) {
+  confirmReject(
+    @Param('token', ParseLinkTokenPipe) token: string,
+    @Res() res: Response,
+  ) {
     return this.confirm(res, token, 'reject');
   }
 
   @Post(':token/approve')
   @HttpCode(200)
-  async approve(@Param('token') token: string, @Res() res: Response) {
+  async approve(
+    @Param('token', ParseLinkTokenPipe) token: string,
+    @Res() res: Response,
+  ) {
     const done = await this.registrations.approve(token);
     if (!done) return send(res, 404, 'Link invalid', INVALID);
     return send(
@@ -58,7 +72,10 @@ export class RegistrationsController {
 
   @Post(':token/reject')
   @HttpCode(200)
-  async reject(@Param('token') token: string, @Res() res: Response) {
+  async reject(
+    @Param('token', ParseLinkTokenPipe) token: string,
+    @Res() res: Response,
+  ) {
     const done = await this.registrations.reject(token);
     if (!done) return send(res, 404, 'Link invalid', INVALID);
     return send(
@@ -91,18 +108,4 @@ export class RegistrationsController {
 function describe(p: PendingRegistration): string {
   const email = `&lt;${escapeHtml(p.email)}&gt;`;
   return p.name ? `<strong>${escapeHtml(p.name)}</strong> ${email}` : email;
-}
-
-function send(
-  res: Response,
-  status: number,
-  title: string,
-  messageHtml: string,
-) {
-  return res
-    .status(status)
-    .type('html')
-    .send(
-      renderPage(title, `<h1>${escapeHtml(title)}</h1><p>${messageHtml}</p>`),
-    );
 }

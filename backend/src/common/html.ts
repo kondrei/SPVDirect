@@ -1,3 +1,5 @@
+import type { Response } from 'express';
+
 const ESCAPES: Record<string, string> = {
   '&': '&amp;',
   '<': '&lt;',
@@ -29,4 +31,18 @@ export function renderPage(title: string, bodyHtml: string): string {
 </head>
 <body><main>${bodyHtml}</main></body>
 </html>`;
+}
+
+export function sendHtmlPage(
+  res: Response,
+  status: number,
+  title: string,
+  messageHtml: string,
+) {
+  return res
+    .status(status)
+    .type('html')
+    .send(
+      renderPage(title, `<h1>${escapeHtml(title)}</h1><p>${messageHtml}</p>`),
+    );
 }

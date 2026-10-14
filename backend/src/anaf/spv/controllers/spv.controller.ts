@@ -8,7 +8,6 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
-  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -16,8 +15,10 @@ import { AccountantParamGuard } from '../../../auth/guards/accountant-param.guar
 import { JwtAuthGuard } from '../../../auth/guards/jwt-auth.guard.js';
 import {
   SPV_REQUEST_THROTTLE,
+  SPV_SYNC_THROTTLE,
   SPV_THROTTLE,
 } from '../../../common/constants.js';
+import { attachment } from '../../../common/download-file.js';
 import { ParseIdPipe } from '../../../common/parse-id.pipe.js';
 import {
   CreateSpvRequestDto,
@@ -59,15 +60,12 @@ export class SpvController {
       connectionId,
       messageId,
     );
-    return new StreamableFile(doc.content, {
-      type: doc.contentType,
-      disposition: `attachment; filename="${doc.filename}"`,
-    });
+    return attachment(doc);
   }
 
   @Post('sync')
   @HttpCode(200)
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle(SPV_SYNC_THROTTLE)
   async sync(
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('connectionId', ParseUUIDPipe) connectionId: string,

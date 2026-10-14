@@ -59,11 +59,14 @@ export function parseStatusResponse(xml: string): StatusResponse {
   return { status, downloadId, error };
 }
 
-export function anafStampToIso(stamp: string | null | undefined): string | null {
+export function anafStampToIso(
+  stamp: string | null | undefined,
+): string | null {
   const m = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(stamp ?? '');
   if (!m) return null;
   return (
-    parseAnafDateTime(`${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]}:00`)?.toISOString() ??
-    null
+    parseAnafDateTime(
+      `${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]}:00`,
+    )?.toISOString() ?? null
   );
 }

@@ -1,0 +1,63 @@
+import type { Repository } from 'typeorm';
+import type { AnafCompanyLookupService } from '../companies/services/anaf-company-lookup.service.js';
+import type { CompaniesService } from '../companies/services/companies.service.js';
+import type { Invoice } from '../invoices/invoice.entity.js';
+import { InvoiceBuyersService } from '../invoices/services/invoice-buyers.service.js';
+import { InvoiceDeliveryService } from '../invoices/services/invoice-delivery.service.js';
+import type { InvoiceFileStore } from '../invoices/services/invoice-file-store.service.js';
+import type { InvoiceMailer } from '../invoices/services/invoice-mailer.service.js';
+import { InvoiceNumbering } from '../invoices/services/invoice-numbering.service.js';
+import { InvoiceStornoService } from '../invoices/services/invoice-storno.service.js';
+import { InvoicesService } from '../invoices/services/invoices.service.js';
+
+export function buildInvoiceServices(deps: {
+  invoices: object;
+  companies: object;
+  anaf?: object;
+  store: object;
+  mailer: object;
+}) {
+  const repo = Object.assign(deps.invoices, {
+    manager: {
+      transaction: (run: (manager: unknown) => unknown) =>
+        run({ getRepository: () => deps.invoices }),
+    },
+  }) as unknown as Repository<Invoice>;
+  const companies = deps.companies as unknown as CompaniesService;
+  const numbering = new InvoiceNumbering(repo);
+  const delivery = new InvoiceDeliveryService(
+    repo,
+    companies,
+    deps.store as unknown as InvoiceFileStore,
+    deps.mailer as unknown as InvoiceMailer,
+  );
+  const invoices = new InvoicesService(repo, companies, numbering, delivery);
+  const buyers = new InvoiceBuyersService(
+    repo,
+    companies,
+    (deps.anaf ?? {}) as unknown as AnafCompanyLookupService,
+  );
+  const storno = new InvoiceStornoService(numbering, delivery);
+  return {
+    invoices,
+    buyers,
+    storno,
+    delivery,
+    service: {
+      lookupBuyer: buyers.lookupBuyer.bind(buyers),
+      findBuyer: buyers.findBuyer.bind(buyers),
+      lineSuggestions: buyers.lineSuggestions.bind(buyers),
+      nextNumber: invoices.nextNumber.bind(invoices),
+      list: invoices.list.bind(invoices),
+      stats: invoices.stats.bind(invoices),
+      get: invoices.get.bind(invoices),
+      detail: invoices.detail.bind(invoices),
+      create: invoices.create.bind(invoices),
+      createStorno: storno.createStorno.bind(storno),
+      download: delivery.pdf.bind(delivery),
+      downloadXml: delivery.xml.bind(delivery),
+      saveToStorage: delivery.saveToStorage.bind(delivery),
+      send: delivery.send.bind(delivery),
+    },
+  };
+}

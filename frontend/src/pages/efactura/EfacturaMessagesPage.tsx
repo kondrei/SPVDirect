@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useCompanies, useDownloadMessage, useEfacturaMessages } from '../../api/hooks';
+import { useCompanies } from '../../api/hooks/companies';
+import { useDownloadMessage, useEfacturaMessages } from '../../api/hooks/efactura';
 import type { EfacturaMessage, MessageFilter } from '../../api/types';
 import { EmptyState } from '../../components/EmptyState';
 import { PageHead } from '../../components/PageHead';
@@ -7,14 +8,14 @@ import { QueryError } from '../../components/QueryError';
 import { SelectField } from '../../components/SelectField';
 import {
   Alert,
-  Badge,
   Button,
   ButtonLink,
   Card,
   DataTable,
   TextField,
+  StatusBadge,
   type Column,
-  type Tone,
+  type Status,
 } from '../../components/ui';
 import { useAppPath } from '../../hooks/useAppPath';
 import { formatDateTime } from '../../lib/format';
@@ -27,12 +28,11 @@ const FILTERS: { value: MessageFilter | ''; label: string }[] = [
   { value: 'R', label: 'Mesaje de la cumpărător' },
 ];
 
-function tone(type: string | null): Tone {
-  if (!type) return 'neutral';
-  if (/ERORI/i.test(type)) return 'danger';
-  if (/PRIMIT/i.test(type)) return 'brand';
-  if (/TRIMIS/i.test(type)) return 'success';
-  return 'neutral';
+function messageStatus(type: string): Status {
+  if (/ERORI/i.test(type)) return 'messageError';
+  if (/PRIMIT/i.test(type)) return 'messageReceived';
+  if (/TRIMIS/i.test(type)) return 'messageSent';
+  return 'messageOther';
 }
 
 export function EfacturaMessagesPage() {
@@ -61,7 +61,11 @@ export function EfacturaMessagesPage() {
       key: 'type',
       header: 'Tip',
       render: (m) =>
-        m.type ? <Badge tone={tone(m.type)}>{m.type}</Badge> : '—',
+        m.type ? (
+          <StatusBadge status={messageStatus(m.type)}>{m.type}</StatusBadge>
+        ) : (
+          '—'
+        ),
     },
     {
       key: 'details',

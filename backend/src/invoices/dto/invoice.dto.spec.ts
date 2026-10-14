@@ -165,13 +165,18 @@ describe('LineSuggestionsQuery', () => {
   }
 
   it('reads the company id and strips RO and spaces from the buyer CUI', async () => {
-    const { dto, errors } = await query({ companyId: '7', buyerCui: 'RO 87654321' });
+    const { dto, errors } = await query({
+      companyId: '7',
+      buyerCui: 'RO 87654321',
+    });
     expect(errors).toHaveLength(0);
     expect(dto).toMatchObject({ companyId: 7, buyerCui: '87654321' });
   });
 
   it('rejects an invalid CUI or a missing company', async () => {
-    expect((await query({ companyId: '7', buyerCui: 'abc' })).errors).toHaveLength(1);
+    expect(
+      (await query({ companyId: '7', buyerCui: 'abc' })).errors,
+    ).toHaveLength(1);
     expect((await query({ buyerCui: '87654321' })).errors).toHaveLength(1);
   });
 });

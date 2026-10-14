@@ -13,6 +13,8 @@ import { EfacturaUploads1791300000000 } from './1791300000000-EfacturaUploads.js
 import { PasswordChangedAt1791400000000 } from './1791400000000-PasswordChangedAt.js';
 import { InvoiceBuyerIndex1791500000000 } from './1791500000000-InvoiceBuyerIndex.js';
 import { InvoiceAccountantBuyerIndex1791600000000 } from './1791600000000-InvoiceAccountantBuyerIndex.js';
+import { EfacturaUploadClaim1791700000000 } from './1791700000000-EfacturaUploadClaim.js';
+import { AnafConnectionTokenState1791800000000 } from './1791800000000-AnafConnectionTokenState.js';
 
 export const migrations = [
   InitialSchema1790200000000,
@@ -30,4 +32,6 @@ export const migrations = [
   PasswordChangedAt1791400000000,
   InvoiceBuyerIndex1791500000000,
   InvoiceAccountantBuyerIndex1791600000000,
+  EfacturaUploadClaim1791700000000,
+  AnafConnectionTokenState1791800000000,
 ];

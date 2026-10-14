@@ -110,7 +110,7 @@ describe('API security (e2e)', () => {
     for (let i = 0; i < 20; i++) {
       await request(server)
         .get(`/auth/registrations/t${i}/approve`)
-        .expect(404);
+        .expect(400);
     }
     await request(server).get('/auth/registrations/t99/approve').expect(429);
   });

@@ -46,7 +46,9 @@ function setup({
 
 describe('CompaniesService.findByCui', () => {
   it('looks only among the accountant’s companies', async () => {
-    const { service, companies } = setup({ stored: { id: 3, cui: '12345678' } });
+    const { service, companies } = setup({
+      stored: { id: 3, cui: '12345678' },
+    });
     expect(await service.findByCui(1, '12345678')).toMatchObject({ id: 3 });
     expect(companies.findOneBy).toHaveBeenCalledWith({
       accountantId: 1,

@@ -1,24 +1,40 @@
 import { useId, type SelectHTMLAttributes } from 'react';
+import { cx } from './ui/cx';
 
 export function SelectField({
   label,
   hint,
+  error,
+  id,
   children,
   ...rest
 }: SelectHTMLAttributes<HTMLSelectElement> & {
   label: string;
   hint?: string;
+  error?: string;
 }) {
-  const id = useId();
+  const auto = useId();
+  const selectId = id ?? auto;
+  const hintId = `${selectId}-hint`;
   return (
-    <div className="spv-field">
-      <label className="spv-field-label" htmlFor={id}>
+    <div className={cx('spv-field', error && 'spv-field-invalid')}>
+      <label className="spv-field-label" htmlFor={selectId}>
         {label}
       </label>
-      <select {...rest} id={id} className="spv-input">
+      <select
+        {...rest}
+        id={selectId}
+        className="spv-input"
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error || hint ? hintId : undefined}
+      >
         {children}
       </select>
-      {hint ? <div className="spv-field-hint">{hint}</div> : null}
+      {error || hint ? (
+        <div id={hintId} className="spv-field-hint">
+          {error ?? hint}
+        </div>
+      ) : null}
     </div>
   );
 }

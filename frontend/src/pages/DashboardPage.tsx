@@ -1,11 +1,8 @@
 import { Link } from 'react-router';
-import {
-  useCompanies,
-  useConnections,
-  useConnectUrl,
-  useInvoiceStats,
-  useMe,
-} from '../api/hooks';
+import { useCompanies } from '../api/hooks/companies';
+import { useConnections, useConnectUrl } from '../api/hooks/connections';
+import { useInvoiceStats } from '../api/hooks/invoices';
+import { useMe } from '../api/hooks/auth';
 import type { AnafConnection } from '../api/types';
 import { EmptyState } from '../components/EmptyState';
 import { PageHead } from '../components/PageHead';
@@ -27,8 +24,10 @@ import {
   formatCui,
   formatMonth,
   groupSerial,
+  pluralCertificate,
   pluralFacturi,
   pluralFirme,
+  pluralStornari,
   pluralZile,
 } from '../lib/format';
 
@@ -55,7 +54,6 @@ export function DashboardPage() {
 
   const conns = connections.data ?? [];
   const list = companies.data ?? [];
-  const byId = new Map(conns.map((c) => [c.id, c]));
   const withoutCert = list.filter((c) => !c.anafConnectionId);
   const active = conns.filter(
     (c) =>
@@ -119,7 +117,7 @@ export function DashboardPage() {
         >
           {`Titularul trebuie să reautorizeze cu certificatul calificat; ${companiesOn(expiring[0]) === 1 ? 'o firmă depinde' : `${pluralFirme(companiesOn(expiring[0]))} depind`} de el.`}
           {expiring.length > 1
-            ? ` Încă ${expiring.length - 1} certificate expiră curând.`
+            ? ` Încă ${pluralCertificate(expiring.length - 1)} expiră curând.`
             : ''}
         </Alert>
       ) : null}
@@ -163,7 +161,7 @@ export function DashboardPage() {
           icon="invoice"
           label="Facturi primite azi"
           value="—"
-          note="e-Factura vine în faza 2"
+          note="vedeți Mesaje e-Factura"
         />
         <Stat
           icon="truck"
@@ -188,7 +186,7 @@ export function DashboardPage() {
             note={
               stats
                 ? stats.month.stornos
-                  ? `${stats.month.stornos} stornări`
+                  ? pluralStornari(stats.month.stornos)
                   : `${pluralFacturi(stats.year.invoices)} în acest an`
                 : undefined
             }
@@ -217,7 +215,7 @@ export function DashboardPage() {
             value={stats ? `${formatAmount(stats.year.grossRon)} RON` : '—'}
             note={
               stats
-                ? `${pluralFacturi(stats.year.invoices)}, ${stats.year.stornos} stornări`
+                ? `${pluralFacturi(stats.year.invoices)}, ${pluralStornari(stats.year.stornos)}`
                 : undefined
             }
           />
@@ -361,7 +359,7 @@ export function DashboardPage() {
               ))}
             </div>
           )}
-          {byId.size > 5 ? (
+          {conns.length > 5 ? (
             <Link to={appPath('/connections')}>Toate certificatele</Link>
           ) : null}
         </Card>
