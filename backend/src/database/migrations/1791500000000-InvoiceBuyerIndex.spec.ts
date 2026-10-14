@@ -13,11 +13,15 @@ describe('InvoiceBuyerIndex1791500000000', () => {
   it('indexes the invoices of a company by buyer CUI, newest first, without stornos', async () => {
     const sql = await run('up');
     expect(sql).toContain('CREATE INDEX "idx_invoices_company_buyer_cui"');
-    expect(sql).toContain(`("company_id", ("buyer" ->> 'cui'), "issue_date" DESC, "id" DESC)`);
+    expect(sql).toContain(
+      `("company_id", ("buyer" ->> 'cui'), "issue_date" DESC, "id" DESC)`,
+    );
     expect(sql).toContain('WHERE "storno_of_invoice_id" IS NULL');
   });
 
   it('reverts', async () => {
-    expect(await run('down')).toBe('DROP INDEX "idx_invoices_company_buyer_cui"');
+    expect(await run('down')).toBe(
+      'DROP INDEX "idx_invoices_company_buyer_cui"',
+    );
   });
 });

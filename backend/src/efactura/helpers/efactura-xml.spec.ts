@@ -11,7 +11,9 @@ describe('parseUploadResponse', () => {
   it('reads the upload index of an accepted file', () => {
     expect(
       parseUploadResponse(
-        header('dateResponse="202108051140" ExecutionStatus="0" index_incarcare="3828"'),
+        header(
+          'dateResponse="202108051140" ExecutionStatus="0" index_incarcare="3828"',
+        ),
       ),
     ).toEqual({ accepted: true, uploadIndex: '3828', error: null });
   });
@@ -48,9 +50,9 @@ const state = (attrs: string) =>
 
 describe('parseStatusResponse', () => {
   it('maps ok with the download id', () => {
-    expect(parseStatusResponse(state('stare="ok" id_descarcare="1234"'))).toEqual(
-      { status: 'ok', downloadId: '1234', error: null },
-    );
+    expect(
+      parseStatusResponse(state('stare="ok" id_descarcare="1234"')),
+    ).toEqual({ status: 'ok', downloadId: '1234', error: null });
   });
 
   it('maps nok with the download id of the error file', () => {

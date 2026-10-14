@@ -55,12 +55,23 @@ export class AuthorizationLinksService {
     return this.check(await this.links.findOneBy({ id }));
   }
 
-  async markUsed(linkId: string, connectionId: string): Promise<boolean> {
+  async claim(linkId: string): Promise<boolean> {
     const result = await this.links.update(
       { id: linkId, usedAt: IsNull() },
-      { usedAt: new Date(), anafConnectionId: connectionId },
+      { usedAt: new Date() },
     );
     return (result.affected ?? 0) > 0;
+  }
+
+  async release(linkId: string): Promise<void> {
+    await this.links.update(
+      { id: linkId, anafConnectionId: IsNull() },
+      { usedAt: null },
+    );
+  }
+
+  async attachConnection(linkId: string, connectionId: string): Promise<void> {
+    await this.links.update({ id: linkId }, { anafConnectionId: connectionId });
   }
 
   private async check(link: AuthorizationLink | null): Promise<LinkLookup> {

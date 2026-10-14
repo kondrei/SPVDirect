@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef } from 'react';
-import { useDownloadInvoice, useInvoicePdf } from '../../api/hooks';
+import { useDownloadInvoice, useInvoicePdf } from '../../api/hooks/invoices';
 import type { InvoiceSummary } from '../../api/types';
 import { formatAmount, formatIsoDate } from '../../lib/format';
 import { invoiceFilename, invoiceNumber } from '../../lib/invoice';

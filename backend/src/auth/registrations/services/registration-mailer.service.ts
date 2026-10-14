@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Accountant } from '../../../accountants/accountant.entity.js';
 import { ApiLogsService } from '../../../api-logs/api-logs.service.js';
+import { trackApiCall } from '../../../api-logs/track-api-call.js';
 import { escapeHtml } from '../../../common/html.js';
 import {
   MailService,
@@ -70,32 +71,30 @@ export class RegistrationMailer {
     kind: RegistrationMail,
     message: MailMessage,
   ): Promise<boolean> {
-    const started = performance.now();
-    let statusCode: number | null = null;
-    let error: string | null = null;
-    try {
-      statusCode = await this.mail.send(message);
-      return true;
-    } catch (err) {
-      statusCode = smtpErrorCode(err);
-      error = (err as Error).message;
-      this.logger.error(
-        `Email ${kind} for accountant ${accountantId} failed: ${error}`,
-      );
-      return false;
-    } finally {
-      await this.apiLogs.record({
+    return trackApiCall(
+      this.apiLogs,
+      {
         accountantId,
         anafConnectionId: null,
         companyId: null,
         service: MAIL_LOG_SERVICE,
         method: 'SEND',
         endpoint: kind,
-        statusCode,
-        responseTimeMs: Math.round(performance.now() - started),
-        error,
-      });
-    }
+      },
+      async (outcome) => {
+        try {
+          outcome.statusCode = await this.mail.send(message);
+          return true;
+        } catch (err) {
+          outcome.statusCode = smtpErrorCode(err);
+          outcome.error = (err as Error).message;
+          this.logger.error(
+            `Email ${kind} for accountant ${accountantId} failed: ${outcome.error}`,
+          );
+          return false;
+        }
+      },
+    );
   }
 
   private adminMessage(request: AdminApprovalRequest): MailMessage {

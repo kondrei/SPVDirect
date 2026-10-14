@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { useBuyerLookup, useFindBuyer } from '../../api/hooks';
+import { useBuyerLookup, useFindBuyer } from '../../api/hooks/invoices';
 import type { FoundBuyer } from '../../api/types';
 import { isValidCui, normalizeCui } from '../../lib/format';
 

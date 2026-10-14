@@ -1,10 +1,5 @@
 import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
-import {
-  useCompanyLogoUrl,
-  useRemoveCompanyLogo,
-  useUpdateCompany,
-  useUploadCompanyLogo,
-} from '../../api/hooks';
+import { useCompanyLogoUrl, useRemoveCompanyLogo, useUpdateCompany, useUploadCompanyLogo } from '../../api/hooks/companies';
 import type { Company } from '../../api/types';
 import { MAX_LOGO_BYTES } from '../../common/constants';
 import { ConfirmButton } from '../ConfirmButton';

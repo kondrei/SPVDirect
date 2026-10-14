@@ -7,7 +7,6 @@ import {
   Param,
   Post,
   Query,
-  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -18,6 +17,7 @@ import {
   INVOICE_MAIL_THROTTLE,
   INVOICE_THROTTLE,
 } from '../../common/constants.js';
+import { attachment } from '../../common/download-file.js';
 import { ParseIdPipe } from '../../common/parse-id.pipe.js';
 import { ParseCuiPipe } from '../../companies/dto/company.dto.js';
 import {
@@ -28,24 +28,20 @@ import {
   NextNumberQuery,
   SendInvoiceDto,
 } from '../dto/invoice.dto.js';
-import { InvoicesService, type InvoiceFile } from '../services/invoices.service.js';
-
-function asFile(file: InvoiceFile): StreamableFile {
-  return new StreamableFile(
-    typeof file.content === 'string'
-      ? Buffer.from(file.content, 'utf8')
-      : file.content,
-    {
-      type: file.contentType,
-      disposition: `attachment; filename="${file.filename}"`,
-    },
-  );
-}
+import { InvoiceBuyersService } from '../services/invoice-buyers.service.js';
+import { InvoiceDeliveryService } from '../services/invoice-delivery.service.js';
+import { InvoiceStornoService } from '../services/invoice-storno.service.js';
+import { InvoicesService } from '../services/invoices.service.js';
 
 @Controller('accountants/:accountantId/invoices')
 @UseGuards(JwtAuthGuard, AccountantParamGuard)
 export class InvoicesController {
-  constructor(private readonly invoices: InvoicesService) {}
+  constructor(
+    private readonly invoices: InvoicesService,
+    private readonly buyers: InvoiceBuyersService,
+    private readonly storno: InvoiceStornoService,
+    private readonly delivery: InvoiceDeliveryService,
+  ) {}
 
   @Get()
   @Throttle(INVOICE_THROTTLE)
@@ -72,7 +68,7 @@ export class InvoicesController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('cui', ParseCuiPipe) cui: string,
   ) {
-    return this.invoices.lookupBuyer(accountantId, cui);
+    return this.buyers.lookupBuyer(accountantId, cui);
   }
 
   @Get('buyers/:cui')
@@ -81,7 +77,7 @@ export class InvoicesController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('cui', ParseCuiPipe) cui: string,
   ) {
-    return this.invoices.findBuyer(accountantId, cui);
+    return this.buyers.findBuyer(accountantId, cui);
   }
 
   @Get('next-number')
@@ -105,7 +101,7 @@ export class InvoicesController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Query() query: LineSuggestionsQuery,
   ) {
-    return this.invoices.lineSuggestions(
+    return this.buyers.lineSuggestions(
       accountantId,
       query.companyId,
       query.buyerCui,
@@ -137,7 +133,7 @@ export class InvoicesController {
     @Param('id', ParseIdPipe) id: number,
     @Body() dto: CreateStornoDto,
   ) {
-    return this.invoices.createStorno(accountantId, id, dto);
+    return this.storno.createStorno(accountantId, id, dto);
   }
 
   @Get(':id/pdf')
@@ -147,7 +143,7 @@ export class InvoicesController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseIdPipe) id: number,
   ) {
-    return asFile(await this.invoices.download(accountantId, id));
+    return attachment(await this.delivery.pdf(accountantId, id));
   }
 
   @Get(':id/xml')
@@ -157,7 +153,7 @@ export class InvoicesController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseIdPipe) id: number,
   ) {
-    return asFile(await this.invoices.downloadXml(accountantId, id));
+    return attachment(await this.delivery.xml(accountantId, id));
   }
 
   @Post(':id/store')
@@ -167,7 +163,7 @@ export class InvoicesController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseIdPipe) id: number,
   ) {
-    return this.invoices.saveToStorage(accountantId, id);
+    return this.delivery.saveToStorage(accountantId, id);
   }
 
   @Post(':id/send')
@@ -178,6 +174,6 @@ export class InvoicesController {
     @Param('id', ParseIdPipe) id: number,
     @Body() dto: SendInvoiceDto,
   ) {
-    return this.invoices.send(accountantId, id, dto.to);
+    return this.delivery.send(accountantId, id, dto.to);
   }
 }

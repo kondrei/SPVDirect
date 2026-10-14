@@ -4,21 +4,18 @@ import {
   Delete,
   Get,
   HttpCode,
-  NotFoundException,
   Param,
   ParseUUIDPipe,
   Patch,
   UseGuards,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { Throttle } from '@nestjs/throttler';
 import { IsString, MaxLength, MinLength } from 'class-validator';
-import { Repository } from 'typeorm';
 import { AccountantParamGuard } from '../../auth/guards/accountant-param.guard.js';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard.js';
+import { ANAF_CONNECTION_THROTTLE } from '../../common/constants.js';
 import { ParseIdPipe } from '../../common/parse-id.pipe.js';
-import { AnafApiService } from '../services/anaf-api.service.js';
-import { AnafConnection } from '../anaf-connection.entity.js';
-import { AnafOAuthService } from '../services/anaf-oauth.service.js';
+import { AnafConnectionsService } from '../services/anaf-connections.service.js';
 
 class UpdateConnectionDto {
   @IsString()
@@ -30,62 +27,38 @@ class UpdateConnectionDto {
 @Controller('accountants/:accountantId/anaf/connections')
 @UseGuards(JwtAuthGuard, AccountantParamGuard)
 export class AnafConnectionsController {
-  constructor(
-    private readonly api: AnafApiService,
-    private readonly oauth: AnafOAuthService,
-    @InjectRepository(AnafConnection)
-    private readonly connections: Repository<AnafConnection>,
-  ) {}
+  constructor(private readonly connections: AnafConnectionsService) {}
 
   @Get()
   list(@Param('accountantId', ParseIdPipe) accountantId: number) {
-    return this.connections.find({
-      where: { accountantId },
-      order: { createdAt: 'DESC' },
-    });
+    return this.connections.list(accountantId);
   }
 
   @Patch(':id')
-  async update(
+  update(
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateConnectionDto,
   ) {
-    const connection = await this.get(accountantId, id);
-    connection.label = dto.label;
-    return this.connections.save(connection);
+    return this.connections.rename(accountantId, id, dto.label);
   }
 
   @Delete(':id')
   @HttpCode(204)
-  async remove(
+  @Throttle(ANAF_CONNECTION_THROTTLE)
+  remove(
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    const connection = await this.get(accountantId, id);
-    await this.oauth.revokeConnection(connection.id);
-    await this.connections.remove(connection);
+    return this.connections.remove(accountantId, id);
   }
 
   @Get(':id/test')
-  async test(
+  @Throttle(ANAF_CONNECTION_THROTTLE)
+  test(
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    const res = await this.api.request<string>({
-      accountantId,
-      connectionId: id,
-      service: 'TestOAuth',
-      path: '/TestOauth/jaxrs/hello',
-      params: { name: 'SPVDirect' },
-      responseType: 'text',
-    });
-    return { status: res.status, body: res.data };
-  }
-
-  private async get(accountantId: number, id: string) {
-    const connection = await this.connections.findOneBy({ id, accountantId });
-    if (!connection) throw new NotFoundException('Conexiune ANAF inexistentă');
-    return connection;
+    return this.connections.test(accountantId, id);
   }
 }

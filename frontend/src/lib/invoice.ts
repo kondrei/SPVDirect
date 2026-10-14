@@ -37,6 +37,10 @@ export function toCents(amount: number): number {
   return Math.round(amount * 100 + Math.sign(amount) * 1e-7);
 }
 
+function roundHalfAway(value: number): number {
+  return Math.sign(value) * Math.round(Math.abs(value));
+}
+
 export interface Totals {
   net: number;
   vat: number;
@@ -53,7 +57,7 @@ export function computeTotals(
   const groups = new Map<number, number>();
   for (const line of lines) {
     const rate = vatPayer ? line.vatRate : 0;
-    const net = toCents(toCents(line.quantity * line.unitPrice) / 100);
+    const net = toCents(line.quantity * line.unitPrice);
     groups.set(rate, (groups.get(rate) ?? 0) + net);
   }
   const byRate = [...groups.entries()]
@@ -61,7 +65,7 @@ export function computeTotals(
     .map(([rate, taxableCents]) => ({
       rate,
       taxable: taxableCents / 100,
-      vat: Math.round((taxableCents * rate) / 100) / 100,
+      vat: roundHalfAway((taxableCents * rate) / 100) / 100,
     }));
   const netCents = [...groups.values()].reduce((sum, c) => sum + c, 0);
   const vatCents = byRate.reduce((sum, r) => sum + Math.round(r.vat * 100), 0);
@@ -70,7 +74,9 @@ export function computeTotals(
     vat: vatCents / 100,
     gross: (netCents + vatCents) / 100,
     vatRon:
-      (exchangeRate === null ? vatCents : Math.round(vatCents * exchangeRate)) /
+      (exchangeRate === null
+        ? vatCents
+        : roundHalfAway(vatCents * exchangeRate)) /
       100,
     byRate,
   };

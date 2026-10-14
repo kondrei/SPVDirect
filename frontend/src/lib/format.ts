@@ -33,9 +33,14 @@ export function formatDate(iso: string | Date): string {
   return dateFmt.format(new Date(iso));
 }
 
-export function formatAnafDate(value: string): string {
+export function formatIsoDate(value: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
   return m ? `${m[3]}.${m[2]}.${m[1]}` : value;
+}
+
+export function parseDecimal(value: string): number {
+  const text = value.trim().replace(',', '.');
+  return text === '' ? NaN : Number(text);
 }
 
 export function formatDateTime(iso: string | Date): string {
@@ -104,12 +109,10 @@ export function formatMonth(month: string): string {
   return monthFmt.format(new Date(Date.UTC(year, number - 1, 1)));
 }
 
-export function formatIsoDate(iso: string): string {
-  const [year, month, day] = iso.split('-');
-  return `${day}.${month}.${year}`;
-}
-
 export const pluralFacturi = (n: number) => plural(n, 'factură', 'facturi');
+export const pluralStornari = (n: number) => plural(n, 'stornare', 'stornări');
+export const pluralCertificate = (n: number) =>
+  plural(n, 'certificat', 'certificate');
 
 export function decimalText(value: number): string {
   return String(value).replace('.', ',');

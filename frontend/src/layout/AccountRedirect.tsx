@@ -1,5 +1,5 @@
 import { Navigate, useLocation } from 'react-router';
-import { useMe } from '../api/hooks';
+import { useMe } from '../api/hooks/auth';
 import { accountantPath } from '../hooks/useAppPath';
 
 export function AccountRedirect() {

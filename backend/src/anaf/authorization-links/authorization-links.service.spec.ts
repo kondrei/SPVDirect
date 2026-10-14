@@ -69,8 +69,18 @@ describe('AuthorizationLinksService', () => {
     });
   });
 
-  it('markUsed reports a lost race', async () => {
+  it('claim reports a lost race', async () => {
     const { service } = setup(null);
-    await expect(service.markUsed('l', 'c')).resolves.toBe(false);
+    await expect(service.claim('l')).resolves.toBe(false);
+  });
+
+  it('claims only a link that is still unused', async () => {
+    const { service, repo } = setup(null);
+    repo.update.mockResolvedValue({ affected: 1 });
+    await expect(service.claim('l')).resolves.toBe(true);
+    expect(repo.update).toHaveBeenCalledWith(
+      { id: 'l', usedAt: expect.anything() },
+      { usedAt: expect.any(Date) },
+    );
   });
 });

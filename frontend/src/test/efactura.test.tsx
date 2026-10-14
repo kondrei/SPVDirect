@@ -370,9 +370,10 @@ const invoiceRoutes = (upload: unknown | null) => ({
     status: 200,
     body: { items: [INVOICE], total: 1, page: 1, pageSize: 25 },
   },
-  'GET /accountants/1/efactura/uploads?page=1&pageSize=100': page(
-    upload ? [upload] : [],
-  ),
+  'GET /accountants/1/efactura/invoices/latest-uploads?ids=3': {
+    status: 200,
+    body: upload ? [upload] : [],
+  },
 });
 
 describe('e-Factura din lista de facturi', () => {

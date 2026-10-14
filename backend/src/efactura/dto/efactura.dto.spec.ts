@@ -3,6 +3,8 @@ import { BadRequestException } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import {
+  assertXmlPayload,
+  LatestUploadsQuery,
   ListMessagesQuery,
   ParseAnafIdPipe,
   TransformXmlDto,
@@ -65,9 +67,9 @@ describe('ValidateXmlDto and TransformXmlDto', () => {
 
 describe('ListMessagesQuery', () => {
   it('limits the days to 1..60 and the filter to E, P, T, R', async () => {
-    expect(await errors(ListMessagesQuery, { zile: '60', filtru: 'T' })).toEqual(
-      [],
-    );
+    expect(
+      await errors(ListMessagesQuery, { zile: '60', filtru: 'T' }),
+    ).toEqual([]);
     expect(await errors(ListMessagesQuery, { zile: '61' })).toContain('zile');
     expect(await errors(ListMessagesQuery, { zile: '0' })).toContain('zile');
     expect(await errors(ListMessagesQuery, { filtru: 'X' })).toContain(
@@ -92,5 +94,35 @@ describe('ParseAnafIdPipe', () => {
     expect(pipe.transform('3001474425')).toBe('3001474425');
     expect(() => pipe.transform('12a')).toThrow(BadRequestException);
     expect(() => pipe.transform('../1')).toThrow(BadRequestException);
+  });
+});
+
+describe('LatestUploadsQuery', () => {
+  it('reads a comma separated list of invoice ids', async () => {
+    const dto = plainToInstance(LatestUploadsQuery, { ids: '3,4,15' });
+    expect(await validate(dto)).toEqual([]);
+    expect(dto.ids).toEqual([3, 4, 15]);
+  });
+
+  it.each([
+    '',
+    'a,b',
+    '0',
+    '-1',
+    Array.from({ length: 101 }, (_, i) => i + 1).join(','),
+  ])('rejects %j', async (ids) => {
+    const out = await errors(LatestUploadsQuery, { ids });
+    if (ids === '') expect(out).toEqual([]);
+    else expect(out).toEqual(['ids']);
+  });
+});
+
+describe('assertXmlPayload', () => {
+  it('refuses an empty or oversized XML', () => {
+    expect(() => assertXmlPayload('  ')).toThrow(BadRequestException);
+    expect(() => assertXmlPayload('x'.repeat(10 * 1024 * 1024 + 1))).toThrow(
+      'Fișierul depășește 10 MB',
+    );
+    expect(() => assertXmlPayload('<Invoice/>')).not.toThrow();
   });
 });

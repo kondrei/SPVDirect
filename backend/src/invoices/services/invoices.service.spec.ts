@@ -4,18 +4,15 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
-import { QueryFailedError, type Repository } from 'typeorm';
+import { QueryFailedError } from 'typeorm';
 import type { Company } from '../../companies/company.entity.js';
-import type { AnafCompanyLookupService } from '../../companies/services/anaf-company-lookup.service.js';
-import type { CompaniesService } from '../../companies/services/companies.service.js';
 import { anafTvaRecord } from '../../testing/anaf-tva-record.js';
 import { sampleInvoice } from '../../testing/invoice-fixtures.js';
 import type { CreateInvoiceDto } from '../dto/invoice.dto.js';
-import type { InvoiceFileStore } from './invoice-file-store.service.js';
 import { bucharestToday } from '../helpers/invoice-format.js';
-import type { InvoiceMailer } from './invoice-mailer.service.js';
 import type { Invoice } from '../invoice.entity.js';
-import { InvoicesService, STORAGE_NOT_CONFIGURED } from './invoices.service.js';
+import { buildInvoiceServices } from '../../testing/invoice-services.js';
+import { STORAGE_NOT_CONFIGURED } from './invoice-delivery.service.js';
 
 const COMPANY = {
   id: 7,
@@ -97,17 +94,17 @@ function setup({
     get: vi.fn(),
   };
   const mailer = { send: vi.fn().mockResolvedValue(undefined) };
-  const service = new InvoicesService(
-    invoices as unknown as Repository<Invoice>,
-    companies as unknown as CompaniesService,
-    anaf as unknown as AnafCompanyLookupService,
-    store as unknown as InvoiceFileStore,
-    mailer as unknown as InvoiceMailer,
-  );
+  const { service } = buildInvoiceServices({
+    invoices,
+    companies,
+    anaf,
+    store,
+    mailer,
+  });
   return { service, invoices, companies, anaf, store, mailer };
 }
 
-describe('InvoicesService.lookupBuyer', () => {
+describe('InvoiceBuyersService.lookupBuyer', () => {
   it('fills the buyer from ANAF', async () => {
     const { service, anaf } = setup();
     const buyer = await service.lookupBuyer(1, '87654321');
@@ -141,18 +138,24 @@ function withQueryBuilder(rows: Partial<Invoice>[]) {
 }
 
 function expectInvoicesToBuyer(qb: ReturnType<typeof withQueryBuilder>['qb']) {
-  expect(qb.where).toHaveBeenCalledWith('invoice.accountantId = :accountantId', {
-    accountantId: 1,
-  });
-  expect(qb.andWhere).toHaveBeenCalledWith("invoice.buyer ->> 'cui' = :buyerCui", {
-    buyerCui: '87654321',
-  });
+  expect(qb.where).toHaveBeenCalledWith(
+    'invoice.accountantId = :accountantId',
+    {
+      accountantId: 1,
+    },
+  );
+  expect(qb.andWhere).toHaveBeenCalledWith(
+    "invoice.buyer ->> 'cui' = :buyerCui",
+    {
+      buyerCui: '87654321',
+    },
+  );
   expect(qb.andWhere).toHaveBeenCalledWith('invoice.stornoOfInvoiceId IS NULL');
   expect(qb.orderBy).toHaveBeenCalledWith('invoice.issueDate', 'DESC');
   expect(qb.addOrderBy).toHaveBeenCalledWith('invoice.id', 'DESC');
 }
 
-describe('InvoicesService.findBuyer', () => {
+describe('InvoiceBuyersService.findBuyer', () => {
   function withSaved({
     invoice = null,
     company = null,
@@ -217,7 +220,8 @@ describe('InvoicesService.findBuyer', () => {
     });
     const buyer = await service.findBuyer(1, '12345678');
     expect(
-      (companies as unknown as { findByCui: ReturnType<typeof vi.fn> }).findByCui,
+      (companies as unknown as { findByCui: ReturnType<typeof vi.fn> })
+        .findByCui,
     ).toHaveBeenCalledWith(1, '12345678');
     expect(buyer).toMatchObject({
       name: 'AGRO VEST SRL',
@@ -258,7 +262,7 @@ describe('InvoicesService.findBuyer', () => {
   });
 });
 
-describe('InvoicesService.lineSuggestions', () => {
+describe('InvoiceBuyersService.lineSuggestions', () => {
   it('reads the lines of the last invoices for that company and buyer, never stornos', async () => {
     const invoice = sampleInvoice();
     const { service, companies, qb } = withQueryBuilder([invoice]);
@@ -280,10 +284,12 @@ describe('InvoicesService.lineSuggestions', () => {
 
   it('answers 404 before querying when the company is not the accountant’s', async () => {
     const { service, companies, invoices } = withQueryBuilder([]);
-    companies.get.mockRejectedValue(new NotFoundException('Firma nu a fost găsită'));
-    await expect(service.lineSuggestions(1, 99, '87654321')).rejects.toBeInstanceOf(
-      NotFoundException,
+    companies.get.mockRejectedValue(
+      new NotFoundException('Firma nu a fost găsită'),
     );
+    await expect(
+      service.lineSuggestions(1, 99, '87654321'),
+    ).rejects.toBeInstanceOf(NotFoundException);
     expect(
       (invoices as unknown as { createQueryBuilder: ReturnType<typeof vi.fn> })
         .createQueryBuilder,
@@ -535,7 +541,7 @@ describe('InvoicesService.nextNumber', () => {
   });
 });
 
-describe('InvoicesService downloads', () => {
+describe('InvoiceDeliveryService downloads', () => {
   it('renders the PDF with the invoice file name', async () => {
     const { service } = setup({ stored: sampleInvoice() });
     const file = await service.download(1, 1);
@@ -571,7 +577,7 @@ describe('InvoicesService downloads', () => {
   });
 });
 
-describe('InvoicesService.saveToStorage', () => {
+describe('InvoiceDeliveryService.saveToStorage', () => {
   it('uploads the PDF of an existing invoice', async () => {
     const { service, store } = setup({ stored: sampleInvoice() });
     const invoice = await service.saveToStorage(1, 1);
@@ -590,7 +596,7 @@ describe('InvoicesService.saveToStorage', () => {
   });
 });
 
-describe('InvoicesService.send', () => {
+describe('InvoiceDeliveryService.send', () => {
   it('sends to the given address', async () => {
     const { service, mailer } = setup({ stored: sampleInvoice() });
     await service.send(1, 1, 'alt@exemplu.ro');

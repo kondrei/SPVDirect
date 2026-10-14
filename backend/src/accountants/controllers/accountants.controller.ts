@@ -9,17 +9,11 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { AccountantParamGuard } from '../../auth/guards/accountant-param.guard.js';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard.js';
-import { AuthService } from '../../auth/services/auth.service.js';
-import {
-  cookieOptions,
-  SESSION_COOKIE,
-  SESSION_TTL_SECONDS,
-} from '../../auth/session.js';
+import { SessionCookieService } from '../../auth/services/session-cookie.service.js';
 import {
   ANAF_LOOKUP_THROTTLE,
   PASSWORD_THROTTLE,
@@ -32,15 +26,10 @@ import { ChangePasswordDto, UpdateProfileDto } from '../dto/profile.dto.js';
 @Controller('accountants/:accountantId')
 @UseGuards(JwtAuthGuard, AccountantParamGuard)
 export class AccountantsController {
-  private readonly production: boolean;
-
   constructor(
     private readonly accountants: AccountantsService,
-    private readonly auth: AuthService,
-    config: ConfigService,
-  ) {
-    this.production = config.get('NODE_ENV') === 'production';
-  }
+    private readonly session: SessionCookieService,
+  ) {}
 
   @Get('profile')
   getProfile(@Param('accountantId', ParseIdPipe) accountantId: number) {
@@ -73,10 +62,6 @@ export class AccountantsController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<void> {
     await this.accountants.changePassword(accountantId, dto);
-    res.cookie(
-      SESSION_COOKIE,
-      await this.auth.signSession(accountantId),
-      cookieOptions(SESSION_TTL_SECONDS, this.production),
-    );
+    await this.session.issue(res, accountantId);
   }
 }

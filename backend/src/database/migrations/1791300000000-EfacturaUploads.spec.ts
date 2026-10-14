@@ -21,7 +21,9 @@ describe('EfacturaUploads1791300000000', () => {
     ]) {
       expect(sql).toContain(column);
     }
-    expect(sql).toMatch(/fk_efactura_uploads_accountant[^\n]*ON DELETE CASCADE/);
+    expect(sql).toMatch(
+      /fk_efactura_uploads_accountant[^\n]*ON DELETE CASCADE/,
+    );
   });
 
   it('keeps the upload record when the invoice or certificate goes away', async () => {

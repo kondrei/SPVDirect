@@ -58,7 +58,9 @@ describe('renderInvoiceXml', () => {
 
   it('does not put the bank name in the XML, which UBL-CR-429 forbids', () => {
     const withBank = renderInvoiceXml(
-      sampleInvoice({ seller: party({ iban: 'RO49AAAA1B31007593840000', bank: 'Banca X' }) }),
+      sampleInvoice({
+        seller: party({ iban: 'RO49AAAA1B31007593840000', bank: 'Banca X' }),
+      }),
     );
     expect(withBank).not.toContain('FinancialInstitutionBranch');
     expect(withBank).not.toContain('Banca X');
@@ -120,7 +122,13 @@ describe('renderInvoiceXml', () => {
 
   it('keeps VAT ids and rates out of an invoice with out of scope lines (BR-O-02, BR-O-05)', () => {
     const computed = computeInvoice(
-      [line({ vatRate: 0, vatCategory: 'O', vatExemptionReason: 'Neplătitor' })],
+      [
+        line({
+          vatRate: 0,
+          vatCategory: 'O',
+          vatExemptionReason: 'Neplătitor',
+        }),
+      ],
       null,
     );
     const out = renderInvoiceXml(

@@ -378,7 +378,12 @@ export interface CreateStornoInput {
   sendToEmail?: string | null;
 }
 
-export type EfacturaStatus = 'processing' | 'ok' | 'nok' | 'rejected';
+export type EfacturaStatus =
+  | 'sending'
+  | 'processing'
+  | 'ok'
+  | 'nok'
+  | 'rejected';
 export type EfacturaStandard = 'UBL' | 'CN' | 'CII' | 'RASP';
 export type MessageFilter = 'E' | 'P' | 'T' | 'R';
 

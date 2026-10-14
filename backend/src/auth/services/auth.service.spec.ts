@@ -113,9 +113,9 @@ describe('AuthService.isSessionValid', () => {
       status: 'active',
       passwordChangedAt: changedAt,
     });
-    await expect(
-      service.isSessionValid(1, changedAtSeconds - 1),
-    ).resolves.toBe(false);
+    await expect(service.isSessionValid(1, changedAtSeconds - 1)).resolves.toBe(
+      false,
+    );
     await expect(service.isSessionValid(1, undefined)).resolves.toBe(false);
   });
 

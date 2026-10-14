@@ -46,6 +46,19 @@ export class AnafConnection {
   @Column({ name: 'last_refreshed_at', type: 'timestamptz', nullable: true })
   lastRefreshedAt: Date | null;
 
+  @Column({ name: 'token_call_at', type: 'timestamptz', nullable: true })
+  tokenCallAt: Date | null;
+
+  @Column({ name: 'refresh_started_at', type: 'timestamptz', nullable: true })
+  refreshStartedAt: Date | null;
+
+  @Column({
+    name: 'denied_with_fresh_token_at',
+    type: 'timestamptz',
+    nullable: true,
+  })
+  deniedWithFreshTokenAt: Date | null;
+
   @Column({ type: 'text', default: 'active' })
   status: AnafConnectionStatus;
 

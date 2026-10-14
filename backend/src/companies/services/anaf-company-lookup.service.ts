@@ -3,7 +3,11 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { isAxiosError } from 'axios';
 import { ApiLogsService } from '../../api-logs/api-logs.service.js';
-import type { AnafTvaRecord, AnafTvaResponse } from '../helpers/anaf-company-info.js';
+import { trackApiCall } from '../../api-logs/track-api-call.js';
+import type {
+  AnafTvaRecord,
+  AnafTvaResponse,
+} from '../helpers/anaf-company-info.js';
 
 export const MIN_INTERVAL_MS = 1_000;
 export const MAX_CUIS_PER_REQUEST = 100;
@@ -54,49 +58,49 @@ export class AnafCompanyLookupService {
     await this.waitTurn();
 
     const endpoint = this.config.getOrThrow<string>('ANAF_TVA_ENDPOINT');
-    const started = performance.now();
-    let status: number | null = null;
-    let error: string | null = null;
-    try {
-      const data = bucharestDate.format(new Date());
-      const res = await this.http.axiosRef.post<AnafTvaResponse>(
-        endpoint,
-        cuis.map((cui) => ({ cui: Number(cui), data })),
-        { timeout: 30_000, validateStatus: () => true },
-      );
-      status = res.status;
-      if (status !== 200 || !Array.isArray(res.data?.found)) {
-        error = `HTTP ${status}`;
-        throw new BadGatewayException(
-          `Serviciul ANAF de verificare a CUI a răspuns cu ${status}. Reîncercați în câteva momente.`,
-        );
-      }
-      const wanted = new Set(cuis.map(Number));
-      const found = new Map<number, AnafTvaRecord>();
-      for (const record of res.data.found) {
-        const cui = Number(record.date_generale?.cui);
-        if (wanted.has(cui) && !found.has(cui)) found.set(cui, record);
-      }
-      return found;
-    } catch (err) {
-      if (err instanceof BadGatewayException) throw err;
-      error = isAxiosError(err) ? (err.code ?? err.message) : String(err);
-      throw new BadGatewayException(
-        'Serviciul ANAF de verificare a CUI nu răspunde. Reîncercați în câteva momente.',
-      );
-    } finally {
-      await this.apiLogs.record({
+    return trackApiCall(
+      this.apiLogs,
+      {
         accountantId,
         anafConnectionId: null,
         companyId,
         service: 'PlatitorTva',
         method: 'POST',
         endpoint: new URL(endpoint).pathname,
-        statusCode: status,
-        responseTimeMs: Math.round(performance.now() - started),
-        error,
-      });
-    }
+      },
+      async (outcome) => {
+        try {
+          const data = bucharestDate.format(new Date());
+          const res = await this.http.axiosRef.post<AnafTvaResponse>(
+            endpoint,
+            cuis.map((cui) => ({ cui: Number(cui), data })),
+            { timeout: 30_000, validateStatus: () => true },
+          );
+          outcome.statusCode = res.status;
+          if (res.status !== 200 || !Array.isArray(res.data?.found)) {
+            outcome.error = `HTTP ${res.status}`;
+            throw new BadGatewayException(
+              `Serviciul ANAF de verificare a CUI a răspuns cu ${res.status}. Reîncercați în câteva momente.`,
+            );
+          }
+          const wanted = new Set(cuis.map(Number));
+          const found = new Map<number, AnafTvaRecord>();
+          for (const record of res.data.found) {
+            const cui = Number(record.date_generale?.cui);
+            if (wanted.has(cui) && !found.has(cui)) found.set(cui, record);
+          }
+          return found;
+        } catch (err) {
+          if (err instanceof BadGatewayException) throw err;
+          outcome.error = isAxiosError(err)
+            ? (err.code ?? err.message)
+            : String(err);
+          throw new BadGatewayException(
+            'Serviciul ANAF de verificare a CUI nu răspunde. Reîncercați în câteva momente.',
+          );
+        }
+      },
+    );
   }
 
   private waitTurn(): Promise<void> {

@@ -5,6 +5,9 @@ import { ApiLogsModule } from '../api-logs/api-logs.module.js';
 import { CompaniesModule } from '../companies/companies.module.js';
 import { Company } from '../companies/company.entity.js';
 import { AnafApiService } from './services/anaf-api.service.js';
+import { AnafAuthorizationService } from './services/anaf-authorization.service.js';
+import { AnafConnectionsService } from './services/anaf-connections.service.js';
+import { AnafTokenClient } from './services/anaf-token-client.service.js';
 import { AnafConnection } from './anaf-connection.entity.js';
 import { AnafConnectionsController } from './controllers/anaf-connections.controller.js';
 import { AnafOAuthController } from './controllers/anaf-oauth.controller.js';
@@ -40,7 +43,10 @@ import { AuthorizationLinksService } from './authorization-links/authorization-l
     SpvArchiveController,
   ],
   providers: [
+    AnafTokenClient,
     AnafOAuthService,
+    AnafAuthorizationService,
+    AnafConnectionsService,
     AnafApiService,
     AuthorizationLinksService,
     SpvService,

@@ -8,6 +8,7 @@ import { InvoicesModule } from '../invoices/invoices.module.js';
 import { EfacturaUpload } from './efactura-upload.entity.js';
 import { EfacturaController } from './controllers/efactura.controller.js';
 import { EfacturaService } from './services/efactura.service.js';
+import { EfacturaValidator } from './services/efactura-validator.service.js';
 
 @Module({
   imports: [
@@ -19,7 +20,7 @@ import { EfacturaService } from './services/efactura.service.js';
     TypeOrmModule.forFeature([EfacturaUpload]),
   ],
   controllers: [EfacturaController],
-  providers: [EfacturaService],
+  providers: [EfacturaService, EfacturaValidator],
   exports: [EfacturaService],
 })
 export class EfacturaModule {}

@@ -1,12 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
-import {
-  useCompanies,
-  useDownloadUpload,
-  useEfacturaUploads,
-  useRefreshUpload,
-  useUploadXml,
-} from '../../api/hooks';
+import { useCompanies } from '../../api/hooks/companies';
+import { useDownloadUpload, useEfacturaUploads, useRefreshUpload, useUploadXml } from '../../api/hooks/efactura';
 import type { EfacturaStandard, EfacturaUpload } from '../../api/types';
 import { INVOICE_PAGE_SIZE } from '../../common/constants';
 import { EfacturaStatusBadge } from '../../components/efactura/EfacturaStatusBadge';

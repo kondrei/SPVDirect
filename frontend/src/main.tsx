@@ -8,15 +8,17 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router';
 import { ApiError } from './api/client';
-import { keys } from './api/hooks';
+import { keys, removeAccountData } from './api/hooks/queryKeys';
 import { router } from './router';
 import './styles/tokens.css';
 import './styles/components.css';
 import './styles/app.css';
 
 const onError = (err: Error) => {
-  if (err instanceof ApiError && err.status === 401)
+  if (err instanceof ApiError && err.status === 401) {
+    removeAccountData(queryClient);
     queryClient.setQueryData(keys.me, null);
+  }
 };
 
 const queryClient: QueryClient = new QueryClient({

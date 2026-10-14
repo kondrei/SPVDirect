@@ -1,8 +1,8 @@
 import { Fragment, type ReactNode } from 'react';
-import { useRefreshCompanyAnaf } from '../api/hooks';
+import { useRefreshCompanyAnaf } from '../api/hooks/companies';
 import type { AnafTvaRecord, CaenInfo, Company } from '../api/types';
 import { CaenName } from './CaenName';
-import { formatAnafDate, formatCui, formatDateTime } from '../lib/format';
+import { formatIsoDate, formatCui, formatDateTime } from '../lib/format';
 import { Alert, Button, Card, StatusBadge } from './ui';
 
 type Row = [label: string, value: ReactNode];
@@ -13,7 +13,7 @@ function text(
 ): ReactNode {
   const s = value == null ? '' : String(value).trim();
   if (!s) return <span className="muted">—</span>;
-  const shown = date ? formatAnafDate(s) : s;
+  const shown = date ? formatIsoDate(s) : s;
   return mono || date ? <span className="mono">{shown}</span> : shown;
 }
 
@@ -171,7 +171,7 @@ export function AnafDataCard({ company }: { company: Company }) {
       title="Date ANAF"
       subtitle={
         data && company.anafSyncedAt
-          ? `Registrul ANAF al contribuabililor · date valabile la ${formatAnafDate(data.date_generale.data)}, preluate ${formatDateTime(company.anafSyncedAt)}`
+          ? `Registrul ANAF al contribuabililor · date valabile la ${formatIsoDate(data.date_generale.data)}, preluate ${formatDateTime(company.anafSyncedAt)}`
           : 'Registrul ANAF al contribuabililor (TVA, TVA la încasare, inactivi, plata defalcată, RO e-Factura)'
       }
       actions={

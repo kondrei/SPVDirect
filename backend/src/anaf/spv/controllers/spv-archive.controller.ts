@@ -4,13 +4,13 @@ import {
   Header,
   Param,
   Query,
-  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AccountantParamGuard } from '../../../auth/guards/accountant-param.guard.js';
 import { JwtAuthGuard } from '../../../auth/guards/jwt-auth.guard.js';
 import { ARCHIVE_THROTTLE } from '../../../common/constants.js';
+import { attachment } from '../../../common/download-file.js';
 import { ParseIdPipe } from '../../../common/parse-id.pipe.js';
 import { SpvArchiveService } from '../services/spv-archive.service.js';
 import { ArchiveQuery } from '../spv.dto.js';
@@ -43,9 +43,6 @@ export class SpvArchiveController {
     @Param('id', ParseIdPipe) id: number,
   ) {
     const doc = await this.archive.download(accountantId, id);
-    return new StreamableFile(doc.content, {
-      type: doc.contentType,
-      disposition: `attachment; filename="${doc.filename}"`,
-    });
+    return attachment(doc);
   }
 }

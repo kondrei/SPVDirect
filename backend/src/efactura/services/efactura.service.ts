@@ -1,47 +1,57 @@
-import { HttpService } from '@nestjs/axios';
 import {
   BadGatewayException,
   BadRequestException,
   ConflictException,
   Injectable,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import type { AxiosResponse } from 'axios';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
+import type { AnafEnvironment } from '../../anaf/anaf-environment.js';
 import { AnafApiService } from '../../anaf/services/anaf-api.service.js';
-import { ApiLogsService } from '../../api-logs/api-logs.service.js';
+import { isUniqueViolation } from '../../common/db-errors.js';
+import type { Company } from '../../companies/company.entity.js';
 import { CompaniesService } from '../../companies/services/companies.service.js';
 import { InvoicesService } from '../../invoices/services/invoices.service.js';
 import {
-  MAX_XML_BYTES,
-  type MESSAGE_FILTERS,
-  type UPLOAD_STANDARDS,
-  type VALIDATE_STANDARDS,
+  assertXmlPayload,
+  type MessageFilter,
+  type UploadStandard,
 } from '../dto/efactura.dto.js';
 import {
+  ACTIVE_UPLOAD_STATUSES,
   EfacturaUpload,
   type UploadStatus,
 } from '../efactura-upload.entity.js';
+import {
+  bodyJson,
+  bodyText,
+  orNull,
+  type AnafErrorBody,
+} from '../helpers/anaf-body.js';
 import {
   anafStampToIso,
   parseStatusResponse,
   parseUploadResponse,
 } from '../helpers/efactura-xml.js';
+import {
+  EFACTURA_SERVICE,
+  EfacturaValidator,
+  type EfacturaFile,
+  type ValidationResult,
+} from './efactura-validator.service.js';
 
-export const EFACTURA_SERVICE = 'EFACTURA';
+export { EFACTURA_SERVICE };
 export const NO_CERTIFICATE =
   'Firma nu are un certificat ANAF asociat. Legați un certificat din pagina firmei.';
+export const STALE_SENDING_MS = 5 * 60 * 1000;
+const INTERRUPTED = 'Trimiterea a fost întreruptă înainte de răspunsul ANAF';
 const ZIP_MAGIC = [0x50, 0x4b];
-const PDF_MAGIC = '%PDF';
 
 export interface UploadInput {
   companyId: number;
   xml: string;
-  standard: (typeof UPLOAD_STANDARDS)[number];
-  invoiceId?: number | null;
+  standard: UploadStandard;
   extern?: boolean;
   autofactura?: boolean;
   executare?: boolean;
@@ -73,16 +83,22 @@ export interface MessageList {
   pages: number | null;
 }
 
-export interface ValidationResult {
-  valid: boolean;
-  messages: string[];
-  traceId: string | null;
+interface CertifiedCompany {
+  id: number;
+  cui: string;
+  connectionId: string;
 }
 
-export interface EfacturaFile {
-  content: Buffer;
-  contentType: string;
-  filename: string;
+interface AnafTarget {
+  accountantId: number;
+  connectionId: string;
+  companyId: number;
+}
+
+interface SendOutcome {
+  uploadIndex: string | null;
+  status: UploadStatus;
+  errorMessage: string | null;
 }
 
 interface RawMessage {
@@ -103,48 +119,28 @@ interface RawMessageList {
   index_pagina_curenta?: number;
 }
 
-interface RawValidation {
-  stare?: string;
-  trace_id?: string;
-  Messages?: { message?: string }[];
-  message?: string;
-  eroare?: string;
+function certified(company: Company): CertifiedCompany {
+  if (!company.anafConnectionId) throw new BadRequestException(NO_CERTIFICATE);
+  return {
+    id: company.id,
+    cui: company.cui,
+    connectionId: company.anafConnectionId,
+  };
 }
 
-function text(data: unknown): string {
-  if (typeof data === 'string') return data;
-  if (Buffer.isBuffer(data)) return data.toString('utf8');
-  if (data instanceof ArrayBuffer) return Buffer.from(data).toString('utf8');
-  return data === undefined || data === null ? '' : JSON.stringify(data);
-}
-
-function jsonOf<T extends object>(data: unknown): T | null {
-  if (data && typeof data === 'object' && !Buffer.isBuffer(data)) {
-    return data instanceof ArrayBuffer ? jsonOf(text(data)) : (data as T);
-  }
-  try {
-    const parsed: unknown = JSON.parse(text(data));
-    return parsed && typeof parsed === 'object' ? (parsed as T) : null;
-  } catch {
-    return null;
-  }
-}
-
-function orNull(value: string | number | null | undefined): string | null {
-  return value === undefined || value === null || value === ''
-    ? null
-    : String(value);
+function alreadySent(active: EfacturaUpload | null): ConflictException {
+  return new ConflictException(
+    active?.status === 'ok'
+      ? 'Factura a fost deja trimisă și validată de ANAF'
+      : 'Factura este deja în curs de trimitere sau procesare la ANAF',
+  );
 }
 
 @Injectable()
 export class EfacturaService {
-  private readonly logger = new Logger(EfacturaService.name);
-
   constructor(
     private readonly api: AnafApiService,
-    private readonly config: ConfigService,
-    private readonly http: HttpService,
-    private readonly apiLogs: ApiLogsService,
+    private readonly validator: EfacturaValidator,
     private readonly companies: CompaniesService,
     private readonly invoices: InvoicesService,
     @InjectRepository(EfacturaUpload)
@@ -155,67 +151,13 @@ export class EfacturaService {
     accountantId: number,
     input: UploadInput,
   ): Promise<EfacturaUpload> {
-    if (!input.xml.trim()) throw new BadRequestException('Fișierul XML este gol');
-    if (Buffer.byteLength(input.xml) > MAX_XML_BYTES) {
-      throw new BadRequestException('Fișierul depășește 10 MB');
-    }
-    const company = await this.companies.get(accountantId, input.companyId);
-    if (!company.anafConnectionId) throw new BadRequestException(NO_CERTIFICATE);
-
-    const params: Record<string, string> = {
-      standard: input.standard,
-      cif: company.cui,
-    };
-    if (input.extern) params.extern = 'DA';
-    if (input.autofactura) params.autofactura = 'DA';
-    if (input.executare) params.executare = 'DA';
-    const environment = this.config.getOrThrow<'test' | 'prod'>('ANAF_ENV');
-
-    const res = await this.api.request<unknown>({
-      accountantId,
-      connectionId: company.anafConnectionId,
-      companyId: company.id,
-      service: EFACTURA_SERVICE,
-      method: 'POST',
-      path: this.api.envPath(
-        `/FCTEL/rest/${input.b2c ? 'uploadb2c' : 'upload'}`,
-      ),
-      params,
-      data: input.xml,
-      headers: { 'Content-Type': 'text/plain' },
-      responseType: 'text',
-      allowStatuses: [400],
-    });
-
-    let uploadIndex: string | null = null;
-    let status: UploadStatus = 'rejected';
-    let errorMessage: string | null = null;
-    if (res.status === 400) {
-      errorMessage =
-        jsonOf<RawValidation>(res.data)?.message ?? 'ANAF a refuzat cererea';
-    } else {
-      const parsed = parseUploadResponse(text(res.data));
-      if (parsed.accepted) {
-        uploadIndex = parsed.uploadIndex;
-        status = 'processing';
-      } else {
-        errorMessage = parsed.error ?? 'ANAF nu a acceptat fișierul';
-      }
-    }
-
+    assertXmlPayload(input.xml);
+    const company = await this.certifiedCompany(accountantId, input.companyId);
+    const outcome = await this.send(accountantId, company, input);
     return this.uploads.save(
       this.uploads.create({
-        accountantId,
-        companyId: company.id,
-        invoiceId: input.invoiceId ?? null,
-        anafConnectionId: company.anafConnectionId,
-        environment,
-        standard: input.standard,
-        uploadIndex,
-        status,
-        downloadId: null,
-        errorMessage,
-        checkedAt: null,
+        ...this.newUpload(accountantId, company, null, input.standard),
+        ...outcome,
       }),
     );
   }
@@ -226,35 +168,36 @@ export class EfacturaService {
     options: { extern?: boolean } = {},
   ): Promise<EfacturaUpload> {
     const invoice = await this.invoices.get(accountantId, invoiceId);
-    const active = await this.uploads.findOne({
-      where: [
-        { accountantId, invoiceId, status: 'processing' },
-        { accountantId, invoiceId, status: 'ok' },
-      ],
-    });
-    if (active) {
-      throw new ConflictException(
-        active.status === 'ok'
-          ? 'Factura a fost deja trimisă și validată de ANAF'
-          : 'Factura este deja în curs de procesare la ANAF',
+    const company = await this.certifiedCompany(
+      accountantId,
+      invoice.companyId,
+    );
+    const claim = await this.claimInvoice(accountantId, company, invoiceId);
+    let outcome: SendOutcome;
+    try {
+      const xml = await this.invoices.xml(accountantId, invoiceId);
+      const check = await this.validator.validateIfAvailable(
+        accountantId,
+        xml,
+        'FACT1',
       );
-    }
-    const { content } = await this.invoices.downloadXml(accountantId, invoiceId);
-    const xml = typeof content === 'string' ? content : content.toString('utf8');
-    const check = await this.tryValidate(accountantId, xml, 'FACT1');
-    if (check && !check.valid) {
-      throw new BadRequestException({
-        message: 'XML-ul facturii nu trece validarea ANAF',
-        errors: check.messages,
+      if (check && !check.valid) {
+        throw new BadRequestException({
+          message: 'XML-ul facturii nu trece validarea ANAF',
+          errors: check.messages,
+        });
+      }
+      outcome = await this.send(accountantId, company, {
+        companyId: company.id,
+        xml,
+        standard: 'UBL',
+        extern: options.extern,
       });
+    } catch (err) {
+      await this.uploads.delete({ id: claim.id, status: 'sending' });
+      throw err;
     }
-    return this.upload(accountantId, {
-      companyId: invoice.companyId,
-      invoiceId,
-      xml,
-      standard: 'UBL',
-      extern: options.extern,
-    });
+    return this.uploads.save(Object.assign(claim, outcome));
   }
 
   async list(
@@ -279,6 +222,24 @@ export class EfacturaService {
     return { items, total, page: filter.page, pageSize: filter.pageSize };
   }
 
+  async latestForInvoices(
+    accountantId: number,
+    invoiceIds: number[],
+  ): Promise<EfacturaUpload[]> {
+    if (!invoiceIds.length) return [];
+    const rows = await this.uploads.find({
+      where: { accountantId, invoiceId: In(invoiceIds) },
+      order: { id: 'DESC' },
+    });
+    const latest = new Map<number, EfacturaUpload>();
+    for (const row of rows) {
+      if (row.invoiceId !== null && !latest.has(row.invoiceId)) {
+        latest.set(row.invoiceId, row);
+      }
+    }
+    return [...latest.values()];
+  }
+
   async get(accountantId: number, id: number): Promise<EfacturaUpload> {
     const upload = await this.uploads.findOneBy({ id, accountantId });
     if (!upload) throw new NotFoundException('Încărcarea nu a fost găsită');
@@ -298,15 +259,15 @@ export class EfacturaService {
       connectionId: upload.anafConnectionId,
       companyId: upload.companyId,
       service: EFACTURA_SERVICE,
-      path: `/${upload.environment}/FCTEL/rest/stareMesaj`,
+      path: this.api.envPath('/FCTEL/rest/stareMesaj', upload.environment),
       params: { id_incarcare: upload.uploadIndex },
       responseType: 'text',
       allowStatuses: [400],
     });
-    const body = text(res.data);
+    const body = bodyText(res.data);
     if (res.status === 400) {
       throw new BadRequestException(
-        jsonOf<RawValidation>(body)?.message ?? 'ANAF a refuzat cererea',
+        bodyJson<AnafErrorBody>(body)?.message ?? 'ANAF a refuzat cererea',
       );
     }
     const parsed = parseStatusResponse(body);
@@ -331,9 +292,11 @@ export class EfacturaService {
       throw new ConflictException('Certificatul încărcării a fost șters');
     }
     return this.fetchZip(
-      accountantId,
-      upload.anafConnectionId,
-      upload.companyId,
+      {
+        accountantId,
+        connectionId: upload.anafConnectionId,
+        companyId: upload.companyId,
+      },
       upload.environment,
       upload.downloadId,
     );
@@ -344,17 +307,18 @@ export class EfacturaService {
     companyId: number,
     query: {
       zile?: number;
-      filtru?: (typeof MESSAGE_FILTERS)[number];
+      filtru?: MessageFilter;
       startTime?: number;
       endTime?: number;
       pagina?: number;
     },
   ): Promise<MessageList> {
-    const company = await this.companies.get(accountantId, companyId);
-    if (!company.anafConnectionId) throw new BadRequestException(NO_CERTIFICATE);
+    const company = await this.certifiedCompany(accountantId, companyId);
     const paged = query.startTime !== undefined;
     if (paged && query.endTime === undefined) {
-      throw new BadRequestException('Intervalul are nevoie de startTime și endTime');
+      throw new BadRequestException(
+        'Intervalul are nevoie de startTime și endTime',
+      );
     }
     const params: Record<string, string | number> = { cif: company.cui };
     if (paged) {
@@ -368,7 +332,7 @@ export class EfacturaService {
 
     const res = await this.api.request<RawMessageList>({
       accountantId,
-      connectionId: company.anafConnectionId,
+      connectionId: company.connectionId,
       companyId,
       service: EFACTURA_SERVICE,
       path: this.api.envPath(
@@ -377,8 +341,10 @@ export class EfacturaService {
       params,
       allowStatuses: [400],
     });
-    const body = jsonOf<RawMessageList & RawValidation>(res.data);
-    if (!body) throw new BadGatewayException('ANAF a returnat un răspuns neașteptat');
+    const body = bodyJson<RawMessageList & AnafErrorBody>(res.data);
+    if (!body) {
+      throw new BadGatewayException('ANAF a returnat un răspuns neașteptat');
+    }
     const failure = body.eroare ?? (res.status === 400 ? body.message : null);
     if (failure) throw new BadRequestException(failure);
 
@@ -404,75 +370,11 @@ export class EfacturaService {
     companyId: number,
     messageId: string,
   ): Promise<EfacturaFile> {
-    const company = await this.companies.get(accountantId, companyId);
-    if (!company.anafConnectionId) throw new BadRequestException(NO_CERTIFICATE);
+    const company = await this.certifiedCompany(accountantId, companyId);
     return this.fetchZip(
-      accountantId,
-      company.anafConnectionId,
-      companyId,
-      this.config.getOrThrow<string>('ANAF_ENV'),
+      { accountantId, connectionId: company.connectionId, companyId },
+      this.api.environment(),
       messageId,
-    );
-  }
-
-  async validate(
-    accountantId: number,
-    xml: string,
-    standard: (typeof VALIDATE_STANDARDS)[number] = 'FACT1',
-  ): Promise<ValidationResult> {
-    const res = await this.callPublic(
-      accountantId,
-      `/validare/${standard}`,
-      xml,
-      'text',
-    );
-    const body = jsonOf<RawValidation>(res.data);
-    if (!body || (res.status !== 200 && res.status !== 404)) {
-      throw new BadGatewayException('Validatorul ANAF nu a răspuns corect');
-    }
-    if (res.status === 404) {
-      throw new BadRequestException(
-        body.message ?? body.eroare ?? 'Standard de validare necunoscut',
-      );
-    }
-    return {
-      valid: body.stare === 'ok',
-      messages: (body.Messages ?? [])
-        .map((m) => m.message ?? '')
-        .filter(Boolean),
-      traceId: orNull(body.trace_id),
-    };
-  }
-
-  async transform(
-    accountantId: number,
-    xml: string,
-    standard: (typeof VALIDATE_STANDARDS)[number] = 'FACT1',
-    skipValidation = false,
-  ): Promise<EfacturaFile> {
-    const res = await this.callPublic(
-      accountantId,
-      `/transformare/${standard}${skipValidation ? '/DA' : ''}`,
-      xml,
-      'arraybuffer',
-    );
-    const content = Buffer.from(res.data as ArrayBuffer);
-    if (res.status === 200 && content.subarray(0, 4).toString() === PDF_MAGIC) {
-      return {
-        content,
-        contentType: 'application/pdf',
-        filename: 'factura.pdf',
-      };
-    }
-    const body = jsonOf<RawValidation>(content.toString('utf8'));
-    if (body?.Messages?.length) {
-      throw new BadRequestException({
-        message: 'XML-ul nu trece validarea ANAF, deci nu poate fi transformat',
-        errors: body.Messages.map((m) => m.message ?? '').filter(Boolean),
-      });
-    }
-    throw new BadGatewayException(
-      body?.message ?? 'Transformarea ANAF nu a răspuns corect',
     );
   }
 
@@ -480,43 +382,143 @@ export class EfacturaService {
     accountantId: number,
     invoiceId: number,
   ): Promise<ValidationResult> {
-    const { content } = await this.invoices.downloadXml(accountantId, invoiceId);
-    return this.validate(
+    return this.validator.validate(
       accountantId,
-      typeof content === 'string' ? content : content.toString('utf8'),
+      await this.invoices.xml(accountantId, invoiceId),
       'FACT1',
     );
   }
 
-  private async tryValidate(
+  private async certifiedCompany(
     accountantId: number,
-    xml: string,
-    standard: (typeof VALIDATE_STANDARDS)[number],
-  ): Promise<ValidationResult | null> {
+    companyId: number,
+  ): Promise<CertifiedCompany> {
+    return certified(await this.companies.get(accountantId, companyId));
+  }
+
+  private newUpload(
+    accountantId: number,
+    company: CertifiedCompany,
+    invoiceId: number | null,
+    standard: UploadStandard,
+  ): Partial<EfacturaUpload> {
+    return {
+      accountantId,
+      companyId: company.id,
+      invoiceId,
+      anafConnectionId: company.connectionId,
+      environment: this.api.environment(),
+      standard,
+      uploadIndex: null,
+      status: 'sending',
+      downloadId: null,
+      errorMessage: null,
+      checkedAt: null,
+    };
+  }
+
+  private async claimInvoice(
+    accountantId: number,
+    company: CertifiedCompany,
+    invoiceId: number,
+  ): Promise<EfacturaUpload> {
+    const insert = () =>
+      this.uploads.save(
+        this.uploads.create(
+          this.newUpload(accountantId, company, invoiceId, 'UBL'),
+        ),
+      );
     try {
-      return await this.validate(accountantId, xml, standard);
+      return await insert();
     } catch (err) {
-      if (err instanceof BadGatewayException) {
-        this.logger.warn(`ANAF validator unavailable: ${err.message}`);
-        return null;
-      }
+      if (!isUniqueViolation(err)) throw err;
+    }
+    const active = await this.uploads.findOne({
+      where: {
+        accountantId,
+        invoiceId,
+        status: In([...ACTIVE_UPLOAD_STATUSES]),
+      },
+    });
+    if (
+      active?.status !== 'sending' ||
+      Date.now() - active.createdAt.getTime() < STALE_SENDING_MS
+    ) {
+      throw alreadySent(active);
+    }
+    await this.uploads.update(
+      { id: active.id, status: 'sending' },
+      { status: 'rejected', errorMessage: INTERRUPTED },
+    );
+    try {
+      return await insert();
+    } catch (err) {
+      if (isUniqueViolation(err)) throw alreadySent(null);
       throw err;
     }
   }
 
-  private async fetchZip(
+  private async send(
     accountantId: number,
-    connectionId: string,
-    companyId: number,
-    environment: string,
+    company: CertifiedCompany,
+    input: UploadInput,
+  ): Promise<SendOutcome> {
+    const params: Record<string, string> = {
+      standard: input.standard,
+      cif: company.cui,
+    };
+    if (input.extern) params.extern = 'DA';
+    if (input.autofactura) params.autofactura = 'DA';
+    if (input.executare) params.executare = 'DA';
+
+    const res = await this.api.request<unknown>({
+      accountantId,
+      connectionId: company.connectionId,
+      companyId: company.id,
+      service: EFACTURA_SERVICE,
+      method: 'POST',
+      path: this.api.envPath(
+        `/FCTEL/rest/${input.b2c ? 'uploadb2c' : 'upload'}`,
+      ),
+      params,
+      data: input.xml,
+      headers: { 'Content-Type': 'text/plain' },
+      responseType: 'text',
+      allowStatuses: [400],
+    });
+
+    if (res.status === 400) {
+      return {
+        uploadIndex: null,
+        status: 'rejected',
+        errorMessage:
+          bodyJson<AnafErrorBody>(res.data)?.message ??
+          'ANAF a refuzat cererea',
+      };
+    }
+    const parsed = parseUploadResponse(bodyText(res.data));
+    return parsed.accepted
+      ? {
+          uploadIndex: parsed.uploadIndex,
+          status: 'processing',
+          errorMessage: null,
+        }
+      : {
+          uploadIndex: null,
+          status: 'rejected',
+          errorMessage: parsed.error ?? 'ANAF nu a acceptat fișierul',
+        };
+  }
+
+  private async fetchZip(
+    target: AnafTarget,
+    environment: AnafEnvironment,
     id: string,
   ): Promise<EfacturaFile> {
     const res = await this.api.request<ArrayBuffer>({
-      accountantId,
-      connectionId,
-      companyId,
+      ...target,
       service: EFACTURA_SERVICE,
-      path: `/${environment}/FCTEL/rest/descarcare`,
+      path: this.api.envPath('/FCTEL/rest/descarcare', environment),
       params: { id },
       responseType: 'arraybuffer',
       allowStatuses: [400],
@@ -534,54 +536,9 @@ export class EfacturaService {
         filename: `efactura-${id}.zip`,
       };
     }
-    const body = jsonOf<RawValidation>(content.toString('utf8'));
+    const body = bodyJson<AnafErrorBody>(content.toString('utf8'));
     throw new BadRequestException(
       body?.eroare ?? body?.message ?? 'ANAF nu a returnat arhiva solicitată',
     );
-  }
-
-  private async callPublic(
-    accountantId: number,
-    path: string,
-    xml: string,
-    responseType: 'text' | 'arraybuffer',
-  ): Promise<AxiosResponse<unknown>> {
-    if (!xml.trim()) throw new BadRequestException('Fișierul XML este gol');
-    if (Buffer.byteLength(xml) > MAX_XML_BYTES) {
-      throw new BadRequestException('Fișierul depășește 10 MB');
-    }
-    const started = performance.now();
-    let status: number | null = null;
-    let error: string | null = null;
-    try {
-      const res = await this.http.axiosRef.post<unknown>(
-        `${this.config.getOrThrow<string>('ANAF_EFACTURA_VALIDATE_ENDPOINT')}${path}`,
-        xml,
-        {
-          headers: { 'Content-Type': 'text/plain' },
-          responseType,
-          timeout: 60_000,
-          validateStatus: () => true,
-        },
-      );
-      status = res.status;
-      if (status >= 400) error = `HTTP ${status}`;
-      return res;
-    } catch (err) {
-      error = err instanceof Error ? err.message : String(err);
-      throw new BadGatewayException('Serviciul ANAF nu a putut fi contactat');
-    } finally {
-      await this.apiLogs.record({
-        accountantId,
-        anafConnectionId: null,
-        companyId: null,
-        service: EFACTURA_SERVICE,
-        method: 'POST',
-        endpoint: path.replace(/^(\/[a-z]+\/[A-Z0-9]+).*/, '$1'),
-        statusCode: status,
-        responseTimeMs: Math.round(performance.now() - started),
-        error,
-      });
-    }
   }
 }

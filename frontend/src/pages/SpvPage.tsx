@@ -1,12 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import {
-  useConnections,
-  useCreateSpvRequest,
-  useDownloadSpvMessage,
-  useSpvArchive,
-  useSyncSpv,
-  type SpvArchiveQuery,
-} from '../api/hooks';
+import { useConnections } from '../api/hooks/connections';
+import { useCreateSpvRequest, useDownloadSpvMessage, useSpvArchive, useSyncSpv, type SpvArchiveQuery } from '../api/hooks/spv';
 import type { ArchivedSpvMessage } from '../api/types';
 import { MAX_SPV_DAYS, SPV_PAGE_SIZE } from '../common/constants';
 import { EmptyState } from '../components/EmptyState';
@@ -22,7 +16,8 @@ import {
   TextField,
   type Column,
 } from '../components/ui';
-import { connectionStatus, groupSerial } from '../lib/format';
+import { connectionStatus, groupSerial, normalizeCui } from '../lib/format';
+import { SelectField } from '../components/SelectField';
 
 export const SPV_REQUEST_TYPES = [
   'D100',
@@ -58,23 +53,18 @@ function ConnectionSelect({
   options: Certificate[];
 }) {
   return (
-    <div className="spv-field">
-      <label className="spv-field-label" htmlFor={id}>
-        Certificat
-      </label>
-      <select
-        id={id}
-        className="spv-input"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        {options.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.label} · {groupSerial(c.certSerial)}
-          </option>
-        ))}
-      </select>
-    </div>
+    <SelectField
+      id={id}
+      label="Certificat"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      {options.map((c) => (
+        <option key={c.id} value={c.id}>
+          {c.label} · {groupSerial(c.certSerial)}
+        </option>
+      ))}
+    </SelectField>
   );
 }
 
@@ -314,7 +304,7 @@ function RequestCard({
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    const cleanCui = cui.replace(/\s+/g, '').replace(/^RO/i, '');
+    const cleanCui = normalizeCui(cui);
     const cleanPunct = cuiPunctDeLucru.replace(/\s+/g, '');
     if (tip.trim().length < 2) {
       setError('Alegeți sau introduceți tipul cererii.');

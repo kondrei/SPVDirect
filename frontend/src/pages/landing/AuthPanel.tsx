@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { useLogin, useRegister } from '../../api/hooks';
+import { useLogin, useRegister } from '../../api/hooks/auth';
 import { MIN_PASSWORD } from '../../common/constants';
 import { Alert, Button, TextField } from '../../components/ui';
 import { accountantPath } from '../../hooks/useAppPath';

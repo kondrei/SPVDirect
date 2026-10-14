@@ -1,18 +1,14 @@
 import { useState, type FormEvent } from 'react';
-import {
-  useCreateStorno,
-  useDownloadInvoice,
-  useInvoice,
-} from '../../api/hooks';
+import { useCreateStorno, useDownloadInvoice, useInvoice } from '../../api/hooks/invoices';
 import type { InvoiceSummary } from '../../api/types';
-import { formatAmount } from '../../lib/format';
+import { formatAmount, parseDecimal } from '../../lib/format';
 import { invoiceFilename, invoiceNumber, todayIso } from '../../lib/invoice';
 import { QueryError } from '../QueryError';
+import { DeliveryResults } from './InvoiceActionResults';
 import { Alert, Button, Card, TextAreaField, TextField } from '../ui';
 
 function parseQuantity(value: string): number {
-  const text = value.trim().replace(',', '.');
-  return text === '' ? 0 : Number(text);
+  return value.trim() === '' ? 0 : parseDecimal(value);
 }
 
 function StornoForm({
@@ -95,22 +91,7 @@ function StornoForm({
           >
             Total: {formatAmount(created.totalGross)} {created.currency}.
           </Alert>
-          {created.emailedTo ? (
-            <Alert
-              tone="success"
-              title={`Emailul a fost trimis la ${created.emailedTo}.`}
-            />
-          ) : null}
-          {create.data.storageError ? (
-            <Alert tone="warning" title="Salvarea în Storage a eșuat.">
-              {create.data.storageError}
-            </Alert>
-          ) : null}
-          {create.data.emailError ? (
-            <Alert tone="warning" title="Emailul nu a fost trimis.">
-              {create.data.emailError}
-            </Alert>
-          ) : null}
+          <DeliveryResults result={create.data} />
           {download.isError ? (
             <Alert tone="danger" title="Descărcarea a eșuat.">
               {download.error.message}

@@ -1,13 +1,7 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router';
-import {
-  useCompanies,
-  useConnections,
-  useConnectUrl,
-  useDeleteConnection,
-  useRenameConnection,
-  useTestConnection,
-} from '../api/hooks';
+import { useCompanies } from '../api/hooks/companies';
+import { useConnections, useConnectUrl, useDeleteConnection, useRenameConnection, useTestConnection } from '../api/hooks/connections';
 import type { AnafConnection } from '../api/types';
 import { ConfirmButton } from '../components/ConfirmButton';
 import { EmptyState } from '../components/EmptyState';

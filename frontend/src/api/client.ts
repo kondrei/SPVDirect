@@ -132,6 +132,21 @@ export async function fetchFile(path: string, name: string): Promise<File> {
   });
 }
 
+const BLOB_URL_LIFETIME_MS = 30_000;
+
+export function filenameFrom(disposition: string | null): string | null {
+  if (!disposition) return null;
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded[1].trim());
+    } catch {
+      return null;
+    }
+  }
+  return /filename="?([^";]+)"?/i.exec(disposition)?.[1] ?? null;
+}
+
 export async function downloadFile(
   path: string,
   fallbackName: string,
@@ -139,15 +154,13 @@ export async function downloadFile(
 ): Promise<void> {
   const res = await fetchOk(path, init);
   const blob = await res.blob();
-  const match = /filename="?([^";]+)"?/.exec(
-    res.headers.get('content-disposition') ?? '',
-  );
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = match?.[1] ?? fallbackName;
+  link.download =
+    filenameFrom(res.headers.get('content-disposition')) ?? fallbackName;
   document.body.appendChild(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), BLOB_URL_LIFETIME_MS);
 }

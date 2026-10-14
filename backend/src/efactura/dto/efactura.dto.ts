@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsIn,
   IsInt,
@@ -18,6 +20,17 @@ export const VALIDATE_STANDARDS = ['FACT1', 'FCN'] as const;
 export const MESSAGE_FILTERS = ['E', 'P', 'T', 'R'] as const;
 export const MAX_MESSAGE_DAYS = 60;
 export const MAX_XML_BYTES = 10 * 1024 * 1024;
+
+export type UploadStandard = (typeof UPLOAD_STANDARDS)[number];
+export type ValidateStandard = (typeof VALIDATE_STANDARDS)[number];
+export type MessageFilter = (typeof MESSAGE_FILTERS)[number];
+
+export function assertXmlPayload(xml: string): void {
+  if (!xml.trim()) throw new BadRequestException('Fișierul XML este gol');
+  if (Buffer.byteLength(xml) > MAX_XML_BYTES) {
+    throw new BadRequestException('Fișierul depășește 10 MB');
+  }
+}
 
 function toBoolean({ value }: { value: unknown }): unknown {
   if (value === true || value === 'true' || value === 'DA' || value === '1') {
@@ -54,7 +67,7 @@ export class UploadXmlDto {
   @IsIn(UPLOAD_STANDARDS, {
     message: `Standardul trebuie să fie ${UPLOAD_STANDARDS.join(', ')}`,
   })
-  standard: (typeof UPLOAD_STANDARDS)[number];
+  standard: UploadStandard;
 
   @IsOptional()
   @Transform(toBoolean)
@@ -82,7 +95,7 @@ export class ValidateXmlDto {
   @IsIn(VALIDATE_STANDARDS, {
     message: `Standardul trebuie să fie ${VALIDATE_STANDARDS.join(' sau ')}`,
   })
-  standard?: (typeof VALIDATE_STANDARDS)[number];
+  standard?: ValidateStandard;
 }
 
 export class TransformXmlDto extends ValidateXmlDto {
@@ -119,6 +132,22 @@ export class ListUploadsQuery {
   pageSize?: number;
 }
 
+export const MAX_LATEST_UPLOAD_IDS = 100;
+
+export class LatestUploadsQuery {
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string'
+      ? value.split(',').filter(Boolean).map(Number)
+      : value,
+  )
+  @IsArray()
+  @ArrayMaxSize(MAX_LATEST_UPLOAD_IDS)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(2_147_483_647, { each: true })
+  ids: number[];
+}
+
 export class ListMessagesQuery {
   @IsOptional()
   @Type(() => Number)
@@ -133,7 +162,7 @@ export class ListMessagesQuery {
   @IsIn(MESSAGE_FILTERS, {
     message: `Filtrul trebuie să fie ${MESSAGE_FILTERS.join(', ')}`,
   })
-  filtru?: (typeof MESSAGE_FILTERS)[number];
+  filtru?: MessageFilter;
 
   @IsOptional()
   @Type(() => Number)

@@ -6,7 +6,9 @@ describe('InvoicesController buyer routes', () => {
   it.each(['lookupBuyer', 'findBuyer'])(
     'validates the CUI of %s with ParseCuiPipe',
     (method) => {
-      expect(paramPipes(InvoicesController, method, 'cui')).toContain(ParseCuiPipe);
+      expect(paramPipes(InvoicesController, method, 'cui')).toContain(
+        ParseCuiPipe,
+      );
     },
   );
 });

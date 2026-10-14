@@ -1,50 +1,30 @@
-import {
-  BadGatewayException,
-  BadRequestException,
-  ConflictException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, MoreThanOrEqual, Repository } from 'typeorm';
-import { isUniqueViolation } from '../../common/db-errors.js';
-import { AnafCompanyLookupService } from '../../companies/services/anaf-company-lookup.service.js';
+import { CompaniesService } from '../../companies/services/companies.service.js';
+import type { CreateInvoiceDto } from '../dto/invoice.dto.js';
 import {
-  CUI_NOT_FOUND,
-  CompaniesService,
-} from '../../companies/services/companies.service.js';
-import type { CreateInvoiceDto, CreateStornoDto } from '../dto/invoice.dto.js';
-import {
-  buyerFromAnaf,
   buyerFromDto,
   normalizeLines,
   sellerFromCompany,
   validateInvoiceDates,
-  type BuyerLookup,
 } from '../builders/invoice-builder.js';
+import { renderInvoiceXml } from '../builders/invoice-xml.js';
 import { computeInvoice } from '../helpers/invoice-calc.js';
-import { InvoiceFileStore } from './invoice-file-store.service.js';
-import { bucharestToday, invoiceFilename } from '../helpers/invoice-format.js';
-import { buildStornoLines, remainingQuantities } from '../helpers/invoice-storno.js';
+import { bucharestToday } from '../helpers/invoice-format.js';
+import { remainingQuantities } from '../helpers/invoice-storno.js';
 import {
   computeInvoiceStats,
   statsWindowStart,
   type InvoiceStats,
 } from '../helpers/invoice-stats.js';
-import {
-  distinctLineSuggestions,
-  SUGGESTION_INVOICE_LIMIT,
-  type LineSuggestion,
-} from '../helpers/invoice-line-suggestions.js';
-import { InvoiceMailer } from './invoice-mailer.service.js';
-import { renderInvoicePdf, type InvoiceLogo } from '../builders/invoice-pdf.js';
-import { renderInvoiceXml } from '../builders/invoice-xml.js';
 import { Invoice } from '../invoice.entity.js';
-
-export const NUMBER_RETRIES = 3;
-export const STORAGE_NOT_CONFIGURED =
-  'Salvarea în Supabase Storage nu este configurată (SUPABASE_URL și SUPABASE_SERVICE_KEY).';
+import {
+  InvoiceDeliveryService,
+  type CreatedInvoice,
+} from './invoice-delivery.service.js';
+import { findOwnedInvoice } from './invoice-lookup.js';
+import { InvoiceNumbering } from './invoice-numbering.service.js';
 
 export interface InvoiceSummary {
   id: number;
@@ -67,15 +47,6 @@ export interface InvoiceSummary {
   emailedAt: string | null;
 }
 
-type BuyerStatus = Pick<BuyerLookup, 'vatPayer' | 'inactive' | 'eFactura'> & {
-  anafChecked: boolean;
-};
-
-export type FoundBuyer = BuyerLookup &
-  BuyerStatus & {
-    source: 'invoice' | 'company' | 'anaf';
-  };
-
 export interface InvoicePage {
   items: InvoiceSummary[];
   total: number;
@@ -83,21 +54,9 @@ export interface InvoicePage {
   pageSize: number;
 }
 
-export interface CreatedInvoice {
-  invoice: Invoice;
-  storageError: string | null;
-  emailError: string | null;
-}
-
 export type InvoiceDetail = Invoice & {
   remainingQuantities: number[] | null;
 };
-
-export interface InvoiceFile {
-  content: Buffer | string;
-  contentType: string;
-  filename: string;
-}
 
 function toSummary(invoice: Invoice, stornoed: boolean): InvoiceSummary {
   return {
@@ -124,77 +83,13 @@ function toSummary(invoice: Invoice, stornoed: boolean): InvoiceSummary {
 
 @Injectable()
 export class InvoicesService {
-  private readonly logger = new Logger(InvoicesService.name);
-
   constructor(
     @InjectRepository(Invoice)
     private readonly invoices: Repository<Invoice>,
     private readonly companies: CompaniesService,
-    private readonly anaf: AnafCompanyLookupService,
-    private readonly store: InvoiceFileStore,
-    private readonly mailer: InvoiceMailer,
+    private readonly numbering: InvoiceNumbering,
+    private readonly delivery: InvoiceDeliveryService,
   ) {}
-
-  async lookupBuyer(accountantId: number, cui: string): Promise<BuyerLookup> {
-    const record = await this.anaf.lookup(accountantId, cui);
-    if (!record) throw new BadRequestException(CUI_NOT_FOUND);
-    return buyerFromAnaf(record);
-  }
-
-  async findBuyer(accountantId: number, cui: string): Promise<FoundBuyer> {
-    const last = await this.invoicesToBuyer(accountantId, cui)
-      .select(['invoice.id', 'invoice.buyer'])
-      .limit(1)
-      .getOne();
-    if (last) {
-      return {
-        ...last.buyer,
-        ...(await this.anafStatus(accountantId, cui)),
-        source: 'invoice',
-      };
-    }
-    const company = await this.companies.findByCui(accountantId, cui);
-    if (company?.address?.trim()) {
-      return {
-        ...sellerFromCompany(company),
-        inactive: company.inactive,
-        eFactura: company.eFactura,
-        anafChecked: false,
-        source: 'company',
-      };
-    }
-    return {
-      ...(await this.lookupBuyer(accountantId, cui)),
-      anafChecked: true,
-      source: 'anaf',
-    };
-  }
-
-  private async anafStatus(
-    accountantId: number,
-    cui: string,
-  ): Promise<BuyerStatus | Omit<BuyerStatus, 'vatPayer'>> {
-    try {
-      const record = await this.anaf.lookup(accountantId, cui);
-      if (record) {
-        const { vatPayer, inactive, eFactura } = buyerFromAnaf(record);
-        return { vatPayer, inactive, eFactura, anafChecked: true };
-      }
-    } catch (error) {
-      this.logger.warn(`ANAF status check failed for buyer: ${String(error)}`);
-    }
-    return { inactive: null, eFactura: null, anafChecked: false };
-  }
-
-  private invoicesToBuyer(accountantId: number, buyerCui: string) {
-    return this.invoices
-      .createQueryBuilder('invoice')
-      .where('invoice.accountantId = :accountantId', { accountantId })
-      .andWhere("invoice.buyer ->> 'cui' = :buyerCui", { buyerCui })
-      .andWhere('invoice.stornoOfInvoiceId IS NULL')
-      .orderBy('invoice.issueDate', 'DESC')
-      .addOrderBy('invoice.id', 'DESC');
-  }
 
   async nextNumber(
     accountantId: number,
@@ -202,9 +97,7 @@ export class InvoicesService {
     series: string,
   ): Promise<number> {
     await this.companies.get(accountantId, companyId);
-    return (
-      ((await this.invoices.maximum('number', { companyId, series })) ?? 0) + 1
-    );
+    return this.numbering.next(companyId, series);
   }
 
   async list(
@@ -241,25 +134,6 @@ export class InvoicesService {
     };
   }
 
-  async lineSuggestions(
-    accountantId: number,
-    companyId: number,
-    buyerCui: string,
-  ): Promise<LineSuggestion[]> {
-    await this.companies.get(accountantId, companyId);
-    const rows = await this.invoicesToBuyer(accountantId, buyerCui)
-      .select([
-        'invoice.id',
-        'invoice.lines',
-        'invoice.currency',
-        'invoice.issueDate',
-      ])
-      .andWhere('invoice.companyId = :companyId', { companyId })
-      .limit(SUGGESTION_INVOICE_LIMIT)
-      .getMany();
-    return distinctLineSuggestions(rows);
-  }
-
   async stats(accountantId: number): Promise<InvoiceStats> {
     const today = bucharestToday();
     const rows = await this.invoices.find({
@@ -279,17 +153,22 @@ export class InvoicesService {
     return computeInvoiceStats(rows, today);
   }
 
-  async get(accountantId: number, id: number): Promise<Invoice> {
-    const invoice = await this.invoices.findOneBy({ id, accountantId });
-    if (!invoice) throw new NotFoundException('Factura nu a fost găsită');
-    return invoice;
+  get(accountantId: number, id: number): Promise<Invoice> {
+    return findOwnedInvoice(this.invoices, accountantId, id);
+  }
+
+  async xml(accountantId: number, id: number): Promise<string> {
+    return renderInvoiceXml(await this.get(accountantId, id));
   }
 
   async detail(accountantId: number, id: number): Promise<InvoiceDetail> {
     const invoice = await this.get(accountantId, id);
     const remaining =
       invoice.stornoOfInvoiceId === null
-        ? remainingQuantities(invoice, await this.stornosOf(accountantId, id))
+        ? remainingQuantities(
+            invoice,
+            await this.invoices.findBy({ accountantId, stornoOfInvoiceId: id }),
+          )
         : null;
     return Object.assign(invoice, { remainingQuantities: remaining });
   }
@@ -305,9 +184,7 @@ export class InvoicesService {
         'Introduceți cursul de schimb BNR pentru a calcula TVA în RON',
       );
     }
-    if (dto.saveToStorage && !this.store.configured) {
-      throw new BadRequestException(STORAGE_NOT_CONFIGURED);
-    }
+    this.delivery.assertCanDeliver(dto);
 
     const seller = sellerFromCompany(company);
     const lines = normalizeLines(dto.lines, seller.vatPayer, dto.deliveryDate);
@@ -315,273 +192,38 @@ export class InvoicesService {
       dto.currency === 'RON' ? null : (dto.exchangeRate ?? null);
     const computed = computeInvoice(lines, exchangeRate);
 
-    const invoice = await this.saveWithNumber(
-      { companyId: company.id, series: dto.series, number: dto.number },
-      () =>
-        this.invoices.create({
-          accountantId,
-          companyId: company.id,
-          series: dto.series,
-          issueDate: dto.issueDate,
-          deliveryDate: dto.deliveryDate,
-          dueDate: dto.dueDate ?? null,
-          currency: dto.currency,
-          exchangeRate,
-          paymentMethod: dto.paymentMethod,
-          vatOnCollection: seller.vatPayer && company.vatOnCollection === true,
-          seller,
-          buyer: buyerFromDto(dto.buyer),
-          lines: computed.lines,
-          vatBreakdown: computed.totals.breakdown,
-          totalNet: computed.totals.net,
-          totalVat: computed.totals.vat,
-          totalGross: computed.totals.gross,
-          totalVatRon: computed.totals.vatRon,
-          stornoOfInvoiceId: null,
-          stornoOfSeries: null,
-          stornoOfNumber: null,
-          stornoOfIssueDate: null,
-          notes: dto.notes ?? null,
-        }),
+    const invoice = await this.numbering.insert(
+      (invoices) =>
+        Promise.resolve(
+          invoices.create({
+            accountantId,
+            companyId: company.id,
+            series: dto.series,
+            issueDate: dto.issueDate,
+            deliveryDate: dto.deliveryDate,
+            dueDate: dto.dueDate ?? null,
+            currency: dto.currency,
+            exchangeRate,
+            paymentMethod: dto.paymentMethod,
+            vatOnCollection:
+              seller.vatPayer && company.vatOnCollection === true,
+            seller,
+            buyer: buyerFromDto(dto.buyer),
+            lines: computed.lines,
+            vatBreakdown: computed.totals.breakdown,
+            totalNet: computed.totals.net,
+            totalVat: computed.totals.vat,
+            totalGross: computed.totals.gross,
+            totalVatRon: computed.totals.vatRon,
+            stornoOfInvoiceId: null,
+            stornoOfSeries: null,
+            stornoOfNumber: null,
+            stornoOfIssueDate: null,
+            notes: dto.notes ?? null,
+          }),
+        ),
+      dto.number,
     );
-    return this.followUp(invoice, dto);
-  }
-
-  async createStorno(
-    accountantId: number,
-    id: number,
-    dto: CreateStornoDto,
-  ): Promise<CreatedInvoice> {
-    const original = await this.get(accountantId, id);
-    if (original.stornoOfInvoiceId !== null) {
-      throw new BadRequestException(
-        'O factură de stornare nu poate fi stornată',
-      );
-    }
-    if (dto.saveToStorage && !this.store.configured) {
-      throw new BadRequestException(STORAGE_NOT_CONFIGURED);
-    }
-    const issueDate = dto.issueDate ?? bucharestToday();
-    validateInvoiceDates({ issueDate, deliveryDate: issueDate });
-    if (issueDate < original.issueDate) {
-      throw new BadRequestException(
-        'Factura de stornare nu poate fi emisă înaintea facturii stornate',
-      );
-    }
-
-    const remaining = remainingQuantities(
-      original,
-      await this.stornosOf(accountantId, id),
-    );
-    const lines = buildStornoLines(original, remaining, dto.lines);
-    const computed = computeInvoice(lines, original.exchangeRate);
-    const series = dto.series ?? original.series;
-
-    const invoice = await this.saveWithNumber(
-      { companyId: original.companyId, series },
-      () =>
-        this.invoices.create({
-          accountantId,
-          companyId: original.companyId,
-          series,
-          issueDate,
-          deliveryDate: issueDate,
-          dueDate: null,
-          currency: original.currency,
-          exchangeRate: original.exchangeRate,
-          paymentMethod: original.paymentMethod,
-          vatOnCollection: original.vatOnCollection,
-          seller: original.seller,
-          buyer: original.buyer,
-          lines: computed.lines,
-          vatBreakdown: computed.totals.breakdown,
-          totalNet: computed.totals.net,
-          totalVat: computed.totals.vat,
-          totalGross: computed.totals.gross,
-          totalVatRon: computed.totals.vatRon,
-          stornoOfInvoiceId: original.id,
-          stornoOfSeries: original.series,
-          stornoOfNumber: original.number,
-          stornoOfIssueDate: original.issueDate,
-          notes: dto.notes ?? null,
-        }),
-    );
-    return this.followUp(invoice, dto);
-  }
-
-  private stornosOf(accountantId: number, id: number): Promise<Invoice[]> {
-    return this.invoices.findBy({ accountantId, stornoOfInvoiceId: id });
-  }
-
-  private async followUp(
-    invoice: Invoice,
-    options: { saveToStorage?: boolean; sendToEmail?: string | null },
-  ): Promise<CreatedInvoice> {
-    let storageError: string | null = null;
-    let emailError: string | null = null;
-    if (options.saveToStorage || options.sendToEmail) {
-      const pdf = await this.renderPdf(invoice);
-      if (options.saveToStorage) {
-        storageError = await this.attempt(
-          () => this.putInStorage(invoice, pdf),
-          'Factura a fost creată, dar nu a putut fi salvată în Storage. Reîncercați din listă.',
-        );
-      }
-      if (options.sendToEmail) {
-        const to = options.sendToEmail;
-        emailError = await this.attempt(
-          () => this.mailAndRecord(invoice, to, pdf),
-          'Factura a fost creată, dar emailul nu a putut fi trimis. Reîncercați din listă.',
-        );
-      }
-    }
-    return { invoice, storageError, emailError };
-  }
-
-  async download(accountantId: number, id: number): Promise<InvoiceFile> {
-    const invoice = await this.get(accountantId, id);
-    return {
-      content: await this.pdfFor(invoice),
-      contentType: 'application/pdf',
-      filename: invoiceFilename(invoice.series, invoice.number),
-    };
-  }
-
-  async downloadXml(accountantId: number, id: number): Promise<InvoiceFile> {
-    const invoice = await this.get(accountantId, id);
-    return {
-      content: renderInvoiceXml(invoice),
-      contentType: 'application/xml',
-      filename: invoiceFilename(invoice.series, invoice.number).replace(
-        /\.pdf$/,
-        '.xml',
-      ),
-    };
-  }
-
-  async saveToStorage(accountantId: number, id: number): Promise<Invoice> {
-    if (!this.store.configured) {
-      throw new BadRequestException(STORAGE_NOT_CONFIGURED);
-    }
-    const invoice = await this.get(accountantId, id);
-    await this.putInStorage(invoice, await this.renderPdf(invoice));
-    return invoice;
-  }
-
-  async send(
-    accountantId: number,
-    id: number,
-    to: string | null | undefined,
-  ): Promise<Invoice> {
-    const invoice = await this.get(accountantId, id);
-    const recipient = to ?? invoice.buyer.email;
-    if (!recipient) {
-      throw new BadRequestException(
-        'Introduceți adresa de email a destinatarului',
-      );
-    }
-    try {
-      await this.mailAndRecord(invoice, recipient, await this.pdfFor(invoice));
-    } catch (err) {
-      if (err instanceof BadGatewayException) throw err;
-      throw new BadGatewayException(
-        'Emailul nu a putut fi trimis. Verificați adresa și reîncercați.',
-      );
-    }
-    return invoice;
-  }
-
-  private async saveWithNumber(
-    target: { companyId: number; series: string; number?: number },
-    build: () => Invoice,
-  ): Promise<Invoice> {
-    for (let attempt = 1; ; attempt++) {
-      const invoice = build();
-      invoice.number =
-        target.number ??
-        ((await this.invoices.maximum('number', {
-          companyId: target.companyId,
-          series: target.series,
-        })) ?? 0) + 1;
-      try {
-        return await this.invoices.save(invoice);
-      } catch (err) {
-        if (!isUniqueViolation(err)) throw err;
-        if (target.number !== undefined || attempt >= NUMBER_RETRIES) {
-          throw new ConflictException(
-            `Factura ${target.series} ${invoice.number} există deja pentru această firmă`,
-          );
-        }
-      }
-    }
-  }
-
-  private async logoFor(invoice: Invoice): Promise<InvoiceLogo | null> {
-    try {
-      return await this.companies.getLogo(
-        invoice.accountantId,
-        invoice.companyId,
-      );
-    } catch (err) {
-      if (err instanceof NotFoundException) return null;
-      throw err;
-    }
-  }
-
-  private async renderPdf(invoice: Invoice): Promise<Buffer> {
-    return renderInvoicePdf(invoice, await this.logoFor(invoice));
-  }
-
-  private async pdfFor(invoice: Invoice): Promise<Buffer> {
-    if (invoice.storagePath && this.store.configured) {
-      try {
-        return await this.store.get(invoice.storagePath);
-      } catch (err) {
-        this.logger.warn(
-          `Invoice ${invoice.id} not read from storage, regenerating: ${(err as Error).message}`,
-        );
-      }
-    }
-    return this.renderPdf(invoice);
-  }
-
-  private async putInStorage(invoice: Invoice, pdf: Buffer): Promise<void> {
-    const path = this.store.pathFor(
-      invoice.accountantId,
-      invoice.companyId,
-      invoice.series,
-      invoice.number,
-    );
-    await this.store.put(path, pdf);
-    await this.invoices.update({ id: invoice.id }, { storagePath: path });
-    invoice.storagePath = path;
-  }
-
-  private async mailAndRecord(
-    invoice: Invoice,
-    to: string,
-    pdf: Buffer,
-  ): Promise<void> {
-    await this.mailer.send(invoice, to, pdf);
-    const emailedAt = new Date();
-    await this.invoices.update(
-      { id: invoice.id },
-      { emailedTo: to, emailedAt },
-    );
-    invoice.emailedTo = to;
-    invoice.emailedAt = emailedAt;
-  }
-
-  private async attempt(
-    action: () => Promise<void>,
-    failure: string,
-  ): Promise<string | null> {
-    try {
-      await action();
-      return null;
-    } catch (err) {
-      this.logger.warn(`Invoice follow-up failed: ${(err as Error).message}`);
-      return failure;
-    }
+    return this.delivery.deliverNew(invoice, dto);
   }
 }

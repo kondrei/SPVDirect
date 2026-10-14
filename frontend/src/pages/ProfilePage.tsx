@@ -1,11 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import {
-  useCaen,
-  useChangePassword,
-  useFirmLookup,
-  useProfile,
-  useUpdateProfile,
-} from '../api/hooks';
+import { useCaen, useChangePassword, useFirmLookup, useProfile, useUpdateProfile } from '../api/hooks/profile';
 import type { AccountantProfile, ProfessionalTitle } from '../api/types';
 import { CaenName } from '../components/CaenName';
 import { PageHead } from '../components/PageHead';
@@ -13,6 +7,7 @@ import { QueryError } from '../components/QueryError';
 import { Alert, Button, Card, TextField } from '../components/ui';
 import { formatDate, isValidCui, normalizeCui } from '../lib/format';
 import { MIN_PASSWORD } from '../common/constants';
+import { SelectField } from '../components/SelectField';
 
 const PROFESSIONAL_TITLES: Record<ProfessionalTitle, string> = {
   expert_contabil: 'Expert contabil',
@@ -213,41 +208,20 @@ function ProfileForm({ profile }: { profile: AccountantProfile }) {
           {form.ceccarMember ? (
             <>
               <div className="form-row">
-                <div
-                  className={
-                    show(errors.professionalTitle)
-                      ? 'spv-field spv-field-invalid'
-                      : 'spv-field'
-                  }
+                <SelectField
+                  id="title-select"
+                  label="Calitate profesională"
+                  value={form.professionalTitle}
+                  onChange={set('professionalTitle')}
+                  error={show(errors.professionalTitle)}
                 >
-                  <label className="spv-field-label" htmlFor="title-select">
-                    Calitate profesională
-                  </label>
-                  <select
-                    id="title-select"
-                    className="spv-input"
-                    value={form.professionalTitle}
-                    onChange={set('professionalTitle')}
-                    aria-invalid={
-                      show(errors.professionalTitle) ? true : undefined
-                    }
-                    aria-describedby={
-                      show(errors.professionalTitle) ? 'title-hint' : undefined
-                    }
-                  >
-                    <option value="">Alegeți…</option>
-                    {Object.entries(PROFESSIONAL_TITLES).map(([v, label]) => (
-                      <option key={v} value={v}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                  {show(errors.professionalTitle) ? (
-                    <div id="title-hint" className="spv-field-hint">
-                      {errors.professionalTitle}
-                    </div>
-                  ) : null}
-                </div>
+                  <option value="">Alegeți…</option>
+                  {Object.entries(PROFESSIONAL_TITLES).map(([v, label]) => (
+                    <option key={v} value={v}>
+                      {label}
+                    </option>
+                  ))}
+                </SelectField>
                 <TextField
                   label="Nr. legitimație CECCAR"
                   mono

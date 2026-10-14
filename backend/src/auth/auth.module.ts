@@ -11,6 +11,7 @@ import { AuthService } from './services/auth.service.js';
 import { BannedEmail } from './banned-email.entity.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { RecaptchaService } from './services/recaptcha.service.js';
+import { SessionCookieService } from './services/session-cookie.service.js';
 import { AdminApprovalRetryJob } from './registrations/admin-approval-retry.job.js';
 import { RegisterAccountantHandler } from './registrations/register-accountant.handler.js';
 import {
@@ -39,6 +40,7 @@ import { ResendAdminApprovalHandler } from './registrations/resend-admin-approva
   controllers: [AuthController, RegistrationsController],
   providers: [
     AuthService,
+    SessionCookieService,
     JwtAuthGuard,
     RecaptchaService,
     RegistrationsService,
@@ -49,6 +51,6 @@ import { ResendAdminApprovalHandler } from './registrations/resend-admin-approva
     ResendAdminApprovalHandler,
     AdminApprovalRetryJob,
   ],
-  exports: [JwtModule, JwtAuthGuard, AuthService],
+  exports: [JwtModule, JwtAuthGuard, AuthService, SessionCookieService],
 })
 export class AuthModule {}

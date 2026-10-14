@@ -11,7 +11,10 @@ import { hashPassword, verifyPassword } from '../../common/crypto/password.js';
 import { AnafCompanyLookupService } from '../../companies/services/anaf-company-lookup.service.js';
 import { CUI_NOT_FOUND } from '../../companies/services/companies.service.js';
 import { Accountant } from '../accountant.entity.js';
-import type { ChangePasswordDto, UpdateProfileDto } from '../dto/profile.dto.js';
+import type {
+  ChangePasswordDto,
+  UpdateProfileDto,
+} from '../dto/profile.dto.js';
 
 export function toProfile(a: Accountant, firmCaen: CaenInfo | null) {
   return {

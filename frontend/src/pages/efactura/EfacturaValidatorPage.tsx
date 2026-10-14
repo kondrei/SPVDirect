@@ -1,12 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { detailsOf } from '../../api/client';
-import {
-  useCompanies,
-  useInvoices,
-  useTransformXml,
-  useValidateInvoice,
-  useValidateXml,
-} from '../../api/hooks';
+import { useCompanies } from '../../api/hooks/companies';
+import { useInvoices } from '../../api/hooks/invoices';
+import { useTransformXml, useValidateInvoice, useValidateXml } from '../../api/hooks/efactura';
 import { ErrorLog } from '../../components/ErrorLog';
 import { PageHead } from '../../components/PageHead';
 import { SelectField } from '../../components/SelectField';

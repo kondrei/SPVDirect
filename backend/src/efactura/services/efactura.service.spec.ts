@@ -14,7 +14,13 @@ import type { CompaniesService } from '../../companies/services/companies.servic
 import type { InvoicesService } from '../../invoices/services/invoices.service.js';
 import { sampleInvoice } from '../../testing/invoice-fixtures.js';
 import type { EfacturaUpload } from '../efactura-upload.entity.js';
-import { EfacturaService, NO_CERTIFICATE } from './efactura.service.js';
+import { QueryFailedError } from 'typeorm';
+import { EfacturaValidator } from './efactura-validator.service.js';
+import {
+  EfacturaService,
+  NO_CERTIFICATE,
+  STALE_SENDING_MS,
+} from './efactura.service.js';
 
 const CONNECTION = '11111111-1111-4111-8111-111111111111';
 const COMPANY = {
@@ -54,7 +60,8 @@ function upload(overrides: Partial<EfacturaUpload> = {}): EfacturaUpload {
 
 function setup({ company = COMPANY }: { company?: Company } = {}) {
   const api = {
-    envPath: vi.fn((p: string) => `/test${p}`),
+    environment: vi.fn(() => 'test'),
+    envPath: vi.fn((p: string, env = 'test') => `/${env}${p}`),
     request: vi.fn().mockResolvedValue({ status: 200, data: accepted }),
   };
   const http = {
@@ -74,7 +81,7 @@ function setup({ company = COMPANY }: { company?: Company } = {}) {
   const companies = { get: vi.fn().mockResolvedValue(company) };
   const invoices = {
     get: vi.fn().mockResolvedValue(sampleInvoice({ companyId: 7 })),
-    downloadXml: vi.fn().mockResolvedValue({ content: '<Invoice/>' }),
+    xml: vi.fn().mockResolvedValue('<Invoice/>'),
   };
   const uploads = {
     create: vi.fn((d: Partial<EfacturaUpload>) => ({ ...d })),
@@ -82,19 +89,40 @@ function setup({ company = COMPANY }: { company?: Company } = {}) {
       Promise.resolve(Object.assign({ id: 5 }, u)),
     ),
     findOne: vi.fn().mockResolvedValue(null),
+    find: vi.fn().mockResolvedValue([]),
+    delete: vi.fn().mockResolvedValue({ affected: 1 }),
+    update: vi.fn().mockResolvedValue({ affected: 1 }),
     findOneBy: vi.fn().mockResolvedValue(upload()),
     findAndCount: vi.fn().mockResolvedValue([[upload()], 1]),
   };
-  const service = new EfacturaService(
-    api as unknown as AnafApiService,
+  const validator = new EfacturaValidator(
     config as unknown as ConfigService,
     http as unknown as HttpService,
     apiLogs as unknown as ApiLogsService,
+  );
+  const service = new EfacturaService(
+    api as unknown as AnafApiService,
+    validator,
     companies as unknown as CompaniesService,
     invoices as unknown as InvoicesService,
     uploads as unknown as Repository<EfacturaUpload>,
   );
-  return { service, api, http, apiLogs, companies, invoices, uploads };
+  return {
+    service,
+    validator,
+    api,
+    http,
+    apiLogs,
+    companies,
+    invoices,
+    uploads,
+  };
+}
+
+function uniqueViolation() {
+  return new QueryFailedError('INSERT', [], {
+    code: '23505',
+  } as unknown as Error);
 }
 
 const input = {
@@ -175,9 +203,9 @@ describe('EfacturaService.upload', () => {
 
   it('refuses an empty or oversized file before calling ANAF', async () => {
     const { service, api } = setup();
-    await expect(service.upload(1, { ...input, xml: '  ' })).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+    await expect(
+      service.upload(1, { ...input, xml: '  ' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
     await expect(
       service.upload(1, { ...input, xml: 'x'.repeat(10 * 1024 * 1024 + 1) }),
     ).rejects.toBeInstanceOf(BadRequestException);
@@ -219,17 +247,68 @@ describe('EfacturaService.uploadInvoice', () => {
     expect(api.request).toHaveBeenCalledOnce();
   });
 
-  it.each(['processing', 'ok'] as const)(
+  it.each(['sending', 'processing', 'ok'] as const)(
     'refuses an invoice that is already %s at ANAF',
     async (status) => {
       const { service, uploads, api } = setup();
-      uploads.findOne.mockResolvedValue(upload({ invoiceId: 3, status }));
+      uploads.save.mockRejectedValueOnce(uniqueViolation());
+      uploads.findOne.mockResolvedValue(
+        upload({ invoiceId: 3, status, createdAt: new Date() }),
+      );
       await expect(service.uploadInvoice(1, 3)).rejects.toBeInstanceOf(
         ConflictException,
       );
       expect(api.request).not.toHaveBeenCalled();
     },
   );
+
+  it('claims the invoice with a sending row before validating or uploading', async () => {
+    const { service, uploads, http, api } = setup();
+    await service.uploadInvoice(1, 3);
+    expect(uploads.create).toHaveBeenCalledWith(
+      expect.objectContaining({ invoiceId: 3, status: 'sending' }),
+    );
+    expect(uploads.save.mock.invocationCallOrder[0]).toBeLessThan(
+      http.axiosRef.post.mock.invocationCallOrder[0],
+    );
+    expect(uploads.save.mock.invocationCallOrder[0]).toBeLessThan(
+      api.request.mock.invocationCallOrder[0],
+    );
+    expect(uploads.save).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'processing', uploadIndex: '3828' }),
+    );
+  });
+
+  it('releases the claim when the invoice cannot be sent', async () => {
+    const { service, uploads, http } = setup();
+    http.axiosRef.post.mockResolvedValue({
+      status: 200,
+      data: { stare: 'nok', Messages: [{ message: 'BR-CO-09' }] },
+    });
+    await expect(service.uploadInvoice(1, 3)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(uploads.delete).toHaveBeenCalledWith({ id: 5, status: 'sending' });
+  });
+
+  it('takes over a claim left behind by an interrupted send', async () => {
+    const { service, uploads, api } = setup();
+    uploads.save.mockRejectedValueOnce(uniqueViolation());
+    uploads.findOne.mockResolvedValue(
+      upload({
+        id: 4,
+        invoiceId: 3,
+        status: 'sending',
+        createdAt: new Date(Date.now() - STALE_SENDING_MS - 1000),
+      }),
+    );
+    await service.uploadInvoice(1, 3);
+    expect(uploads.update).toHaveBeenCalledWith(
+      { id: 4, status: 'sending' },
+      expect.objectContaining({ status: 'rejected' }),
+    );
+    expect(api.request).toHaveBeenCalledOnce();
+  });
 });
 
 describe('EfacturaService.refresh', () => {
@@ -438,10 +517,10 @@ describe('EfacturaService.downloadMessage', () => {
   });
 });
 
-describe('EfacturaService.validate', () => {
+describe('EfacturaValidator.validate', () => {
   it('returns valid with the trace id', async () => {
-    const { service, http, apiLogs } = setup();
-    expect(await service.validate(1, '<Invoice/>')).toEqual({
+    const { validator, http, apiLogs } = setup();
+    expect(await validator.validate(1, '<Invoice/>')).toEqual({
       valid: true,
       messages: [],
       traceId: 't-1',
@@ -464,36 +543,36 @@ describe('EfacturaService.validate', () => {
   });
 
   it('returns the schematron messages when invalid', async () => {
-    const { service, http } = setup();
+    const { validator, http } = setup();
     http.axiosRef.post.mockResolvedValue({
       status: 200,
       data: { stare: 'nok', Messages: [{ message: 'E: BR-RO-110' }, {}] },
     });
-    expect(await service.validate(1, '<Invoice/>', 'FCN')).toMatchObject({
+    expect(await validator.validate(1, '<Invoice/>', 'FCN')).toMatchObject({
       valid: false,
       messages: ['E: BR-RO-110'],
     });
   });
 
   it('answers 502 when the validator is unreachable or answers nonsense', async () => {
-    const { service, http } = setup();
+    const { validator, http } = setup();
     http.axiosRef.post.mockRejectedValue(new Error('timeout'));
-    await expect(service.validate(1, '<a/>')).rejects.toBeInstanceOf(
+    await expect(validator.validate(1, '<a/>')).rejects.toBeInstanceOf(
       BadGatewayException,
     );
     http.axiosRef.post.mockResolvedValue({ status: 500, data: '<html/>' });
-    await expect(service.validate(1, '<a/>')).rejects.toBeInstanceOf(
+    await expect(validator.validate(1, '<a/>')).rejects.toBeInstanceOf(
       BadGatewayException,
     );
   });
 
   it('answers 400 for an unknown standard (404 from ANAF)', async () => {
-    const { service, http } = setup();
+    const { validator, http } = setup();
     http.axiosRef.post.mockResolvedValue({
       status: 404,
       data: { message: 'Standard necunoscut' },
     });
-    await expect(service.validate(1, '<a/>')).rejects.toThrow(
+    await expect(validator.validate(1, '<a/>')).rejects.toThrow(
       'Standard necunoscut',
     );
   });
@@ -501,17 +580,17 @@ describe('EfacturaService.validate', () => {
   it('validates a stored invoice', async () => {
     const { service, invoices } = setup();
     expect((await service.validateInvoice(1, 3)).valid).toBe(true);
-    expect(invoices.downloadXml).toHaveBeenCalledWith(1, 3);
+    expect(invoices.xml).toHaveBeenCalledWith(1, 3);
   });
 });
 
-describe('EfacturaService.transform', () => {
+describe('EfacturaValidator.transform', () => {
   const pdf = Buffer.from('%PDF-1.7 …');
 
   it('returns the PDF', async () => {
-    const { service, http } = setup();
+    const { validator, http } = setup();
     http.axiosRef.post.mockResolvedValue({ status: 200, data: pdf });
-    const file = await service.transform(1, '<Invoice/>');
+    const file = await validator.transform(1, '<Invoice/>');
     expect(file.contentType).toBe('application/pdf');
     expect(http.axiosRef.post).toHaveBeenCalledWith(
       'https://validator.example/prod/FCTEL/rest/transformare/FACT1',
@@ -521,9 +600,9 @@ describe('EfacturaService.transform', () => {
   });
 
   it('skips validation with /DA', async () => {
-    const { service, http } = setup();
+    const { validator, http } = setup();
     http.axiosRef.post.mockResolvedValue({ status: 200, data: pdf });
-    await service.transform(1, '<Invoice/>', 'FCN', true);
+    await validator.transform(1, '<Invoice/>', 'FCN', true);
     expect(http.axiosRef.post).toHaveBeenCalledWith(
       'https://validator.example/prod/FCTEL/rest/transformare/FCN/DA',
       '<Invoice/>',
@@ -532,14 +611,14 @@ describe('EfacturaService.transform', () => {
   });
 
   it('explains why an invalid XML cannot be transformed', async () => {
-    const { service, http } = setup();
+    const { validator, http } = setup();
     http.axiosRef.post.mockResolvedValue({
       status: 200,
       data: Buffer.from(
         JSON.stringify({ stare: 'nok', Messages: [{ message: 'E: BR-01' }] }),
       ),
     });
-    await expect(service.transform(1, '<Invoice/>')).rejects.toMatchObject({
+    await expect(validator.transform(1, '<Invoice/>')).rejects.toMatchObject({
       response: { errors: ['E: BR-01'] },
     });
   });
@@ -560,5 +639,28 @@ describe('EfacturaService.list', () => {
       take: 10,
     });
     expect(page).toMatchObject({ total: 1, page: 2, pageSize: 10 });
+  });
+});
+
+describe('EfacturaService.latestForInvoices', () => {
+  it('returns the newest upload of each invoice', async () => {
+    const { service, uploads } = setup();
+    uploads.find.mockResolvedValue([
+      upload({ id: 9, invoiceId: 3, status: 'ok' }),
+      upload({ id: 8, invoiceId: 4, status: 'nok' }),
+      upload({ id: 7, invoiceId: 3, status: 'nok' }),
+    ]);
+    const latest = await service.latestForInvoices(1, [3, 4]);
+    expect(latest.map((u) => u.id)).toEqual([9, 8]);
+    expect(uploads.find).toHaveBeenCalledWith({
+      where: { accountantId: 1, invoiceId: expect.anything() },
+      order: { id: 'DESC' },
+    });
+  });
+
+  it('does not query for an empty list', async () => {
+    const { service, uploads } = setup();
+    await expect(service.latestForInvoices(1, [])).resolves.toEqual([]);
+    expect(uploads.find).not.toHaveBeenCalled();
   });
 });

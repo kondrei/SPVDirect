@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useSendInvoice } from '../../api/hooks';
+import { useSendInvoice } from '../../api/hooks/invoices';
 import type { InvoiceSummary } from '../../api/types';
 import { invoiceNumber } from '../../lib/invoice';
 import { Alert, Button, Card, TextField } from '../ui';

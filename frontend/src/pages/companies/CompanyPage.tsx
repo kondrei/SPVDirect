@@ -1,13 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import {
-  useCompany,
-  useConnections,
-  useConnectUrl,
-  useCreateAuthorizationLink,
-  useDeleteCompany,
-  useUpdateCompany,
-} from '../../api/hooks';
+import { useCompany, useCreateAuthorizationLink, useDeleteCompany, useUpdateCompany } from '../../api/hooks/companies';
+import { useConnections, useConnectUrl } from '../../api/hooks/connections';
 import { ApiError } from '../../api/client';
 import { AnafDataCard } from '../../components/AnafDataCard';
 import { ConfirmButton } from '../../components/ConfirmButton';
@@ -37,6 +31,7 @@ import {
   formatDateTime,
   groupSerial,
 } from '../../lib/format';
+import { SelectField } from '../../components/SelectField';
 
 function CertificateCard({
   companyId,
@@ -97,24 +92,19 @@ function CertificateCard({
         ) : null}
         {usable.length ? (
           <div className="form-row">
-            <div className="spv-field">
-              <label className="spv-field-label" htmlFor="cert-select">
-                {conn ? 'Schimbă certificatul' : 'Alege un certificat'}
-              </label>
-              <select
-                id="cert-select"
-                className="spv-input"
-                value={choice}
-                onChange={(e) => setChoice(e.target.value)}
-              >
-                <option value="">Fără certificat</option>
-                {usable.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.label} · {groupSerial(c.certSerial)}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <SelectField
+              id="cert-select"
+              label={conn ? 'Schimbă certificatul' : 'Alege un certificat'}
+              value={choice}
+              onChange={(e) => setChoice(e.target.value)}
+            >
+              <option value="">Fără certificat</option>
+              {usable.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label} · {groupSerial(c.certSerial)}
+                </option>
+              ))}
+            </SelectField>
             <Button
               variant="primary"
               disabled={choice === (current ?? '')}
