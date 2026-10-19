@@ -45,7 +45,7 @@ export class AnafAuthorizationService {
     if (!(await this.links.claim(lookup.link.id))) {
       return { kind: 'link-invalid', reason: 'used' };
     }
-    let connectionId: string;
+    let connectionId: number;
     try {
       connectionId = (
         await this.oauth.saveConnection(

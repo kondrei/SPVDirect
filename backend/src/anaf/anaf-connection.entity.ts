@@ -13,8 +13,12 @@ export type AnafConnectionSource = 'self' | 'link';
 @Entity('anaf_connections')
 @Unique('uq_anaf_connections_accountant_serial', ['accountantId', 'certSerial'])
 export class AnafConnection {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryGeneratedColumn('identity', {
+    type: 'integer',
+    generatedIdentity: 'ALWAYS',
+    primaryKeyConstraintName: 'anaf_connections_pkey',
+  })
+  id: number;
 
   @Column({ name: 'accountant_id', type: 'integer' })
   accountantId: number;

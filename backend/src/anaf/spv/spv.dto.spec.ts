@@ -50,6 +50,40 @@ describe('CreateSpvRequestDto', () => {
   it('requires tip', () => {
     expect(errors(CreateSpvRequestDto, { cui: '123456' })).toContain('tip');
   });
+
+  it.each(['Fisa Rol', 'Adeverinte Venit', 'DATE IDENTIFICARE', 'D112Contrib'])(
+    'accepts the ANAF request type %s',
+    (tip) => {
+      expect(errors(CreateSpvRequestDto, { tip, cui: '123456' })).toEqual([]);
+    },
+  );
+
+  it.each(['X1', 'd300', 'Fisa rol', 'CAF', 'NeconcordanteD394'])(
+    'rejects the unknown request type %s',
+    (tip) => {
+      expect(errors(CreateSpvRequestDto, { tip, cui: '123456' })).toEqual([
+        'tip',
+      ]);
+    },
+  );
+
+  it('accepts only the exact ANAF reasons for an income certificate', () => {
+    expect(
+      errors(CreateSpvRequestDto, {
+        tip: 'Adeverinte Venit',
+        cui: '1111111111118',
+        an: 2025,
+        motiv: 'Institutie financiar bancara asigurare etc.',
+      }),
+    ).toEqual([]);
+    expect(
+      errors(CreateSpvRequestDto, {
+        tip: 'Adeverinte Venit',
+        cui: '1111111111118',
+        motiv: 'banca',
+      }),
+    ).toEqual(['motiv']);
+  });
 });
 
 describe('ParseSpvMessageIdPipe', () => {

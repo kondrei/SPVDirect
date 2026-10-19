@@ -51,11 +51,11 @@ export class AuthorizationLinksService {
     return this.check(link);
   }
 
-  async findById(id: string): Promise<LinkLookup> {
+  async findById(id: number): Promise<LinkLookup> {
     return this.check(await this.links.findOneBy({ id }));
   }
 
-  async claim(linkId: string): Promise<boolean> {
+  async claim(linkId: number): Promise<boolean> {
     const result = await this.links.update(
       { id: linkId, usedAt: IsNull() },
       { usedAt: new Date() },
@@ -63,14 +63,14 @@ export class AuthorizationLinksService {
     return (result.affected ?? 0) > 0;
   }
 
-  async release(linkId: string): Promise<void> {
+  async release(linkId: number): Promise<void> {
     await this.links.update(
       { id: linkId, anafConnectionId: IsNull() },
       { usedAt: null },
     );
   }
 
-  async attachConnection(linkId: string, connectionId: string): Promise<void> {
+  async attachConnection(linkId: number, connectionId: number): Promise<void> {
     await this.links.update({ id: linkId }, { anafConnectionId: connectionId });
   }
 

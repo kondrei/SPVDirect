@@ -29,7 +29,7 @@ export function useRenameConnection() {
   const qc = useQueryClient();
   const path = useConnectionsPath();
   return useMutation({
-    mutationFn: ({ id, label }: { id: string; label: string }) =>
+    mutationFn: ({ id, label }: { id: number; label: string }) =>
       api<AnafConnection>(`${requirePath(path)}/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         json: { label },
@@ -42,7 +42,7 @@ export function useDeleteConnection() {
   const qc = useQueryClient();
   const path = useConnectionsPath();
   return useMutation({
-    mutationFn: (id: string) =>
+    mutationFn: (id: number) =>
       api<void>(`${requirePath(path)}/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       }),
@@ -56,7 +56,7 @@ export function useDeleteConnection() {
 export function useTestConnection() {
   const path = useConnectionsPath();
   return useMutation({
-    mutationFn: (id: string) =>
+    mutationFn: (id: number) =>
       api<ConnectionTestResult>(
         `${requirePath(path)}/${encodeURIComponent(id)}/test`,
       ),

@@ -97,6 +97,7 @@ export class CompaniesController {
   }
 
   @Patch(':id')
+  @Throttle(ANAF_LOOKUP_THROTTLE)
   async update(
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseIdPipe) id: number,

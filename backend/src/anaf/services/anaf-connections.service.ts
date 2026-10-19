@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AnafConnection } from '../anaf-connection.entity.js';
+import { redactBearerTokens } from '../redact-bearer.js';
 import { AnafApiService } from './anaf-api.service.js';
 import { AnafOAuthService } from './anaf-oauth.service.js';
 
@@ -28,7 +29,7 @@ export class AnafConnectionsService {
 
   async rename(
     accountantId: number,
-    id: string,
+    id: number,
     label: string,
   ): Promise<AnafConnection> {
     const connection = await this.get(accountantId, id);
@@ -36,13 +37,13 @@ export class AnafConnectionsService {
     return this.connections.save(connection);
   }
 
-  async remove(accountantId: number, id: string): Promise<void> {
+  async remove(accountantId: number, id: number): Promise<void> {
     const connection = await this.get(accountantId, id);
     await this.oauth.revokeConnection(connection.id);
     await this.connections.remove(connection);
   }
 
-  async test(accountantId: number, id: string): Promise<ConnectionTestResult> {
+  async test(accountantId: number, id: number): Promise<ConnectionTestResult> {
     const res = await this.api.request<string>({
       accountantId,
       connectionId: id,
@@ -51,10 +52,10 @@ export class AnafConnectionsService {
       params: { name: 'SPVDirect' },
       responseType: 'text',
     });
-    return { status: res.status, body: res.data };
+    return { status: res.status, body: redactBearerTokens(res.data) };
   }
 
-  private async get(accountantId: number, id: string): Promise<AnafConnection> {
+  private async get(accountantId: number, id: number): Promise<AnafConnection> {
     const connection = await this.connections.findOneBy({ id, accountantId });
     if (!connection) throw new NotFoundException('Conexiune ANAF inexistentă');
     return connection;

@@ -86,12 +86,12 @@ export interface MessageList {
 interface CertifiedCompany {
   id: number;
   cui: string;
-  connectionId: string;
+  connectionId: number;
 }
 
 interface AnafTarget {
   accountantId: number;
-  connectionId: string;
+  connectionId: number;
   companyId: number;
 }
 

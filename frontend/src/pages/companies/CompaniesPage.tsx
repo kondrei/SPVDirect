@@ -127,13 +127,19 @@ function BulkResults({
 
 type FileNote = { tone: 'info' | 'danger'; message: string };
 
-function AddCompanyForm({ onDone }: { onDone: () => void }) {
+function AddCompanyForm({
+  initial = '',
+  onDone,
+}: {
+  initial?: string;
+  onDone: () => void;
+}) {
   const create = useCreateCompany();
   const createMany = useCreateCompanies();
   const navigate = useNavigate();
   const appPath = useAppPath();
   const fileInput = useRef<HTMLInputElement>(null);
-  const [text, setText] = useState('');
+  const [text, setText] = useState(initial);
   const [touched, setTouched] = useState(false);
   const [fileNote, setFileNote] = useState<FileNote | null>(null);
   const { cuis } = parseCuiList(text);
@@ -313,7 +319,12 @@ export function CompaniesPage() {
           ) : undefined
         }
       />
-      {adding ? <AddCompanyForm onDone={() => setAdding(false)} /> : null}
+      {adding ? (
+        <AddCompanyForm
+          initial={parseCuiList(params.get('cuis') ?? '').cuis.join(', ')}
+          onDone={() => setAdding(false)}
+        />
+      ) : null}
       {companies.isError ? (
         <QueryError error={companies.error} retry={() => companies.refetch()} />
       ) : null}

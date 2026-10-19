@@ -27,15 +27,15 @@ describe('AnafConnectionsController', () => {
       service as unknown as AnafConnectionsService,
     );
     await controller.list(4);
-    await controller.update(4, 'c', { label: 'Nou' });
-    await controller.remove(4, 'c');
-    await expect(controller.test(4, 'c')).resolves.toEqual({
+    await controller.update(4, 9, { label: 'Nou' });
+    await controller.remove(4, 9);
+    await expect(controller.test(4, 9)).resolves.toEqual({
       status: 200,
       body: 'ok',
     });
     expect(service.list).toHaveBeenCalledWith(4);
-    expect(service.rename).toHaveBeenCalledWith(4, 'c', 'Nou');
-    expect(service.remove).toHaveBeenCalledWith(4, 'c');
-    expect(service.test).toHaveBeenCalledWith(4, 'c');
+    expect(service.rename).toHaveBeenCalledWith(4, 9, 'Nou');
+    expect(service.remove).toHaveBeenCalledWith(4, 9);
+    expect(service.test).toHaveBeenCalledWith(4, 9);
   });
 });

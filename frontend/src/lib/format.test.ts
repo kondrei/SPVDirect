@@ -97,6 +97,10 @@ describe('Romanian formatting', () => {
   });
   it('groups serials in fours', () =>
     expect(groupSerial('4C000012A9F3')).toBe('4C00 0012 A9F3'));
+  it('drops the colons ANAF puts in certificate serials', () =>
+    expect(groupSerial('26:21:74:2f:03:3c:00:99:b8:30:3a:0e')).toBe(
+      '2621 742F 033C 0099 B830 3A0E',
+    ));
   it('formats ANAF calendar dates and leaves other text alone', () => {
     expect(formatIsoDate('2010-02-01')).toBe('01.02.2010');
     expect(formatIsoDate('INREGISTRAT din data 27.01.1993')).toBe(

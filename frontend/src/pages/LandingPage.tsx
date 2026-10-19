@@ -84,10 +84,10 @@ const FEATURES: Feature[] = [
   {
     icon: 'download',
     title: 'Mesaje SPV',
-    text: 'Sincronizați mesajele din Spațiul Privat Virtual pentru toate firmele, într-o arhivă comună.',
+    text: 'Mesajele din Spațiul Privat Virtual salvate pentru toate firmele, într-o arhivă comună.',
     points: [
-      'Filtrare după firmă, CIF și tipul mesajului',
-      'Descărcarea documentelor primite de la ANAF',
+      'Filtrare după CIF',
+      'Descărcarea documentelor salvate',
       'Cereri de documente către ANAF, direct din aplicație',
     ],
   },

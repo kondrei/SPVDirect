@@ -1,8 +1,31 @@
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { useConnections } from '../api/hooks/connections';
-import { useCreateSpvRequest, useDownloadSpvMessage, useSpvArchive, useSyncSpv, type SpvArchiveQuery } from '../api/hooks/spv';
-import type { ArchivedSpvMessage } from '../api/types';
-import { MAX_SPV_DAYS, SPV_PAGE_SIZE } from '../common/constants';
+import {
+  useCreateSpvRequest,
+  useDownloadSpvMessage,
+  useImportSpvMessages,
+  useSpvArchive,
+  useUploadSpvDocument,
+  type SpvArchiveQuery,
+} from '../api/hooks/spv';
+import type { ArchivedSpvMessage, SpvImportSummary } from '../api/types';
+import {
+  ANAF_SPV_WEB_URL,
+  MAX_BULK_CUIS,
+  MAX_SPV_DAYS,
+  MAX_SPV_IMPORT_BYTES,
+  MAX_SPV_PDF_BYTES,
+  SPV_PAGE_SIZE,
+} from '../common/constants';
+import {
+  SPV_INCOME_REASONS,
+  SPV_REQUEST_TYPES,
+  spvRequestError,
+  spvRequestPayload,
+  spvRequestType,
+  usesField,
+  type SpvRequestField,
+} from '../common/spvRequests';
 import { EmptyState } from '../components/EmptyState';
 import { PageHead } from '../components/PageHead';
 import { QueryError } from '../components/QueryError';
@@ -10,33 +33,28 @@ import {
   Alert,
   Badge,
   Button,
+  ButtonAnchor,
+  ButtonLink,
   Card,
   DataTable,
   StatusBadge,
+  TextAreaField,
   TextField,
   type Column,
 } from '../components/ui';
-import { connectionStatus, groupSerial, normalizeCui } from '../lib/format';
+import { useAppPath } from '../hooks/useAppPath';
+import {
+  connectionStatus,
+  groupSerial,
+  normalizeCui,
+  plural,
+} from '../lib/format';
 import { SelectField } from '../components/SelectField';
-
-export const SPV_REQUEST_TYPES = [
-  'D100',
-  'D101',
-  'D112',
-  'D112Contrib',
-  'D300',
-  'D390',
-  'D394',
-  'Istoric bilant',
-  'Fisa Rol',
-  'Adeverinte Venit',
-  'Obligatii de plata',
-];
 
 const DIGITS = /^\d{2,13}$/;
 
 interface Certificate {
-  id: string;
+  id: number;
   label: string;
   certSerial: string;
 }
@@ -48,8 +66,8 @@ function ConnectionSelect({
   options,
 }: {
   id: string;
-  value: string;
-  onChange: (v: string) => void;
+  value: number;
+  onChange: (v: number) => void;
   options: Certificate[];
 }) {
   return (
@@ -57,7 +75,7 @@ function ConnectionSelect({
       id={id}
       label="Certificat"
       value={value}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={(e) => onChange(Number(e.target.value))}
     >
       {options.map((c) => (
         <option key={c.id} value={c.id}>
@@ -68,43 +86,122 @@ function ConnectionSelect({
   );
 }
 
-function SyncCard({
-  connectionId,
-  certificates,
-  onSelect,
-}: {
-  connectionId: string;
-  certificates: Certificate[];
-  onSelect: (id: string) => void;
-}) {
-  const [zile, setZile] = useState(String(MAX_SPV_DAYS));
-  const [error, setError] = useState<string | null>(null);
-  const sync = useSyncSpv();
+function ImportResult({ summary }: { summary: SpvImportSummary }) {
+  const appPath = useAppPath();
+  const { fetched, added, notice, certSerial, rights, unknownCuis } = summary;
+  const toAdd = unknownCuis.slice(0, MAX_BULK_CUIS);
+  return (
+    <>
+      <Alert tone="success" title="Import încheiat.">
+        <div className="stack-sm">
+          <span>
+            {notice
+              ? `ANAF: ${notice}.`
+              : `${fetched} mesaje în listă, ${added} noi${
+                  fetched > added ? `, ${fetched - added} existau deja.` : '.'
+                }`}
+          </span>
+          {certSerial || rights > 0 ? (
+            <span className="muted">
+              {certSerial ? (
+                <>
+                  Certificat{' '}
+                  <span className="mono">{groupSerial(certSerial)}</span>
+                </>
+              ) : (
+                'Certificatul'
+              )}
+              {rights > 0
+                ? ` · drepturi SPV pentru ${plural(rights, 'CUI/CNP', 'CUI/CNP-uri')}`
+                : null}
+            </span>
+          ) : null}
+        </div>
+      </Alert>
+      {toAdd.length > 0 ? (
+        <Alert
+          tone="info"
+          title={`${plural(unknownCuis.length, 'firmă', 'firme')} din certificat nu ${
+            unknownCuis.length === 1 ? 'este' : 'sunt'
+          } în lista dvs. de firme.`}
+        >
+          <div className="stack-sm">
+            <span className="mono">
+              {toAdd.slice(0, 10).join(', ')}
+              {unknownCuis.length > 10 ? '…' : ''}
+            </span>
+            <div>
+              <ButtonLink
+                size="sm"
+                icon="plus"
+                to={appPath(`/companies?add=1&cuis=${toAdd.join(',')}`)}
+              >
+                Adaugă în Firme
+              </ButtonLink>
+            </div>
+          </div>
+        </Alert>
+      ) : null}
+    </>
+  );
+}
 
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    const days = Number(zile);
-    if (!Number.isInteger(days) || days < 1 || days > MAX_SPV_DAYS) {
-      setError(`Introduceți un număr de zile între 1 și ${MAX_SPV_DAYS}.`);
+function ImportCard() {
+  const [zile, setZile] = useState(String(MAX_SPV_DAYS));
+  const [text, setText] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const importer = useImportSpvMessages();
+
+  const days = Number(zile);
+  const validDays = Number.isInteger(days) && days >= 1 && days <= MAX_SPV_DAYS;
+  const anafUrl = `${ANAF_SPV_WEB_URL}/listaMesaje?zile=${validDays ? days : MAX_SPV_DAYS}`;
+
+  const loadFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > MAX_SPV_IMPORT_BYTES) {
+      setError('Fișierul poate avea cel mult 5 MB.');
       return;
     }
     setError(null);
-    sync.mutate({ connectionId, zile: days });
+    setText(await file.text());
+  };
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!text.trim()) {
+      setError('Lipiți textul copiat de la ANAF sau încărcați fișierul salvat.');
+      return;
+    }
+    setError(null);
+    importer.mutate(text.trim(), { onSuccess: () => setText('') });
   };
 
   return (
     <Card
-      title="Sincronizare cu ANAF"
-      subtitle="SPV păstrează mesajele doar o perioadă. Le salvăm aici ca să le aveți și după ce ANAF le șterge. Sincronizarea rulează și automat în fiecare noapte."
+      title="Importă mesaje din ANAF"
+      subtitle="ANAF dă lista de mesaje doar browserului care are certificatul digital, așa că o aduceți dvs. aici."
     >
       <form className="stack" onSubmit={submit} noValidate>
+        <ol className="spv-steps">
+          <li>
+            Alegeți perioada (cel mult {MAX_SPV_DAYS} de zile) și apăsați
+            „Deschide lista la ANAF”. Browserul vă cere certificatul; lista
+            cuprinde mesajele tuturor CUI/CNP-urilor pentru care certificatul
+            are drepturi.
+          </li>
+          <li>
+            Copiați tot textul afișat (Ctrl+A, Ctrl+C) și lipiți-l mai jos, sau
+            salvați pagina și încărcați fișierul.
+          </li>
+          <li>
+            În „Mesaje salvate”, „Deschide la ANAF” descarcă PDF-ul fiecărui
+            mesaj; încărcați-l înapoi cu „Încarcă PDF” ca să rămână în arhivă.
+          </li>
+        </ol>
         <div className="form-row">
-          <ConnectionSelect
-            id="spv-sync-cert"
-            value={connectionId}
-            onChange={onSelect}
-            options={certificates}
-          />
           <TextField
             label="Ultimele zile"
             type="number"
@@ -113,39 +210,91 @@ function SyncCard({
             value={zile}
             onChange={(e) => setZile(e.target.value)}
             hint={`Cel mult ${MAX_SPV_DAYS} de zile`}
+            error={validDays ? undefined : `Între 1 și ${MAX_SPV_DAYS}.`}
           />
+          <ButtonAnchor
+            href={anafUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            icon="link"
+          >
+            Deschide lista la ANAF
+          </ButtonAnchor>
+        </div>
+        <TextAreaField
+          label="Lista de mesaje de la ANAF"
+          mono
+          rows={6}
+          placeholder='{"titlu":"Lista Mesaje disponibile din ultimele 60 zile","mesaje":[…]}'
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+        />
+        <input
+          ref={fileInput}
+          type="file"
+          accept=".json,.txt,application/json,text/plain"
+          hidden
+          aria-label="Fișier cu lista de mesaje"
+          onChange={(e) => void loadFile(e)}
+        />
+        {error ? <Alert tone="danger" title={error} /> : null}
+        {importer.isError ? (
+          <Alert tone="danger" title="Importul a eșuat.">
+            {importer.error.message}
+          </Alert>
+        ) : null}
+        {importer.isSuccess ? <ImportResult summary={importer.data} /> : null}
+        <div className="spv-row">
           <Button
             type="submit"
             variant="primary"
-            icon="refresh"
-            loading={sync.isPending}
+            icon="download"
+            loading={importer.isPending}
           >
-            Sincronizează din ANAF
+            Importă mesajele
+          </Button>
+          <Button icon="upload" onClick={() => fileInput.current?.click()}>
+            Încarcă fișier
           </Button>
         </div>
-        {error ? <Alert tone="danger" title={error} /> : null}
-        {sync.isError ? (
-          <Alert tone="danger" title="Sincronizarea a eșuat.">
-            {sync.error.message}
-          </Alert>
-        ) : null}
-        {sync.isSuccess ? (
-          <Alert
-            tone={sync.data.failed > 0 ? 'warning' : 'success'}
-            title="Sincronizare încheiată."
-          >
-            {sync.data.fetched} mesaje la ANAF, {sync.data.added} noi,{' '}
-            {sync.data.downloaded} documente salvate
-            {sync.data.failed > 0
-              ? `, ${sync.data.failed} nereușite`
-              : ''}
-            {sync.data.pending > 0
-              ? `. ${sync.data.pending} documente încă nesalvate: rulați din nou sincronizarea.`
-              : '.'}
-          </Alert>
-        ) : null}
       </form>
     </Card>
+  );
+}
+
+function UploadPdfButton({
+  message,
+  loading,
+  onPick,
+}: {
+  message: ArchivedSpvMessage;
+  loading: boolean;
+  onPick: (file: File) => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <input
+        ref={input}
+        type="file"
+        accept=".pdf,application/pdf"
+        hidden
+        aria-label={`PDF pentru mesajul ${message.anafMessageId}`}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = '';
+          if (file) onPick(file);
+        }}
+      />
+      <Button
+        size="sm"
+        icon="upload"
+        loading={loading}
+        onClick={() => input.current?.click()}
+      >
+        Încarcă PDF
+      </Button>
+    </>
   );
 }
 
@@ -155,6 +304,16 @@ function ArchiveCard() {
   const [error, setError] = useState<string | null>(null);
   const archive = useSpvArchive(query);
   const download = useDownloadSpvMessage();
+  const upload = useUploadSpvDocument();
+
+  const uploadPdf = (message: ArchivedSpvMessage, file: File) => {
+    if (file.size > MAX_SPV_PDF_BYTES) {
+      setError('PDF-ul poate avea cel mult 10 MB.');
+      return;
+    }
+    setError(null);
+    upload.mutate({ id: message.id, file });
+  };
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -201,18 +360,37 @@ function ArchiveCard() {
     },
     {
       key: 'download',
-      header: <span className="spv-sr-only">Descarcă</span>,
-      render: (m) => (
-        <Button
-          size="sm"
-          icon="download"
-          loading={download.isPending && download.variables?.id === m.id}
-          aria-label={`Descarcă mesajul ${m.anafMessageId}`}
-          onClick={() => download.mutate(m)}
-        >
-          Descarcă
-        </Button>
-      ),
+      header: <span className="spv-sr-only">Acțiuni</span>,
+      render: (m) =>
+        m.stored ? (
+          <Button
+            size="sm"
+            icon="download"
+            loading={download.isPending && download.variables?.id === m.id}
+            aria-label={`Descarcă mesajul ${m.anafMessageId}`}
+            onClick={() => download.mutate(m)}
+          >
+            Descarcă
+          </Button>
+        ) : (
+          <div className="spv-row">
+            <ButtonAnchor
+              size="sm"
+              icon="link"
+              href={`${ANAF_SPV_WEB_URL}/descarcare?id=${encodeURIComponent(m.anafMessageId)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Deschide la ANAF mesajul ${m.anafMessageId}`}
+            >
+              Deschide la ANAF
+            </ButtonAnchor>
+            <UploadPdfButton
+              message={m}
+              loading={upload.isPending && upload.variables?.id === m.id}
+              onPick={(file) => uploadPdf(m, file)}
+            />
+          </div>
+        ),
     },
   ];
 
@@ -240,15 +418,18 @@ function ArchiveCard() {
             {download.error.message}
           </Alert>
         ) : null}
+        {upload.isError ? (
+          <Alert tone="danger" title="PDF-ul nu a fost salvat.">
+            {upload.error.message}
+          </Alert>
+        ) : null}
         {archive.isError ? (
           <QueryError error={archive.error} retry={() => archive.refetch()} />
         ) : null}
         {archive.isPending ? (
           <div className="loading">Se încarcă…</div>
         ) : archive.data && archive.data.items.length === 0 ? (
-          <EmptyState icon="invoice" title="Niciun mesaj salvat.">
-            Rulați o sincronizare cu ANAF pentru a aduce mesajele din SPV.
-          </EmptyState>
+          <EmptyState icon="invoice" title="Niciun mesaj salvat." />
         ) : archive.data ? (
           <>
             <DataTable
@@ -283,14 +464,52 @@ function ArchiveCard() {
   );
 }
 
+function MonthField({
+  months,
+  value,
+  onChange,
+}: {
+  months?: number[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  if (!months) {
+    return (
+      <TextField
+        label="Luna"
+        type="number"
+        min={1}
+        max={12}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    );
+  }
+  return (
+    <SelectField
+      id="spv-request-month"
+      label="Luna"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      <option value="">Alegeți luna</option>
+      {months.map((m) => (
+        <option key={m} value={m}>
+          {m}
+        </option>
+      ))}
+    </SelectField>
+  );
+}
+
 function RequestCard({
   connectionId,
   certificates,
   onSelect,
 }: {
-  connectionId: string;
+  connectionId: number;
   certificates: Certificate[];
-  onSelect: (id: string) => void;
+  onSelect: (id: number) => void;
 }) {
   const create = useCreateSpvRequest();
   const [tip, setTip] = useState('');
@@ -302,43 +521,24 @@ function RequestCard({
   const [cuiPunctDeLucru, setCuiPunctDeLucru] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  const type = spvRequestType(tip);
+  const needs = (field: SpvRequestField) => usesField(type, field);
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    const cleanCui = normalizeCui(cui);
-    const cleanPunct = cuiPunctDeLucru.replace(/\s+/g, '');
-    if (tip.trim().length < 2) {
-      setError('Alegeți sau introduceți tipul cererii.');
-      return;
-    }
-    if (!DIGITS.test(cleanCui)) {
-      setError('CUI/CNP invalid: folosiți doar cifre (2–13).');
-      return;
-    }
-    if (cleanPunct && !DIGITS.test(cleanPunct)) {
-      setError('CUI-ul punctului de lucru este invalid.');
-      return;
-    }
-    if (an && !/^\d{4}$/.test(an)) {
-      setError('Anul trebuie să aibă 4 cifre.');
-      return;
-    }
-    if (luna && !(Number(luna) >= 1 && Number(luna) <= 12)) {
-      setError('Luna trebuie să fie între 1 și 12.');
-      return;
-    }
-    setError(null);
-    create.mutate({
-      connectionId,
-      tip: tip.trim(),
-      cui: cleanCui,
-      ...(an ? { an: Number(an) } : {}),
-      ...(luna ? { luna: Number(luna) } : {}),
-      ...(motiv.trim() ? { motiv: motiv.trim() } : {}),
-      ...(numarInregistrare.trim()
-        ? { numarInregistrare: numarInregistrare.trim() }
-        : {}),
-      ...(cleanPunct ? { cuiPunctDeLucru: cleanPunct } : {}),
-    });
+    const form = {
+      tip,
+      cui: normalizeCui(cui),
+      an,
+      luna,
+      motiv,
+      numarInregistrare: numarInregistrare.trim(),
+      cuiPunctDeLucru: cuiPunctDeLucru.replace(/\s+/g, ''),
+    };
+    const problem = spvRequestError(type, form);
+    setError(problem);
+    if (problem || !type) return;
+    create.mutate({ connectionId, ...spvRequestPayload(type, form) });
   };
 
   return (
@@ -354,20 +554,19 @@ function RequestCard({
             onChange={onSelect}
             options={certificates}
           />
-          <TextField
+          <SelectField
+            id="spv-request-type"
             label="Tip cerere"
-            list="spv-request-types"
             value={tip}
             onChange={(e) => setTip(e.target.value)}
-            maxLength={100}
-          />
-          <datalist id="spv-request-types">
+          >
+            <option value="">Alegeți tipul cererii</option>
             {SPV_REQUEST_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
+              <option key={t.tip} value={t.tip}>
+                {t.label}
               </option>
             ))}
-          </datalist>
+          </SelectField>
           <TextField
             label="CUI/CNP"
             mono
@@ -376,44 +575,58 @@ function RequestCard({
             inputMode="numeric"
           />
         </div>
-        <div className="form-row">
-          <TextField
-            label="An (opțional)"
-            type="number"
-            value={an}
-            onChange={(e) => setAn(e.target.value)}
-          />
-          <TextField
-            label="Luna (opțional)"
-            type="number"
-            min={1}
-            max={12}
-            value={luna}
-            onChange={(e) => setLuna(e.target.value)}
-          />
-          <TextField
-            label="Motiv (adeverințe de venit)"
-            value={motiv}
-            onChange={(e) => setMotiv(e.target.value)}
-            maxLength={200}
-          />
-        </div>
-        <div className="form-row">
-          <TextField
-            label="Nr. înregistrare (duplicat recipisă)"
-            mono
-            value={numarInregistrare}
-            onChange={(e) => setNumarInregistrare(e.target.value)}
-            maxLength={50}
-          />
-          <TextField
-            label="CUI punct de lucru (fișa rol)"
-            mono
-            value={cuiPunctDeLucru}
-            onChange={(e) => setCuiPunctDeLucru(e.target.value)}
-            inputMode="numeric"
-          />
-        </div>
+        {needs('an') || needs('luna') || needs('motiv') ? (
+          <div className="form-row">
+            {needs('an') ? (
+              <TextField
+                label="An"
+                type="number"
+                value={an}
+                onChange={(e) => setAn(e.target.value)}
+              />
+            ) : null}
+            {needs('luna') ? (
+              <MonthField months={type?.months} value={luna} onChange={setLuna} />
+            ) : null}
+            {needs('motiv') ? (
+              <SelectField
+                id="spv-request-reason"
+                label="Motiv"
+                value={motiv}
+                onChange={(e) => setMotiv(e.target.value)}
+              >
+                <option value="">Alegeți motivul</option>
+                {SPV_INCOME_REASONS.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </SelectField>
+            ) : null}
+          </div>
+        ) : null}
+        {needs('numarInregistrare') || needs('cuiPunctDeLucru') ? (
+          <div className="form-row">
+            {needs('numarInregistrare') ? (
+              <TextField
+                label="Nr. înregistrare recipisă"
+                mono
+                value={numarInregistrare}
+                onChange={(e) => setNumarInregistrare(e.target.value)}
+                maxLength={50}
+              />
+            ) : null}
+            {needs('cuiPunctDeLucru') ? (
+              <TextField
+                label="CUI punct de lucru (opțional)"
+                mono
+                value={cuiPunctDeLucru}
+                onChange={(e) => setCuiPunctDeLucru(e.target.value)}
+                inputMode="numeric"
+              />
+            ) : null}
+          </div>
+        ) : null}
         {error ? <Alert tone="danger" title={error} /> : null}
         {create.isError ? (
           <Alert tone="danger" title="Cererea nu a fost trimisă.">
@@ -448,10 +661,8 @@ export function SpvPage() {
     (c) =>
       connectionStatus(c) !== 'revoked' && connectionStatus(c) !== 'expired',
   );
-  const [chosen, setChosen] = useState('');
-  const connectionId = usable.some((c) => c.id === chosen)
-    ? chosen
-    : (usable[0]?.id ?? '');
+  const [chosen, setChosen] = useState<number | null>(null);
+  const connection = usable.find((c) => c.id === chosen) ?? usable[0];
 
   return (
     <>
@@ -469,22 +680,14 @@ export function SpvPage() {
         {connections.isSuccess && usable.length === 0 ? (
           <Alert tone="info" title="Niciun certificat activ.">
             Conectați un certificat ANAF din pagina Certificate ANAF pentru a
-            sincroniza mesaje noi sau a trimite cereri. Mesajele deja salvate
-            rămân disponibile.
+            trimite cereri. Mesajele deja salvate rămân disponibile.
           </Alert>
         ) : null}
-        {usable.length > 0 ? (
-          <SyncCard
-            key={connectionId}
-            connectionId={connectionId}
-            certificates={usable}
-            onSelect={setChosen}
-          />
-        ) : null}
+        <ImportCard />
         <ArchiveCard />
-        {usable.length > 0 ? (
+        {connection ? (
           <RequestCard
-            connectionId={connectionId}
+            connectionId={connection.id}
             certificates={usable}
             onSelect={setChosen}
           />

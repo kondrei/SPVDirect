@@ -21,8 +21,8 @@ export class SpvMessage {
   @Column({ name: 'accountant_id', type: 'integer' })
   accountantId: number;
 
-  @Column({ name: 'anaf_connection_id', type: 'uuid', nullable: true })
-  anafConnectionId: string | null;
+  @Column({ name: 'anaf_connection_id', type: 'integer', nullable: true })
+  anafConnectionId: number | null;
 
   @Column({ name: 'company_id', type: 'integer', nullable: true })
   companyId: number | null;

@@ -86,7 +86,10 @@ export function initials(name: string | null, email: string): string {
 }
 
 export function groupSerial(serial: string): string {
-  return serial.replace(/\s+/g, '').replace(/(.{4})(?=.)/g, '$1 ');
+  return serial
+    .replace(/[\s:-]+/g, '')
+    .toUpperCase()
+    .replace(/(.{4})(?=.)/g, '$1 ');
 }
 
 const amountFmt = new Intl.NumberFormat('ro-RO', {

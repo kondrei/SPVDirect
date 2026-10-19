@@ -12,7 +12,7 @@ function setup(link: Partial<AuthorizationLink> | null) {
     findOneBy: vi.fn().mockResolvedValue(link),
     create: (x: object) => x,
     save: vi.fn((x: object) =>
-      Promise.resolve({ id: 'link-1', ...x } as AuthorizationLink),
+      Promise.resolve({ id: 3, ...x } as AuthorizationLink),
     ),
     update: vi.fn().mockResolvedValue({ affected: 0 }),
   };
@@ -41,13 +41,13 @@ describe('AuthorizationLinksService', () => {
   });
 
   it('accepts an unused, unexpired link', async () => {
-    const { service } = setup({ id: 'l', usedAt: null, expiresAt: future() });
+    const { service } = setup({ id: 3, usedAt: null, expiresAt: future() });
     await expect(service.findByToken('t')).resolves.toMatchObject({ ok: true });
   });
 
   it('rejects a used link', async () => {
     const { service } = setup({
-      id: 'l',
+      id: 3,
       usedAt: new Date(),
       expiresAt: future(),
     });
@@ -59,7 +59,7 @@ describe('AuthorizationLinksService', () => {
 
   it('rejects an expired link', async () => {
     const { service } = setup({
-      id: 'l',
+      id: 3,
       usedAt: null,
       expiresAt: new Date(Date.now() - 1000),
     });
@@ -71,15 +71,15 @@ describe('AuthorizationLinksService', () => {
 
   it('claim reports a lost race', async () => {
     const { service } = setup(null);
-    await expect(service.claim('l')).resolves.toBe(false);
+    await expect(service.claim(3)).resolves.toBe(false);
   });
 
   it('claims only a link that is still unused', async () => {
     const { service, repo } = setup(null);
     repo.update.mockResolvedValue({ affected: 1 });
-    await expect(service.claim('l')).resolves.toBe(true);
+    await expect(service.claim(3)).resolves.toBe(true);
     expect(repo.update).toHaveBeenCalledWith(
-      { id: 'l', usedAt: expect.anything() },
+      { id: 3, usedAt: expect.anything() },
       { usedAt: expect.any(Date) },
     );
   });

@@ -35,8 +35,8 @@ export class EfacturaUpload {
   @Column({ name: 'invoice_id', type: 'integer', nullable: true })
   invoiceId: number | null;
 
-  @Column({ name: 'anaf_connection_id', type: 'uuid', nullable: true })
-  anafConnectionId: string | null;
+  @Column({ name: 'anaf_connection_id', type: 'integer', nullable: true })
+  anafConnectionId: number | null;
 
   @Column({ type: 'varchar', length: 4 })
   environment: AnafEnvironment;

@@ -10,6 +10,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Repository } from 'typeorm';
 import { Company } from '../../../companies/company.entity.js';
 import { parseAnafDateTime } from '../spv-date.js';
+import { parseSpvExport, validateSpvPdf } from '../spv-import.js';
 import { SpvFileStore } from './spv-file-store.service.js';
 import { SpvMessage } from '../spv-message.entity.js';
 import {
@@ -21,6 +22,20 @@ import {
 export const MAX_DOWNLOADS_PER_SYNC = 100;
 export const INSERT_CHUNK = 200;
 export const DEFAULT_SYNC_DAYS = 60;
+export const NOT_STORED =
+  'Documentul nu este salvat în SPVDirect. Deschideți-l la ANAF și încărcați PDF-ul.';
+
+export interface ImportSummary {
+  fetched: number;
+  added: number;
+  title: string | null;
+  certSerial: string | null;
+  notice: string | null;
+  rights: number;
+  unknownCuis: string[];
+}
+
+const MAX_CUI_DIGITS = 10;
 
 export interface SyncSummary {
   fetched: number;
@@ -97,7 +112,7 @@ export class SpvArchiveService {
 
   async sync(
     accountantId: number,
-    connectionId: string,
+    connectionId: number,
     zile: number = DEFAULT_SYNC_DAYS,
   ): Promise<SyncSummary> {
     const list = await this.spv.listMessages(accountantId, connectionId, {
@@ -214,23 +229,56 @@ export class SpvArchiveService {
         filename: `mesaj-${message.anafMessageId}.pdf`,
       };
     }
-    if (!message.anafConnectionId) {
-      throw new ConflictException(
-        'Documentul nu a fost salvat, iar certificatul prin care a fost obținut a fost șters.',
-      );
-    }
-    const doc = await this.spv.downloadMessage(
-      accountantId,
-      message.anafConnectionId,
-      message.anafMessageId,
-    );
-    await this.saveContent(
-      accountantId,
-      message,
-      message.anafConnectionId,
-      doc,
-    );
-    return doc;
+    throw new ConflictException(NOT_STORED);
+  }
+
+  async importMessages(
+    accountantId: number,
+    content: Buffer | undefined,
+  ): Promise<ImportSummary> {
+    const list = parseSpvExport(content);
+    const added = await this.saveMetadata(accountantId, null, list.messages);
+    return {
+      fetched: list.messages.length,
+      added,
+      title: list.title,
+      certSerial: list.certSerial,
+      notice: list.notice,
+      rights: list.cuis.length,
+      unknownCuis: await this.unknownCuis(accountantId, list.cuis),
+    };
+  }
+
+  private async unknownCuis(
+    accountantId: number,
+    cuis: string[],
+  ): Promise<string[]> {
+    const companyCuis = cuis.filter((c) => c.length <= MAX_CUI_DIGITS);
+    if (companyCuis.length === 0) return [];
+    const known = await this.companies.find({
+      select: { cui: true },
+      where: { accountantId, cui: In(companyCuis) },
+    });
+    const have = new Set(known.map((c) => c.cui));
+    return companyCuis.filter((c) => !have.has(c));
+  }
+
+  async saveDocument(
+    accountantId: number,
+    id: number,
+    content: Buffer | undefined,
+  ): Promise<ArchivedMessage> {
+    const pdf = validateSpvPdf(content);
+    const message = await this.messages.findOneBy({ id, accountantId });
+    if (!message) throw new NotFoundException('Mesajul nu a fost găsit');
+    await this.saveContent(accountantId, message, message.anafConnectionId, {
+      content: pdf,
+      contentType: 'application/pdf',
+      filename: `mesaj-${message.anafMessageId}.pdf`,
+    });
+    const saved = await this.messages.findOneBy({ id, accountantId });
+    if (!saved) throw new NotFoundException('Mesajul nu a fost găsit');
+    return toArchived(saved);
   }
 
   async moveStoredContent(limit = MAX_DOWNLOADS_PER_SYNC): Promise<number> {
@@ -270,7 +318,7 @@ export class SpvArchiveService {
   private async saveContent(
     accountantId: number,
     row: Pick<SpvMessage, 'id' | 'anafMessageId'>,
-    connectionId: string,
+    connectionId: number | null,
     doc: SpvDocument,
   ): Promise<void> {
     const common = {
@@ -296,7 +344,7 @@ export class SpvArchiveService {
 
   private async saveMetadata(
     accountantId: number,
-    connectionId: string,
+    connectionId: number | null,
     messages: AnafSpvMessage[],
   ): Promise<number> {
     if (messages.length === 0) return 0;

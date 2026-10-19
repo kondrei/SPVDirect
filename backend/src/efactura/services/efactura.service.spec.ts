@@ -22,7 +22,7 @@ import {
   STALE_SENDING_MS,
 } from './efactura.service.js';
 
-const CONNECTION = '11111111-1111-4111-8111-111111111111';
+const CONNECTION = 7;
 const COMPANY = {
   id: 7,
   cui: '12345678',

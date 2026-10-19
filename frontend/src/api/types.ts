@@ -10,7 +10,7 @@ export interface Company {
   accountantId: number;
   cui: string;
   name: string;
-  anafConnectionId: string | null;
+  anafConnectionId: number | null;
   regCom: string | null;
   address: string | null;
   caenCode: string | null;
@@ -94,7 +94,7 @@ export interface AnafTvaRecord {
 export type AnafConnectionStatus = 'active' | 'expired' | 'revoked';
 
 export interface AnafConnection {
-  id: string;
+  id: number;
   accountantId: number;
   label: string;
   certSerial: string;
@@ -109,7 +109,7 @@ export interface AnafConnection {
 }
 
 export interface AuthorizationLink {
-  id: string;
+  id: number;
   url: string;
   expiresAt: string;
 }
@@ -180,6 +180,16 @@ export interface SpvArchivePage {
   total: number;
   page: number;
   pageSize: number;
+}
+
+export interface SpvImportSummary {
+  fetched: number;
+  added: number;
+  title: string | null;
+  certSerial: string | null;
+  notice: string | null;
+  rights: number;
+  unknownCuis: string[];
 }
 
 export interface SpvSyncSummary {
@@ -392,7 +402,7 @@ export interface EfacturaUpload {
   accountantId: number;
   companyId: number;
   invoiceId: number | null;
-  anafConnectionId: string | null;
+  anafConnectionId: number | null;
   environment: 'test' | 'prod';
   standard: EfacturaStandard;
   uploadIndex: string | null;

@@ -27,8 +27,8 @@ export class Company {
   @Column({ type: 'text' })
   name: string;
 
-  @Column({ name: 'anaf_connection_id', type: 'uuid', nullable: true })
-  anafConnectionId: string | null;
+  @Column({ name: 'anaf_connection_id', type: 'integer', nullable: true })
+  anafConnectionId: number | null;
 
   @Column({ name: 'reg_com', type: 'text', nullable: true })
   regCom: string | null;

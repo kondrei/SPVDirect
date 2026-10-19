@@ -2,16 +2,17 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { SPV_PAGE_SIZE } from '../../common/constants';
 import { api, downloadFile } from '../client';
 import type {
+  ArchivedSpvMessage,
   SpvArchivePage,
+  SpvImportSummary,
   SpvRequestInput,
   SpvRequestResult,
-  SpvSyncSummary,
 } from '../types';
 import { keys } from './queryKeys';
 import { useAccountantApiPath, requirePath } from './accountantPath';
 import { useConnectionsPath } from './connections';
 
-function spvPath(path: string | null, connectionId: string, rest: string) {
+function spvPath(path: string | null, connectionId: number, rest: string) {
   return `${requirePath(path)}/${encodeURIComponent(connectionId)}/spv${rest}`;
 }
 
@@ -37,25 +38,6 @@ export function useSpvArchive(query: SpvArchiveQuery) {
   });
 }
 
-export function useSyncSpv() {
-  const qc = useQueryClient();
-  const path = useConnectionsPath();
-  return useMutation({
-    mutationFn: ({
-      connectionId,
-      zile,
-    }: {
-      connectionId: string;
-      zile: number;
-    }) =>
-      api<SpvSyncSummary>(spvPath(path, connectionId, '/sync'), {
-        method: 'POST',
-        json: { zile },
-      }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.spvArchive }),
-  });
-}
-
 export function useDownloadSpvMessage() {
   const path = useAccountantApiPath('/spv/archive');
   return useMutation({
@@ -67,6 +49,42 @@ export function useDownloadSpvMessage() {
   });
 }
 
+export function useImportSpvMessages() {
+  const qc = useQueryClient();
+  const path = useAccountantApiPath('/spv/archive');
+  return useMutation({
+    mutationFn: (content: string) => {
+      const body = new FormData();
+      body.append(
+        'file',
+        new Blob([content], { type: 'application/json' }),
+        'lista-mesaje-anaf.json',
+      );
+      return api<SpvImportSummary>(`${requirePath(path)}/import`, {
+        method: 'POST',
+        body,
+      });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.spvArchive }),
+  });
+}
+
+export function useUploadSpvDocument() {
+  const qc = useQueryClient();
+  const path = useAccountantApiPath('/spv/archive');
+  return useMutation({
+    mutationFn: ({ id, file }: { id: number; file: File }) => {
+      const body = new FormData();
+      body.append('document', file);
+      return api<ArchivedSpvMessage>(`${requirePath(path)}/${id}/document`, {
+        method: 'PUT',
+        body,
+      });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.spvArchive }),
+  });
+}
+
 export function useCreateSpvRequest() {
   const qc = useQueryClient();
   const path = useConnectionsPath();
@@ -74,7 +92,7 @@ export function useCreateSpvRequest() {
     mutationFn: ({
       connectionId,
       ...dto
-    }: SpvRequestInput & { connectionId: string }) =>
+    }: SpvRequestInput & { connectionId: number }) =>
       api<SpvRequestResult>(spvPath(path, connectionId, '/requests'), {
         method: 'POST',
         json: dto,

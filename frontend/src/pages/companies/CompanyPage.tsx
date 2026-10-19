@@ -38,12 +38,12 @@ function CertificateCard({
   current,
 }: {
   companyId: number;
-  current: string | null;
+  current: number | null;
 }) {
   const connections = useConnections();
   const update = useUpdateCompany(companyId);
   const appPath = useAppPath();
-  const [choice, setChoice] = useState(current ?? '');
+  const [choice, setChoice] = useState(current ? String(current) : '');
   const conn = connections.data?.find((c) => c.id === current);
   const usable = (connections.data ?? []).filter(
     (c) => connectionStatus(c) !== 'revoked',
@@ -107,10 +107,10 @@ function CertificateCard({
             </SelectField>
             <Button
               variant="primary"
-              disabled={choice === (current ?? '')}
+              disabled={choice === (current ? String(current) : '')}
               loading={update.isPending}
               onClick={() =>
-                update.mutate({ anafConnectionId: choice || null })
+                update.mutate({ anafConnectionId: choice ? Number(choice) : null })
               }
             >
               Salvează

@@ -164,7 +164,7 @@ export class AnafOAuthController {
   private async redirectToAnaf(
     res: Response,
     flow:
-      { mode: 'self'; accountantId: number } | { mode: 'link'; linkId: string },
+      { mode: 'self'; accountantId: number } | { mode: 'link'; linkId: number },
   ) {
     const state = randomBytes(24).toString('base64url');
     const payload: OAuthStatePayload = { ...flow, state };
@@ -189,12 +189,9 @@ export class AnafOAuthController {
       const payload = await this.jwt.verifyAsync<OAuthStatePayload>(raw, {
         audience: OAUTH_STATE_AUDIENCE,
       });
-      if (
-        payload.mode === 'self' &&
-        !Number.isSafeInteger(payload.accountantId)
-      ) {
-        return null;
-      }
+      const id =
+        payload.mode === 'self' ? payload.accountantId : payload.linkId;
+      if (!Number.isSafeInteger(id)) return null;
       return payload;
     } catch {
       return null;

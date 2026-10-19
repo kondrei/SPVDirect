@@ -4,4 +4,4 @@ export const OAUTH_STATE_AUDIENCE = 'spv-anaf-oauth';
 
 export type OAuthStatePayload =
   | { state: string; mode: 'self'; accountantId: number }
-  | { state: string; mode: 'link'; linkId: string };
+  | { state: string; mode: 'link'; linkId: number };
