@@ -5,7 +5,6 @@ import {
   Get,
   HttpCode,
   Param,
-  ParseUUIDPipe,
   Patch,
   UseGuards,
 } from '@nestjs/common';
@@ -37,7 +36,7 @@ export class AnafConnectionsController {
   @Patch(':id')
   update(
     @Param('accountantId', ParseIdPipe) accountantId: number,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', ParseIdPipe) id: number,
     @Body() dto: UpdateConnectionDto,
   ) {
     return this.connections.rename(accountantId, id, dto.label);
@@ -48,7 +47,7 @@ export class AnafConnectionsController {
   @Throttle(ANAF_CONNECTION_THROTTLE)
   remove(
     @Param('accountantId', ParseIdPipe) accountantId: number,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', ParseIdPipe) id: number,
   ) {
     return this.connections.remove(accountantId, id);
   }
@@ -57,7 +56,7 @@ export class AnafConnectionsController {
   @Throttle(ANAF_CONNECTION_THROTTLE)
   test(
     @Param('accountantId', ParseIdPipe) accountantId: number,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', ParseIdPipe) id: number,
   ) {
     return this.connections.test(accountantId, id);
   }

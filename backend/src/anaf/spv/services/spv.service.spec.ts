@@ -37,7 +37,7 @@ describe('SpvService.listMessages', () => {
       },
     });
 
-    const list = await service.listMessages(1, 'conn', {
+    const list = await service.listMessages(1, 7, {
       zile: 50,
       cif: '8000000000',
     });
@@ -45,7 +45,7 @@ describe('SpvService.listMessages', () => {
     expect(request).toHaveBeenCalledWith(
       expect.objectContaining({
         accountantId: 1,
-        connectionId: 'conn',
+        connectionId: 7,
         service: 'SPV',
         baseUrl: BASE,
         path: '/listaMesaje',
@@ -68,7 +68,7 @@ describe('SpvService.listMessages', () => {
   it('omits cif when not given and tolerates a missing mesaje array', async () => {
     const { service, request } = setup();
     request.mockResolvedValue({ status: 200, data: { titlu: 'x' } });
-    const list = await service.listMessages(1, 'conn', { zile: 5 });
+    const list = await service.listMessages(1, 7, { zile: 5 });
     expect(request.mock.calls[0][0].params).toEqual({ zile: 5 });
     expect(list.messages).toEqual([]);
   });
@@ -76,7 +76,7 @@ describe('SpvService.listMessages', () => {
   it('turns a 200 body with eroare into a 400', async () => {
     const { service, request } = setup();
     request.mockResolvedValue({ status: 200, data: { eroare: 'Fără drept' } });
-    await expect(service.listMessages(1, 'conn', { zile: 5 })).rejects.toThrow(
+    await expect(service.listMessages(1, 7, { zile: 5 })).rejects.toThrow(
       new BadRequestException('ANAF: Fără drept'),
     );
   });
@@ -85,8 +85,28 @@ describe('SpvService.listMessages', () => {
     const { service, request } = setup();
     request.mockResolvedValue({ status: 200, data: '<html></html>' });
     await expect(
-      service.listMessages(1, 'conn', { zile: 5 }),
+      service.listMessages(1, 7, { zile: 5 }),
     ).rejects.toBeInstanceOf(BadGatewayException);
+  });
+
+  it('says when ANAF answers with an HTML page', async () => {
+    const { service, request } = setup();
+    request.mockResolvedValue({
+      status: 200,
+      headers: { 'content-type': 'text/html; charset=utf-8' },
+      data: '<html><head><title>Pagina logout</title></head></html>',
+    });
+    await expect(service.listMessages(1, 7, { zile: 5 })).rejects.toThrow(
+      'ANAF a returnat o pagină HTML în loc de răspunsul SPV',
+    );
+  });
+
+  it('keeps the generic message for other unreadable replies', async () => {
+    const { service, request } = setup();
+    request.mockResolvedValue({ status: 200, data: 'not json' });
+    await expect(service.listMessages(1, 7, { zile: 5 })).rejects.toThrow(
+      new BadGatewayException('ANAF a returnat un răspuns invalid'),
+    );
   });
 });
 
@@ -100,7 +120,7 @@ describe('SpvService.downloadMessage', () => {
       headers: { 'content-type': 'application/pdf' },
     });
 
-    const doc = await service.downloadMessage(1, 'conn', '100000000');
+    const doc = await service.downloadMessage(1, 7, '100000000');
 
     expect(request).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -122,7 +142,7 @@ describe('SpvService.downloadMessage', () => {
       data: Buffer.from(JSON.stringify({ eroare: 'Mesaj inexistent' })),
       headers: { 'content-type': 'application/json' },
     });
-    await expect(service.downloadMessage(1, 'conn', '1')).rejects.toThrow(
+    await expect(service.downloadMessage(1, 7, '1')).rejects.toThrow(
       'ANAF: Mesaj inexistent',
     );
   });
@@ -135,8 +155,20 @@ describe('SpvService.downloadMessage', () => {
       headers: {},
     });
     await expect(
-      service.downloadMessage(1, 'conn', '1'),
+      service.downloadMessage(1, 7, '1'),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('does not hand out an HTML page as the PDF', async () => {
+    const { service, request } = setup();
+    request.mockResolvedValue({
+      status: 200,
+      data: Buffer.from('<!DOCTYPE html><html>login</html>'),
+      headers: {},
+    });
+    await expect(service.downloadMessage(1, 7, '1')).rejects.toThrow(
+      'ANAF a returnat o pagină HTML în loc de răspunsul SPV',
+    );
   });
 
   it('rejects an empty document', async () => {
@@ -147,7 +179,7 @@ describe('SpvService.downloadMessage', () => {
       headers: { 'content-type': 'application/pdf' },
     });
     await expect(
-      service.downloadMessage(1, 'conn', '1'),
+      service.downloadMessage(1, 7, '1'),
     ).rejects.toBeInstanceOf(BadGatewayException);
   });
 });
@@ -166,7 +198,7 @@ describe('SpvService.createRequest', () => {
       },
     });
 
-    const result = await service.createRequest(1, 'conn', {
+    const result = await service.createRequest(1, 7, {
       tip: 'Fisa Rol',
       cui: '8000000000',
       an: 2018,
@@ -203,7 +235,7 @@ describe('SpvService.createRequest', () => {
   it('sends only tip and cui when nothing else is given', async () => {
     const { service, request } = setup();
     request.mockResolvedValue({ status: 200, data: { id_solicitare: 1 } });
-    await service.createRequest(1, 'conn', { tip: 'D300', cui: '123456' });
+    await service.createRequest(1, 7, { tip: 'D300', cui: '123456' });
     expect(request.mock.calls[0][0].params).toEqual({
       tip: 'D300',
       cui: '123456',
@@ -217,7 +249,7 @@ describe('SpvService.createRequest', () => {
       data: { eroare: 'Tip invalid', titlu: 'Cerere' },
     });
     await expect(
-      service.createRequest(1, 'conn', { tip: 'X1', cui: '123456' }),
+      service.createRequest(1, 7, { tip: 'X1', cui: '123456' }),
     ).rejects.toThrow('ANAF: Tip invalid');
   });
 
@@ -225,7 +257,7 @@ describe('SpvService.createRequest', () => {
     const { service, request } = setup();
     request.mockResolvedValue({ status: 200, data: { titlu: 'x' } });
     await expect(
-      service.createRequest(1, 'conn', { tip: 'D300', cui: '123456' }),
+      service.createRequest(1, 7, { tip: 'D300', cui: '123456' }),
     ).rejects.toBeInstanceOf(BadGatewayException);
   });
 });

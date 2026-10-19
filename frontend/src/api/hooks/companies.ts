@@ -83,7 +83,7 @@ export function useRefreshCompanyAnaf(id: number) {
 
 export interface CompanyUpdate {
   name?: string;
-  anafConnectionId?: string | null;
+  anafConnectionId?: number | null;
   iban?: string | null;
   bankName?: string | null;
   email?: string | null;

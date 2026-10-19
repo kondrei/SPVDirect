@@ -4,7 +4,8 @@ SPVDirect is an accountant portal for ANAF SPV services (e-Factura, e-Transport)
 
 ## Layout
 - `backend/`: NestJS 12 API. Phase 1 is done: accounts, ANAF OAuth, schema.
-- `frontend/`: React 19 + Vite app (Phase 3 in progress): login, dashboard, companies, ANAF certificates. See `frontend/README.md`. Plain folders, no npm workspaces.
+- `frontend/`: React 19 + Vite app (Phase 3 in progress): landing with login/register, dashboard, companies, ANAF certificates, SPV archive and document requests (no sync), invoices, e-Factura, profile; e-Transport is a placeholder. See `frontend/README.md`. Plain folders, no npm workspaces.
+- `postman/`: the SPVDirect API collection (happy paths plus 400/401/403/404 cases). Update it when you add or change a route.
 
 ## Commands (run in `backend/`)
 - `npm run dev`: dev server on :3000. Needs `backend/.env` (copy from `.env.example`).
@@ -21,7 +22,7 @@ SPVDirect is an accountant portal for ANAF SPV services (e-Factura, e-Transport)
 ## MANDATORY workflow after every code change
 This rule always applies:
 1. **Code review first.** Review the whole diff for correctness, security, ANAF rules and conventions, and fix the findings. Follow `.claude/skills/review-and-test/SKILL.md`.
-2. **Then unit tests.** Add or update `*.spec.ts` for every changed behaviour, then run `npm test`, `npm run lint` and `npm run build` in `backend/` until all of them pass.
+2. **Then unit tests.** Add or update `*.spec.ts` for every changed behaviour, then run `npm test`, `npm run lint` and `npm run build` in `backend/` until all of them pass. When `frontend/` changed, add or update its `*.test.ts(x)` and run `npm test`, `npm run typecheck` and `npm run lint` there too.
 3. **Only then** report the work as done or commit. Include the review findings and the test results in the report.
 
 A Stop hook (`.claude/settings.json` → `.claude/hooks/verify-backend.sh`) blocks finishing while tests or lint fail and backend code has uncommitted changes.
@@ -32,12 +33,13 @@ A Stop hook (`.claude/settings.json` → `.claude/hooks/verify-backend.sh`) bloc
 - TypeORM **1.x**, not 0.3. Check APIs against `node_modules/typeorm` if unsure.
   - `synchronize: false`. Every schema change needs a migration.
   - Migrations are listed explicitly in `src/database/migrations/index.ts`, not globbed. **Add each new migration class there.**
+  - Every migration has a `<timestamp>-<Name>.spec.ts` beside it that runs `up` and `down` against a mocked `QueryRunner` and checks the tables, columns and indexes it touches.
   - Entities are listed in `src/config/typeorm.config.ts`.
   - Entities use plain FK id columns (`accountantId`, `companyId`, …) instead of relation decorators. This avoids ESM circular-import problems. The FK constraints live in the migrations.
   - Columns are snake_case in the DB (`@Column({ name: 'created_at' })`) and camelCase in TS. Timestamps are `timestamptz`.
 - The database is Supabase Postgres, reached through `DATABASE_URL` (Session pooler, SSL with `rejectUnauthorized: false`). Supabase Auth is **not** used.
 - Env vars are validated with Joi in `src/config/env.validation.ts`. When you add a var, update the schema, the `Env` interface and `.env.example`.
-- Test helpers go in `src/testing/`, which is excluded from the build. Spec files sit next to their sources (`*.spec.ts`).
+- Test helpers go in `src/testing/`, which is excluded from the build. Spec files sit next to their sources (`*.spec.ts`). Existing helpers: `fake-anaf-jwt.ts` (ANAF-shaped tokens), `paramPipes()` (asserts a route param carries its `Parse*Pipe`), `buildInvoiceServices()` and `invoice-fixtures.ts`, `anaf-tva-record.ts`, `caen-csv.ts`.
 - Package-manager scaffolding comes from `@nestjs/cli@12`. Keep the TypeScript version the scaffold picked (6.x). Don't force TS 7.
 
 ## Two separate auth systems (don't mix them)
@@ -58,10 +60,10 @@ A Stop hook (`.claude/settings.json` → `.claude/hooks/verify-backend.sh`) bloc
   - Include `token_content_type=jwt` in the body.
 - A refresh returns a new access token **and** a new refresh token. Save both.
 - Revoke: `POST .../v1/revoke` (RFC 7009: `token`, `token_type_hint`, Basic auth). `DELETE /accountants/:accountantId/anaf/connections/:id` revokes both tokens (best-effort), then deletes the row.
-- Read expiry from the JWT `exp` claim (docs say 90 days for access, 365 for refresh; don't hard-code).
+- Read expiry from the JWT `exp` claim (docs say 90 days for access, 365 for refresh; don't hard-code). The refresh token ANAF actually issues is opaque (not a JWT), so it is the one exception: see `AnafTokenClient`.
 - Use the JWT claims `serial` (certificate serial) and `role` (e.g. `HELLO,EFACTURA,ETRANSPORT`).
 - The token endpoint has a 60 s cooldown. `AnafOAuthService` serializes refreshes per connection and remembers every token call (success or failure): refreshes, the code exchange (through `saveConnection`) and revokes.
-- `AnafTokenClient` speaks the token protocol (authorize URL, code exchange, refresh, revoke) and reads expiry only from the JWT `exp` (the access token may fall back to the response `expires_in`); a token without either is rejected. Its `AnafTokenError` is a 503 with a Romanian message; the technical `detail` only goes to logs.
+- `AnafTokenClient` speaks the token protocol (authorize URL, code exchange, refresh, revoke) and reads expiry from the JWT `exp`. The access token may fall back to the response `expires_in` and is rejected without either. An opaque refresh token gets ANAF's documented 365 days from issue; when a refresh returns no new refresh token, the stored expiry is kept. Its `AnafTokenError` is a 503 with a Romanian message; the technical `detail` only goes to logs.
 - `AnafApiService` refreshes the token once after a 401. After a 403 it refreshes too, unless a fresh token got a 403 on that connection within the last hour (then it is a missing SPV right, not a stale token).
 - The cooldown, the refresh serialization and the 403 memory live on the `anaf_connections` row, so they hold across instances: `token_call_at` (last token call), `refresh_started_at` (a refresh lease, claimed with one conditional UPDATE that also checks the cooldown; it expires after 90 s if an instance dies) and `denied_with_fresh_token_at`. An instance that loses the claim waits for the lease holder and uses its new token. Only same-process callers share one in-memory promise.
 - api.anaf.ro: 1000 requests per minute, 403 when unauthorized, 429 when rate limited. A 200 response can still carry a business error in the body.
@@ -87,10 +89,14 @@ A Stop hook (`.claude/settings.json` → `.claude/hooks/verify-backend.sh`) bloc
   - For a link, the link is claimed (`usedAt` set where it is null) before any token is stored, so a second holder racing on the same link stores nothing.
 - `src/anaf/services/anaf-connections.service.ts`: list, rename, remove (revoke at ANAF) and test certificates; the controller holds no repository.
 - `src/anaf/authorization-links/`: one-time links (7 days) that let a company's certificate holder authorize for an accountant. Only the SHA-256 hash of the link token is stored.
-- `src/anaf/spv/`: the SPV inbox (`SpvService`, `webserviced.anaf.ro/SPVWS2/rest`, base URL `ANAF_SPV_ENDPOINT`, still through `AnafApiService.request()` with `baseUrl`): `listaMesaje`, `descarcare`, `cerere` (document requests). Messages are kept in `spv_messages` with the PDF in the database or in Supabase Storage (`SPV_STORAGE`). `SpvSyncJob` (03:00 Europe/Bucharest) syncs every active certificate, because ANAF keeps messages only for a limited time; it may refresh tokens as a side effect, through the same cooldown. Routes: `/accountants/:accountantId/anaf/connections/:connectionId/spv/{messages,messages/:id/download,sync,requests}` and `/accountants/:accountantId/spv/archive`.
+- `src/anaf/spv/`: the SPV inbox (`SpvService`, `webserviced.anaf.ro/SPVWS2/rest`, base URL `ANAF_SPV_ENDPOINT`, still through `AnafApiService.request()` with `baseUrl`): `listaMesaje`, `descarcare`, `cerere` (document requests). **SPVWS2 does not accept ANAF OAuth tokens** (F5 APM answers 200 with a logout HTML page; see `docs/adr/0001-no-spv-inbox-over-oauth.md`), so the UI shows the archive and the document-request form (kept on purpose, though `cerere` is expected to 502) but no sync, and `SpvSyncJob` is not registered in `AnafModule`. Messages come in through the browser instead: the accountant opens `listaMesaje` at ANAF with their certificate, pastes or uploads the JSON (`POST spv/archive/import`, parsed by `spv-import.ts`, saved with no `anaf_connection_id`; the reply also carries the list's certificate serial, ANAF's "Nu exista mesaje" notice and the CUIs from its `cui` field that are not companies yet, which the page links to `companies?add=1&cuis=`), opens each PDF at `descarcare?id=` and uploads it (`PUT spv/archive/:id/document`). CORS blocks reading SPVWS2 from our pages, so the browser can't fetch it for us. The code and routes stay for when ANAF exposes SPVWS2 on api.anaf.ro; an HTML reply becomes a 502 "ANAF a returnat o pagină HTML în loc de răspunsul SPV". Messages already saved stay in `spv_messages` with the PDF in the database or in Supabase Storage (`SPV_STORAGE`). Routes: `/accountants/:accountantId/anaf/connections/:connectionId/spv/{messages,messages/:id/download,sync,requests}` and `/accountants/:accountantId/spv/archive`.
 - `src/open-data/`: public data.gov.ro datasets through `DataGovRoService` (CKAN search). `CaenService` (ONRC CAEN names, cached 24 h). Never bundle these datasets in the repo.
+- `src/accountants/`: the accountant's own profile (`GET|PATCH profile`), their firm looked up from ANAF by CUI (`profile/firm-lookup/:cui`), and `POST password` (re-issues the session cookie through `SessionCookieService`).
 - `src/companies/`: client CUIs, stored as digits without `RO`. `anafConnectionId` says which certificate to use for that company.
+  - Linking a different certificate (`PATCH :id`) first asks ANAF through `AnafCompanyAccessService` (`listaMesajeFactura?zile=1&cif=`): "Nu exista mesaje" or a message list means the certificate has the SPV right; an `eroare` about "drept" or a 403 means it doesn't (400, nothing saved); anything unreadable fails closed. The gateway services (`AnafTokenClient`, `AnafOAuthService`, `AnafApiService`, `AnafCompanyAccessService`) live in `AnafGatewayModule`, so `CompaniesModule` can use them without importing `AnafModule`.
   - Company ids are integers (identity, from 1). Parse route ids with `ParseIdPipe`.
+  - `POST companies/bulk` adds many CUIs at once (`ANAF_BULK_THROTTLE`); `POST :id/anaf-refresh` reloads the ANAF data (`AnafCompanyLookupService`, `ANAF_TVA_ENDPOINT`). The invoice logo is stored on the row (`PUT|GET|DELETE :id/logo`, multipart field `logo`, size cap in `company-logo.ts`).
+- `src/common/storage/supabase-storage.ts`: the one Supabase Storage client. `SpvFileStore` (`SUPABASE_SPV_BUCKET`) and `InvoiceFileStore` (`SUPABASE_INVOICE_BUCKET`) wrap it with their own path layout.
 
 - `src/invoices/`: fiscal invoices (Facturi), art. 319 Cod fiscal. Services: `InvoicesService` (list, stats, detail, create, UBL text), `InvoiceBuyersService` (buyer lookup and line suggestions), `InvoiceStornoService`, `InvoiceDeliveryService` (PDF/XML files, Storage, email, the follow-up after issuing) and `InvoiceNumbering` (one transaction per insert: next number, retried on a unique violation). Seller = the `companies` row (IBAN, bank, email, phone, logo live there); buyer data is looked up from ANAF's VAT registry through `AnafCompanyLookupService` and editable before issuing.
   - Seller and buyer are snapshotted as jsonb on the invoice. Money is computed in integer cents: VAT per rate group (`invoice-calc.ts`). VAT rates depend on the delivery date (`vat-rates.ts`: 21/11/0 from 2025-08-01). A seller that is not a VAT payer gets category `O` and no VAT; rate 0 needs a reason (`E`, `Z`, `AE`); `vatOnCollection` prints "TVA la încasare".
@@ -108,24 +114,23 @@ A Stop hook (`.claude/settings.json` → `.claude/hooks/verify-backend.sh`) bloc
 ## Roadmap
 - Phase 2: e-Factura is done (upload, state, messages, download, validator); e-Transport is next, built on AnafApiService. Not done for e-Factura: ANAF's signature validation service.
 - Frontend data: hooks live in `frontend/src/api/hooks/<feature>.ts`; logging in and any 401 drop the cached account data (`removeAccountData`).
-- Phase 3: React frontend in `frontend/` (scaffolded: auth, dashboard, companies, certificates; e-Factura/e-Transport pages wait for Phase 2). The backend expects it at `FRONTEND_URL` (default `http://localhost:5173`) and redirects to `/accountants/:accountantId/connections?status=ok|error`. Every app page lives under `/accountants/:accountantId/`; other paths redirect there for the signed-in accountant.
+- Phase 3: React frontend in `frontend/` (built: landing/auth, dashboard, companies, certificates, SPV, invoices, e-Factura, profile; e-Transport waits for its Phase 2 backend). The backend expects it at `FRONTEND_URL` (default `http://localhost:5173`) and redirects to `/accountants/:accountantId/connections?status=ok|error`. Every app page lives under `/accountants/:accountantId/`; other paths redirect there for the signed-in accountant.
 - Phase 4: background token refresh and expiry notifications, plus rate limiting for ANAF calls.
 - Phase 5: Azure deployment and CI/CD.
 
 ## Working notes
-- Git identity is configured (Andrei). The Phase 1 backend is in the "Initial commit" on `main`.
-- Work on feature branches. `main` is the base branch.
+- Work on feature branches (`feat/...`, `fix/...`) and merge into `main` through GitHub PRs.
 
 ## Agent skills
 
 ### Issue tracker
 
-Issues are tracked in GitHub Issues for kondrei/SPVDirect (via `gh`). See `docs/agents/issue-tracker.md`.
+Issues are tracked in GitHub Issues for kondrei/SPVDirect (via `gh`).
 
 ### Triage labels
 
-Default labels: needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix. See `docs/agents/triage-labels.md`.
+Default labels: needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix.
 
 ### Domain docs
 
-Single-context: one root `CONTEXT.md` plus `docs/adr/`. See `docs/agents/domain.md`.
+Single-context: one root `CONTEXT.md` plus `docs/adr/`. Neither exists yet; create them (with the `domain-modeling` skill) the first time a term or decision needs recording.

@@ -29,7 +29,7 @@ function setup(connection?: Partial<AnafConnection>) {
   const http = { axiosRef: { post } } as unknown as HttpService;
 
   const stored: AnafConnection = {
-    id: 'conn-1',
+    id: 7,
     accountantId: 1,
     status: 'active',
     roles: ['HELLO'],
@@ -42,12 +42,12 @@ function setup(connection?: Partial<AnafConnection>) {
     ...connection,
   } as AnafConnection;
 
-  const update = vi.fn((_id: string, values: Partial<AnafConnection>) => {
+  const update = vi.fn((_id: number, values: Partial<AnafConnection>) => {
     Object.assign(stored, values);
     return Promise.resolve({ affected: 1 });
   });
   const save = vi.fn((c: AnafConnection) => {
-    Object.assign(stored, c, { id: 'conn-1' });
+    Object.assign(stored, c, { id: 7 });
     return Promise.resolve(structuredClone(stored));
   });
   const getOne = vi.fn(() => Promise.resolve(structuredClone(stored)));
@@ -162,8 +162,8 @@ describe('AnafOAuthService', () => {
     post.mockReturnValue(new Promise((r) => (resolve = r)));
 
     const calls = [
-      service.getAccessToken('conn-1'),
-      service.getAccessToken('conn-1'),
+      service.getAccessToken(7),
+      service.getAccessToken(7),
     ];
     await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
     resolve({ data: { access_token: newAccess, refresh_token: newRefresh } });
@@ -183,11 +183,11 @@ describe('AnafOAuthService', () => {
     });
     const stale = structuredClone(stored);
 
-    await expect(service.getAccessToken('conn-1')).resolves.toBe(newAccess);
+    await expect(service.getAccessToken(7)).resolves.toBe(newAccess);
     getOne.mockResolvedValueOnce(stale);
 
     await expect(
-      service.getAccessToken('conn-1', { force: true }),
+      service.getAccessToken(7, { force: true }),
     ).resolves.toBe(newAccess);
     expect(post).toHaveBeenCalledTimes(1);
   });
@@ -203,7 +203,7 @@ describe('AnafOAuthService', () => {
       }),
     );
 
-    await expect(service.getAccessToken('conn-1')).rejects.toMatchObject({
+    await expect(service.getAccessToken(7)).rejects.toMatchObject({
       detail: expect.stringMatching(/401/),
     });
     expect(stored.status).toBe('active');
@@ -221,7 +221,7 @@ describe('AnafOAuthService', () => {
       }),
     );
 
-    await expect(service.getAccessToken('conn-1')).rejects.toMatchObject({
+    await expect(service.getAccessToken(7)).rejects.toMatchObject({
       detail: expect.stringMatching(/invalid_client/),
     });
     expect(stored.status).toBe('active');
@@ -232,7 +232,7 @@ describe('AnafOAuthService', () => {
       lastRefreshedAt: new Date(Date.now() - 10 * 1000),
     });
     await expect(
-      service.getAccessToken('conn-1', { force: true }),
+      service.getAccessToken(7, { force: true }),
     ).resolves.toBe('old-access');
     expect(post).not.toHaveBeenCalled();
   });
@@ -242,7 +242,7 @@ describe('AnafOAuthService', () => {
       accessExpiresAt: new Date(Date.now() + 80 * 24 * 3600 * 1000),
       lastRefreshedAt: new Date(Date.now() - 10 * 24 * 3600 * 1000),
     });
-    await expect(service.getAccessToken('conn-1')).resolves.toBe('old-access');
+    await expect(service.getAccessToken(7)).resolves.toBe('old-access');
     expect(post).not.toHaveBeenCalled();
   });
 
@@ -250,12 +250,12 @@ describe('AnafOAuthService', () => {
     const { service, post, update } = setup();
     post.mockRejectedValue(new Error('ECONNRESET'));
 
-    await expect(service.getAccessToken('conn-1')).resolves.toBe('old-access');
-    await expect(service.getAccessToken('conn-1')).resolves.toBe('old-access');
+    await expect(service.getAccessToken(7)).resolves.toBe('old-access');
+    await expect(service.getAccessToken(7)).resolves.toBe('old-access');
 
     expect(post).toHaveBeenCalledTimes(1);
     expect(update).toHaveBeenCalledTimes(1);
-    expect(update).toHaveBeenCalledWith('conn-1', { refreshStartedAt: null });
+    expect(update).toHaveBeenCalledWith(7, { refreshStartedAt: null });
   });
 
   it('marks the connection expired when ANAF rejects the refresh token', async () => {
@@ -266,10 +266,10 @@ describe('AnafOAuthService', () => {
         response: { status: 400, data: { error: 'invalid_grant' } },
       }),
     );
-    await expect(service.getAccessToken('conn-1')).rejects.toThrow(
+    await expect(service.getAccessToken(7)).rejects.toThrow(
       /Reautorizați/,
     );
-    expect(update).toHaveBeenCalledWith('conn-1', {
+    expect(update).toHaveBeenCalledWith(7, {
       status: 'expired',
       refreshStartedAt: null,
     });
@@ -285,7 +285,7 @@ describe('AnafOAuthService', () => {
         code: 'ECONNABORTED',
       }),
     );
-    const err = await service.getAccessToken('conn-1').catch((e: unknown) => e);
+    const err = await service.getAccessToken(7).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(AnafTokenError);
     expect((err as AnafTokenError).getStatus()).toBe(503);
     expect((err as AnafTokenError).message).toMatch(/Reîncercați/);
@@ -303,6 +303,56 @@ describe('AnafOAuthService', () => {
     await expect(client.exchangeCode('c')).rejects.toMatchObject({
       detail: expect.stringMatching(/exp/),
     });
+  });
+
+  it('describes an access token without exp and never echoes it', async () => {
+    const { client, post } = setup();
+    post.mockResolvedValue({
+      data: {
+        access_token: 'opaque.access-secret',
+        refresh_token: fakeAnafJwt(),
+      },
+    });
+    const err = (await client
+      .exchangeCode('c')
+      .catch((e: unknown) => e)) as AnafTokenError;
+    expect(err.detail).toContain('access_token has no exp claim (opaque, 2');
+    expect(err.detail).toContain('expires_in absent');
+    expect(err.detail).not.toContain('access-secret');
+  });
+
+  it('gives an opaque refresh token the 365 days ANAF documents', async () => {
+    const { client, post } = setup();
+    post.mockResolvedValue({
+      data: { access_token: fakeAnafJwt(), refresh_token: 'opaque-refresh' },
+    });
+    const tokens = await client.exchangeCode('c');
+    const days =
+      (tokens.refreshExpiresAt.getTime() - Date.now()) / (24 * 3600 * 1000);
+    expect(days).toBeCloseTo(365, 2);
+  });
+
+  it('keeps the stored expiry when a refresh reuses an opaque refresh token', async () => {
+    const { client, post } = setup();
+    post.mockResolvedValue({ data: { access_token: fakeAnafJwt() } });
+    const current = new Date(Date.now() + 100 * 24 * 3600 * 1000);
+    const tokens = await client.refreshTokens('opaque-refresh', current);
+    expect(tokens.refreshToken).toBe('opaque-refresh');
+    expect(tokens.refreshExpiresAt).toEqual(current);
+  });
+
+  it('prefers the refresh token exp claim when it is a JWT', async () => {
+    const { client, post } = setup();
+    post.mockResolvedValue({
+      data: {
+        access_token: fakeAnafJwt(),
+        refresh_token: fakeAnafJwt({ exp: 1705509635 }),
+      },
+    });
+    const tokens = await client.exchangeCode('c');
+    expect(tokens.refreshExpiresAt.toISOString()).toBe(
+      '2024-01-17T16:40:35.000Z',
+    );
   });
 
   it('uses expires_in from ANAF when the access token has no exp', async () => {
@@ -332,9 +382,9 @@ describe('AnafOAuthService', () => {
       },
       'self',
     );
-    expect(saved.id).toBe('conn-1');
+    expect(saved.id).toBe(7);
     expect(saved.deniedWithFreshTokenAt).toBeNull();
-    await service.getAccessToken('conn-1', { force: true });
+    await service.getAccessToken(7, { force: true });
     expect(post).not.toHaveBeenCalled();
   });
 
@@ -346,9 +396,9 @@ describe('AnafOAuthService', () => {
       const newAccess = fakeAnafJwt();
       const newRefresh = fakeAnafJwt();
 
-      const first = service.getAccessToken('conn-1');
+      const first = service.getAccessToken(7);
       await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
-      const second = instance().getAccessToken('conn-1', { force: true });
+      const second = instance().getAccessToken(7, { force: true });
       await tick();
       pending.resolve({
         data: { access_token: newAccess, refresh_token: newRefresh },
@@ -367,11 +417,11 @@ describe('AnafOAuthService', () => {
       const { service, instance, post } = setup();
       post.mockRejectedValue(new Error('ECONNRESET'));
 
-      await expect(service.getAccessToken('conn-1')).resolves.toBe(
+      await expect(service.getAccessToken(7)).resolves.toBe(
         'old-access',
       );
       await expect(
-        instance().getAccessToken('conn-1', { force: true }),
+        instance().getAccessToken(7, { force: true }),
       ).resolves.toBe('old-access');
       expect(post).toHaveBeenCalledTimes(1);
     });
@@ -381,10 +431,10 @@ describe('AnafOAuthService', () => {
       const pending = deferred();
       post.mockReturnValue(pending.promise);
 
-      const first = service.getAccessToken('conn-1').catch((e: unknown) => e);
+      const first = service.getAccessToken(7).catch((e: unknown) => e);
       await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
       const second = instance()
-        .getAccessToken('conn-1', { force: true })
+        .getAccessToken(7, { force: true })
         .catch((e: unknown) => e);
       await tick();
       pending.resolve(
@@ -412,7 +462,7 @@ describe('AnafOAuthService', () => {
         data: { access_token: newAccess, refresh_token: fakeAnafJwt() },
       });
 
-      await expect(service.getAccessToken('conn-1')).resolves.toBe(newAccess);
+      await expect(service.getAccessToken(7)).resolves.toBe(newAccess);
       expect(stored.refreshStartedAt).toBeNull();
     });
   });
@@ -422,9 +472,9 @@ describe('AnafOAuthService', () => {
       const { service, post, update } = setup();
       post.mockResolvedValue({ status: 200, data: '' });
 
-      await expect(service.revokeConnection('conn-1')).resolves.toBe(true);
+      await expect(service.revokeConnection(7)).resolves.toBe(true);
 
-      expect(update).toHaveBeenCalledWith('conn-1', { status: 'revoked' });
+      expect(update).toHaveBeenCalledWith(7, { status: 'revoked' });
       expect(post).toHaveBeenCalledTimes(2);
       const forms = post.mock.calls.map(([url, body, options]) => {
         expect(url).toBe(env.ANAF_REVOKE_ENDPOINT);
@@ -446,9 +496,9 @@ describe('AnafOAuthService', () => {
       post.mockReturnValueOnce(pending.promise);
       post.mockResolvedValue({ status: 200, data: '' });
 
-      const access = service.getAccessToken('conn-1');
+      const access = service.getAccessToken(7);
       await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
-      const revoke = service.revokeConnection('conn-1');
+      const revoke = service.revokeConnection(7);
       const newRefresh = fakeAnafJwt();
       pending.resolve({
         data: { access_token: fakeAnafJwt(), refresh_token: newRefresh },
@@ -467,9 +517,9 @@ describe('AnafOAuthService', () => {
       post.mockReturnValueOnce(pending.promise);
       post.mockResolvedValue({ status: 200, data: '' });
 
-      const access = service.getAccessToken('conn-1');
+      const access = service.getAccessToken(7);
       await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
-      const revoke = instance().revokeConnection('conn-1');
+      const revoke = instance().revokeConnection(7);
       await tick();
       expect(post).toHaveBeenCalledTimes(1);
       const newRefresh = fakeAnafJwt();
@@ -490,7 +540,7 @@ describe('AnafOAuthService', () => {
       });
       post.mockResolvedValue({ status: 200, data: '' });
 
-      await service.revokeConnection('conn-1');
+      await service.revokeConnection(7);
 
       expect(post).toHaveBeenCalledTimes(1);
       expect(new URLSearchParams(post.mock.calls[0][1]).get('token')).toBe(
@@ -503,7 +553,7 @@ describe('AnafOAuthService', () => {
         refreshExpiresAt: new Date(Date.now() - 1000),
       });
 
-      await expect(service.revokeConnection('conn-1')).resolves.toBe(true);
+      await expect(service.revokeConnection(7)).resolves.toBe(true);
       expect(post).not.toHaveBeenCalled();
     });
 
@@ -516,7 +566,7 @@ describe('AnafOAuthService', () => {
         }),
       );
 
-      await expect(service.revokeConnection('conn-1')).resolves.toBe(false);
+      await expect(service.revokeConnection(7)).resolves.toBe(false);
     });
   });
 });

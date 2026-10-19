@@ -5,7 +5,6 @@ import {
   Header,
   HttpCode,
   Param,
-  ParseUUIDPipe,
   Post,
   Query,
   UseGuards,
@@ -41,7 +40,7 @@ export class SpvController {
   @Throttle(SPV_THROTTLE)
   list(
     @Param('accountantId', ParseIdPipe) accountantId: number,
-    @Param('connectionId', ParseUUIDPipe) connectionId: string,
+    @Param('connectionId', ParseIdPipe) connectionId: number,
     @Query() query: ListSpvMessagesQuery,
   ) {
     return this.spv.listMessages(accountantId, connectionId, query);
@@ -52,7 +51,7 @@ export class SpvController {
   @Header('Cache-Control', 'no-store')
   async download(
     @Param('accountantId', ParseIdPipe) accountantId: number,
-    @Param('connectionId', ParseUUIDPipe) connectionId: string,
+    @Param('connectionId', ParseIdPipe) connectionId: number,
     @Param('messageId', ParseSpvMessageIdPipe) messageId: string,
   ) {
     const doc = await this.spv.downloadMessage(
@@ -68,7 +67,7 @@ export class SpvController {
   @Throttle(SPV_SYNC_THROTTLE)
   async sync(
     @Param('accountantId', ParseIdPipe) accountantId: number,
-    @Param('connectionId', ParseUUIDPipe) connectionId: string,
+    @Param('connectionId', ParseIdPipe) connectionId: number,
     @Body() dto: SyncSpvDto,
   ) {
     return this.archive.sync(accountantId, connectionId, dto.zile);
@@ -79,7 +78,7 @@ export class SpvController {
   @Throttle(SPV_REQUEST_THROTTLE)
   createRequest(
     @Param('accountantId', ParseIdPipe) accountantId: number,
-    @Param('connectionId', ParseUUIDPipe) connectionId: string,
+    @Param('connectionId', ParseIdPipe) connectionId: number,
     @Body() dto: CreateSpvRequestDto,
   ) {
     return this.spv.createRequest(accountantId, connectionId, dto);

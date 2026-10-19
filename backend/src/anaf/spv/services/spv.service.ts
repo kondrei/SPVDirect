@@ -10,7 +10,7 @@ import type { CreateSpvRequestDto } from '../spv.dto.js';
 
 export const SPV_SERVICE = 'SPV';
 
-interface RawSpvMessage {
+export interface RawSpvMessage {
   id?: string | number;
   detalii?: string;
   cif?: string;
@@ -64,10 +64,27 @@ export interface SpvRequestResult {
 
 export type SpvDocument = DownloadFile;
 
+interface SpvReply {
+  status: number;
+  headers?: Record<string, unknown>;
+  data: unknown;
+}
+
 function textOrNull(value: string | number | null | undefined): string | null {
   return value === undefined || value === null || value === ''
     ? null
     : String(value);
+}
+
+export function toSpvMessages(raw: RawSpvMessage[]): SpvMessage[] {
+  return raw.map((m) => ({
+    id: String(m.id),
+    details: textOrNull(m.detalii),
+    cif: textOrNull(m.cif),
+    createdAt: textOrNull(m.data_creare),
+    requestId: textOrNull(m.id_solicitare),
+    type: textOrNull(m.tip),
+  }));
 }
 
 @Injectable()
@@ -79,7 +96,7 @@ export class SpvService {
 
   async listMessages(
     accountantId: number,
-    connectionId: string,
+    connectionId: number,
     query: { zile: number; cif?: string },
   ): Promise<SpvMessageList> {
     const params: Record<string, string | number> = { zile: query.zile };
@@ -93,19 +110,12 @@ export class SpvService {
       path: '/listaMesaje',
       params,
     });
-    const body = this.json<RawSpvList>(res.data);
+    const body = this.json<RawSpvList>(res);
     this.throwOnBusinessError(body);
 
     return {
       title: textOrNull(body.titlu),
-      messages: (body.mesaje ?? []).map((m) => ({
-        id: String(m.id),
-        details: textOrNull(m.detalii),
-        cif: textOrNull(m.cif),
-        createdAt: textOrNull(m.data_creare),
-        requestId: textOrNull(m.id_solicitare),
-        type: textOrNull(m.tip),
-      })),
+      messages: toSpvMessages(body.mesaje ?? []),
       cnp: textOrNull(body.cnp),
       cuis: textOrNull(body.cui),
       certSerial: textOrNull(body.serial),
@@ -114,7 +124,7 @@ export class SpvService {
 
   async downloadMessage(
     accountantId: number,
-    connectionId: string,
+    connectionId: number,
     messageId: string,
   ): Promise<SpvDocument> {
     const res = await this.api.request<ArrayBuffer>({
@@ -129,11 +139,17 @@ export class SpvService {
     const content = Buffer.from(res.data);
     const contentType = String(res.headers?.['content-type'] ?? '');
 
+    const reply = {
+      status: res.status,
+      headers: res.headers,
+      data: content.toString('utf8'),
+    };
     if (contentType.includes('json') || content[0] === 0x7b) {
-      this.throwOnBusinessError(
-        this.json<RawSpvList>(content.toString('utf8')),
-      );
+      this.throwOnBusinessError(this.json<RawSpvList>(reply));
       throw new BadGatewayException('ANAF a returnat un răspuns neașteptat');
+    }
+    if (contentType.includes('html') || content[0] === 0x3c) {
+      throw this.unreadable(reply);
     }
     if (content.length === 0) {
       throw new BadGatewayException('ANAF a returnat un document gol');
@@ -148,7 +164,7 @@ export class SpvService {
 
   async createRequest(
     accountantId: number,
-    connectionId: string,
+    connectionId: number,
     dto: CreateSpvRequestDto,
   ): Promise<SpvRequestResult> {
     const params: Record<string, string | number> = {
@@ -171,7 +187,7 @@ export class SpvService {
       path: '/cerere',
       params,
     });
-    const body = this.json<RawSpvRequestResult>(res.data);
+    const body = this.json<RawSpvRequestResult>(res);
     this.throwOnBusinessError(body);
     if (body.id_solicitare === undefined || body.id_solicitare === null) {
       throw new BadGatewayException('ANAF nu a returnat numărul solicitării');
@@ -190,19 +206,32 @@ export class SpvService {
     return this.config.getOrThrow<string>('ANAF_SPV_ENDPOINT');
   }
 
-  private json<T extends object>(data: unknown): T {
-    let parsed: unknown = data;
-    if (typeof data === 'string') {
+  private json<T extends object>(res: SpvReply): T {
+    let parsed: unknown = res.data;
+    if (typeof res.data === 'string') {
       try {
-        parsed = JSON.parse(data);
+        parsed = JSON.parse(res.data);
       } catch {
-        throw new BadGatewayException('ANAF a returnat un răspuns invalid');
+        parsed = null;
       }
     }
     if (typeof parsed !== 'object' || parsed === null) {
-      throw new BadGatewayException('ANAF a returnat un răspuns invalid');
+      throw this.unreadable(res);
     }
     return parsed as T;
+  }
+
+  private unreadable(res: SpvReply): BadGatewayException {
+    const text = typeof res.data === 'string' ? res.data : '';
+    const header = res.headers?.['content-type'];
+    const contentType = typeof header === 'string' ? header : '';
+    const html =
+      contentType.includes('html') || text.trimStart().startsWith('<');
+    return new BadGatewayException(
+      html
+        ? 'ANAF a returnat o pagină HTML în loc de răspunsul SPV. Serviciul SPV poate să nu accepte autorizarea OAuth a certificatului.'
+        : 'ANAF a returnat un răspuns invalid',
+    );
   }
 
   private throwOnBusinessError(body: { eroare?: string }): void {

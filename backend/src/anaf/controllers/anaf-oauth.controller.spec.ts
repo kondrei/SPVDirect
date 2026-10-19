@@ -13,12 +13,14 @@ const jwt = new JwtService({ secret: 'x'.repeat(32) });
 
 async function callback({
   accountantId = 5,
+  linkId = 3,
   error,
   state = 's',
   mode = 'self',
   outcome = { kind: 'self', accountantId: 5 },
 }: {
   accountantId?: unknown;
+  linkId?: unknown;
   error?: string;
   state?: string;
   mode?: 'self' | 'link';
@@ -36,7 +38,7 @@ async function callback({
   const cookie = await jwt.signAsync(
     mode === 'self'
       ? { state: 's', mode, accountantId }
-      : { state: 's', mode, linkId: 'link-1' },
+      : { state: 's', mode, linkId },
     { audience: OAUTH_STATE_AUDIENCE },
   );
   const req = {
@@ -121,6 +123,18 @@ describe('AnafOAuthController.callback with a state cookie from before integer i
     });
     expect(authorization.complete).not.toHaveBeenCalled();
     expect(res.redirect).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.send.mock.calls[0][0]).toContain('Sesiune expirată');
+  });
+});
+
+describe('AnafOAuthController.callback with a link state cookie from before integer link ids', () => {
+  it('treats it as expired instead of claiming the link', async () => {
+    const { authorization, res } = await callback({
+      mode: 'link',
+      linkId: '0f8fad5b-d9cb-469f-a165-70867728950e',
+    });
+    expect(authorization.complete).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.send.mock.calls[0][0]).toContain('Sesiune expirată');
   });

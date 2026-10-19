@@ -233,7 +233,7 @@ export function ConnectionsPage() {
   const connections = useConnections();
   const companies = useCompanies();
   const connectUrl = useConnectUrl();
-  const count = (id: string) =>
+  const count = (id: number) =>
     companies.data?.filter((co) => co.anafConnectionId === id).length ?? 0;
   const list = connections.data ?? [];
 

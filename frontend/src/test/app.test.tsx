@@ -336,6 +336,17 @@ describe('session', () => {
 });
 
 describe('companies', () => {
+  it('prefills the add form with the valid CUIs from the link', async () => {
+    renderApp('/companies?add=1&cuis=38745062,RO14399840,abc,38745062', {
+      'GET /auth/me': { status: 200, body: ME },
+      'GET /accountants/1/companies': { status: 200, body: [] },
+      'GET /accountants/1/anaf/connections': { status: 200, body: [] },
+    });
+    expect(await screen.findByLabelText('CUI-uri')).toHaveValue(
+      '38745062, 14399840',
+    );
+  });
+
   it('validates the CUI before calling the API, posts only the CUI, then opens the new company', async () => {
     const user = userEvent.setup();
     let posted: unknown;

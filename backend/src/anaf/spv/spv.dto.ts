@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Transform, Type } from 'class-transformer';
 import {
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -12,8 +13,8 @@ import {
   Max,
   MaxLength,
   Min,
-  MinLength,
 } from 'class-validator';
+import { SPV_INCOME_REASONS, SPV_REQUEST_TYPES } from './spv-request-types.js';
 
 export const MAX_SPV_DAYS = 60;
 
@@ -47,9 +48,7 @@ export class ListSpvMessagesQuery {
 }
 
 export class CreateSpvRequestDto {
-  @IsString()
-  @MinLength(2)
-  @MaxLength(100)
+  @IsIn(SPV_REQUEST_TYPES, { message: 'Tip de cerere SPV necunoscut' })
   tip: string;
 
   @Transform(({ value }) => stripSpaces(value))
@@ -71,8 +70,9 @@ export class CreateSpvRequestDto {
   luna?: number;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(200)
+  @IsIn(SPV_INCOME_REASONS, {
+    message: 'Motiv necunoscut pentru adeverința de venit',
+  })
   motiv?: string;
 
   @IsOptional()

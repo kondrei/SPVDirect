@@ -8,6 +8,7 @@ import type { Company } from '../../../companies/company.entity.js';
 import {
   MAX_DOWNLOADS_PER_SYNC,
   normalizeCif,
+  NOT_STORED,
   SpvArchiveService,
 } from './spv-archive.service.js';
 import type { SpvFileStore } from './spv-file-store.service.js';
@@ -37,6 +38,7 @@ function setup(storeEnabled = false) {
   const messages = {
     createQueryBuilder: vi.fn().mockReturnValue(insertChain),
     findAndCount: vi.fn().mockResolvedValue([[], 0]),
+    findOneBy: vi.fn(),
     update: vi.fn().mockResolvedValue(undefined),
   };
   const companies = {
@@ -88,16 +90,16 @@ describe('SpvArchiveService.sync', () => {
       filename: 'mesaj-100.pdf',
     });
 
-    const summary = await service.sync(1, 'conn', 60);
+    const summary = await service.sync(1, 7, 60);
 
-    expect(listMessages).toHaveBeenCalledWith(1, 'conn', { zile: 60 });
+    expect(listMessages).toHaveBeenCalledWith(1, 7, { zile: 60 });
     const rows = insertChain.values.mock.calls[0][0] as Record<
       string,
       unknown
     >[];
     expect(rows[0]).toMatchObject({
       accountantId: 1,
-      anafConnectionId: 'conn',
+      anafConnectionId: 7,
       companyId: 7,
       anafMessageId: '100',
       cif: 'RO8000000000',
@@ -105,11 +107,11 @@ describe('SpvArchiveService.sync', () => {
       anafCreatedRaw: '20.12.2017 12:00:00',
     });
     expect(insertChain.orIgnore).toHaveBeenCalled();
-    expect(downloadMessage).toHaveBeenCalledWith(1, 'conn', '100');
+    expect(downloadMessage).toHaveBeenCalledWith(1, 7, '100');
     expect(messages.update).toHaveBeenCalledWith(
       { id: 11 },
       expect.objectContaining({
-        anafConnectionId: 'conn',
+        anafConnectionId: 7,
         contentType: 'application/pdf',
         sizeBytes: 4,
       }),
@@ -126,7 +128,7 @@ describe('SpvArchiveService.sync', () => {
   it('only downloads what is missing and caps one run', async () => {
     const { service, listMessages, messages } = setup();
     listMessages.mockResolvedValue({ messages: [MSG] });
-    await service.sync(1, 'conn');
+    await service.sync(1, 7);
     expect(messages.findAndCount.mock.calls[0][0]).toMatchObject({
       take: MAX_DOWNLOADS_PER_SYNC,
     });
@@ -149,7 +151,7 @@ describe('SpvArchiveService.sync', () => {
         contentType: 'application/pdf',
         filename: 'f',
       });
-    await expect(service.sync(1, 'conn')).resolves.toMatchObject({
+    await expect(service.sync(1, 7)).resolves.toMatchObject({
       downloaded: 1,
       failed: 1,
       pending: 1,
@@ -167,7 +169,7 @@ describe('SpvArchiveService.sync', () => {
       2,
     ]);
     downloadMessage.mockRejectedValue(new HttpException('slow down', 429));
-    const summary = await service.sync(1, 'conn');
+    const summary = await service.sync(1, 7);
     expect(downloadMessage).toHaveBeenCalledTimes(1);
     expect(summary.failed).toBe(1);
   });
@@ -175,7 +177,7 @@ describe('SpvArchiveService.sync', () => {
   it('does nothing else when ANAF has no messages', async () => {
     const { service, listMessages, messages, insertChain } = setup();
     listMessages.mockResolvedValue({ messages: [] });
-    await expect(service.sync(1, 'conn')).resolves.toEqual({
+    await expect(service.sync(1, 7)).resolves.toEqual({
       fetched: 0,
       added: 0,
       downloaded: 0,
@@ -189,7 +191,7 @@ describe('SpvArchiveService.sync', () => {
   it('propagates an ANAF listing error', async () => {
     const { service, listMessages } = setup();
     listMessages.mockRejectedValue(new Error('ANAF down'));
-    await expect(service.sync(1, 'conn')).rejects.toThrow('ANAF down');
+    await expect(service.sync(1, 7)).rejects.toThrow('ANAF down');
   });
 });
 
@@ -272,24 +274,18 @@ describe('SpvArchiveService.download', () => {
     expect(downloadMessage).not.toHaveBeenCalled();
   });
 
-  it('fetches and stores a missing copy', async () => {
-    const { service, downloadMessage, messages } = withMessage({
+  it('asks for the PDF from ANAF instead of calling SPVWS2 when the copy is missing', async () => {
+    const { service, downloadMessage } = withMessage({
       id: 1,
       anafMessageId: '100',
-      anafConnectionId: 'conn',
+      anafConnectionId: 7,
       content: null,
+      storagePath: null,
     });
-    const fetched = {
-      content: Buffer.from('abc'),
-      contentType: 'application/pdf',
-      filename: 'mesaj-100.pdf',
-    };
-    downloadMessage.mockResolvedValue(fetched);
-    await expect(service.download(1, 1)).resolves.toBe(fetched);
-    expect(messages.update).toHaveBeenCalledWith(
-      { id: 1 },
-      expect.objectContaining({ sizeBytes: 3 }),
+    await expect(service.download(1, 1)).rejects.toEqual(
+      new ConflictException(NOT_STORED),
     );
+    expect(downloadMessage).not.toHaveBeenCalled();
   });
 
   it('returns 404 for another accountant’s or unknown message', async () => {
@@ -312,6 +308,168 @@ describe('SpvArchiveService.download', () => {
   });
 });
 
+describe('SpvArchiveService.importMessages', () => {
+  const anafList = (mesaje: unknown[]) =>
+    Buffer.from(
+      JSON.stringify({
+        titlu: 'Lista Mesaje disponibile din ultimele 50 zile',
+        mesaje,
+        cnp: '1111111111118',
+        cui: '8000000000,38745062,1111111111118',
+        serial: 'ABC',
+      }),
+    );
+
+  it('saves the messages from the ANAF list without a certificate and links them to companies', async () => {
+    const { service, insertChain, companies, listMessages } = setup();
+    insertChain.execute.mockResolvedValue({ raw: [{ id: 1 }] });
+    const summary = await service.importMessages(
+      1,
+      anafList([
+        {
+          id: '929663619',
+          detalii: 'Document Fisa Rol pentru CIF=8000000000',
+          cif: '8000000000',
+          data_creare: '18.09.2026 08:16:32',
+          id_solicitare: '193229752',
+          tip: 'RASPUNS SOLICITARE',
+        },
+        {
+          id: '930396467',
+          detalii: 'Instiintare',
+          cif: '38745062',
+          data_creare: '22.09.2026 10:38:14',
+          id_solicitare: null,
+          tip: 'NOTIFICARE',
+        },
+      ]),
+    );
+
+    expect(summary).toEqual({
+      fetched: 2,
+      added: 1,
+      title: 'Lista Mesaje disponibile din ultimele 50 zile',
+      certSerial: 'ABC',
+      notice: null,
+      rights: 3,
+      unknownCuis: ['38745062'],
+    });
+    expect(listMessages).not.toHaveBeenCalled();
+    expect(companies.find).toHaveBeenLastCalledWith({
+      select: { cui: true },
+      where: { accountantId: 1, cui: expect.anything() },
+    });
+    const rows = insertChain.values.mock.calls[0][0] as Record<
+      string,
+      unknown
+    >[];
+    expect(rows[0]).toMatchObject({
+      accountantId: 1,
+      anafConnectionId: null,
+      companyId: 7,
+      anafMessageId: '929663619',
+      requestId: '193229752',
+      type: 'RASPUNS SOLICITARE',
+      anafCreatedRaw: '18.09.2026 08:16:32',
+    });
+    expect(rows[1]).toMatchObject({ companyId: null, requestId: null });
+    expect(insertChain.orIgnore).toHaveBeenCalled();
+  });
+
+  it('accepts an empty ANAF answer', async () => {
+    const { service, insertChain } = setup();
+    await expect(
+      service.importMessages(
+        1,
+        Buffer.from(
+          '{"titlu":"Lista Mesaje","eroare":"Nu exista mesaje in ultimele 5 zile"}',
+        ),
+      ),
+    ).resolves.toEqual({
+      fetched: 0,
+      added: 0,
+      title: 'Lista Mesaje',
+      certSerial: null,
+      notice: 'Nu exista mesaje in ultimele 5 zile',
+      rights: 0,
+      unknownCuis: [],
+    });
+    expect(insertChain.execute).not.toHaveBeenCalled();
+  });
+
+  it('lists the CUIs of the certificate that are not companies yet, without CNPs', async () => {
+    const { service, companies } = setup();
+    companies.find.mockResolvedValue([{ id: 7, cui: '8000000000' }]);
+    const summary = await service.importMessages(
+      1,
+      Buffer.from(
+        JSON.stringify({
+          eroare: 'Nu exista mesaje in ultimele 5 zile',
+          cui: '8000000000, 38745062,1111111111118,38745062,RO123,',
+        }),
+      ),
+    );
+    expect(summary.rights).toBe(3);
+    expect(summary.unknownCuis).toEqual(['38745062']);
+    expect(companies.find).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('SpvArchiveService.saveDocument', () => {
+  const pdf = Buffer.from('%PDF-1.4 test');
+
+  it('stores the uploaded PDF on the message and keeps its certificate', async () => {
+    const { service, messages } = setup();
+    messages.findOneBy
+      .mockResolvedValueOnce({
+        id: 3,
+        accountantId: 1,
+        anafMessageId: '929663619',
+        anafConnectionId: null,
+      })
+      .mockResolvedValueOnce({
+        id: 3,
+        accountantId: 1,
+        anafMessageId: '929663619',
+        anafConnectionId: null,
+        sizeBytes: pdf.length,
+        anafCreatedAt: null,
+        downloadedAt: new Date('2026-10-17T10:00:00Z'),
+      });
+
+    const saved = await service.saveDocument(1, 3, pdf);
+
+    expect(messages.findOneBy).toHaveBeenCalledWith({ id: 3, accountantId: 1 });
+    expect(messages.update).toHaveBeenCalledWith(
+      { id: 3 },
+      expect.objectContaining({
+        anafConnectionId: null,
+        content: pdf,
+        contentType: 'application/pdf',
+        sizeBytes: pdf.length,
+      }),
+    );
+    expect(saved).toMatchObject({ id: 3, stored: true });
+  });
+
+  it('refuses a file that is not a PDF before touching the database', async () => {
+    const { service, messages } = setup();
+    await expect(
+      service.saveDocument(1, 3, Buffer.from('<html>')),
+    ).rejects.toThrow('Fișierul nu este un PDF.');
+    expect(messages.findOneBy).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 for another accountant’s message', async () => {
+    const { service, messages } = setup();
+    messages.findOneBy.mockResolvedValue(null);
+    await expect(service.saveDocument(1, 99, pdf)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(messages.update).not.toHaveBeenCalled();
+  });
+});
+
 describe('SpvArchiveService with Supabase Storage', () => {
   const doc = {
     content: Buffer.from('%PDF'),
@@ -329,7 +487,7 @@ describe('SpvArchiveService with Supabase Storage', () => {
     ]);
     downloadMessage.mockResolvedValue(doc);
 
-    await service.sync(1, 'conn');
+    await service.sync(1, 7);
 
     expect(store.put).toHaveBeenCalledWith(
       '1/100.pdf',
@@ -357,7 +515,7 @@ describe('SpvArchiveService with Supabase Storage', () => {
     downloadMessage.mockResolvedValue(doc);
     store.put.mockRejectedValue(new Error('storage down'));
 
-    const summary = await service.sync(1, 'conn');
+    const summary = await service.sync(1, 7);
 
     expect(summary).toMatchObject({ downloaded: 0, failed: 1, pending: 1 });
     expect(messages.update).not.toHaveBeenCalled();
@@ -410,7 +568,7 @@ describe('SpvArchiveService with Supabase Storage', () => {
       1,
     ]);
     downloadMessage.mockResolvedValue(doc);
-    await service.sync(1, 'conn');
+    await service.sync(1, 7);
     expect(store.put).not.toHaveBeenCalled();
     expect(messages.update).toHaveBeenCalledWith(
       { id: 11 },

@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { AnafConnection } from '../../anaf/anaf-connection.entity.js';
+import { AnafCompanyAccessService } from '../../anaf/services/anaf-company-access.service.js';
 import {
   isForeignKeyViolation,
   isUniqueViolation,
@@ -39,6 +40,7 @@ export class CompaniesService {
     @InjectRepository(AnafConnection)
     private readonly connections: Repository<AnafConnection>,
     private readonly anaf: AnafCompanyLookupService,
+    private readonly access: AnafCompanyAccessService,
   ) {}
 
   list(accountantId: number): Promise<Company[]> {
@@ -157,22 +159,32 @@ export class CompaniesService {
     if (dto.bankName !== undefined) company.bankName = dto.bankName;
     if (dto.email !== undefined) company.email = dto.email;
     if (dto.phone !== undefined) company.phone = dto.phone;
-    if (dto.anafConnectionId !== undefined) {
-      if (
-        dto.anafConnectionId !== null &&
-        !(await this.connections.existsBy({
-          id: dto.anafConnectionId,
+    if (
+      dto.anafConnectionId !== undefined &&
+      dto.anafConnectionId !== company.anafConnectionId
+    ) {
+      if (dto.anafConnectionId !== null) {
+        if (
+          !(await this.connections.existsBy({
+            id: dto.anafConnectionId,
+            accountantId,
+          }))
+        ) {
+          throw new BadRequestException('Certificat ANAF necunoscut');
+        }
+        await this.access.assertAccess(
           accountantId,
-        }))
-      ) {
-        throw new BadRequestException('Certificat ANAF necunoscut');
+          dto.anafConnectionId,
+          company.cui,
+          company.id,
+        );
       }
       company.anafConnectionId = dto.anafConnectionId;
     }
     return this.companies.save(company);
   }
 
-  async attachConnection(companyId: number, connectionId: string) {
+  async attachConnection(companyId: number, connectionId: number) {
     await this.companies.update(
       { id: companyId },
       { anafConnectionId: connectionId },

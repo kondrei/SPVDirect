@@ -19,3 +19,5 @@ export const INVOICE_THROTTLE = { default: { limit: 30, ttl: MINUTE_MS } };
 export const INVOICE_MAIL_THROTTLE = { default: { limit: 10, ttl: MINUTE_MS } };
 export const PUBLIC_LINK_THROTTLE = { default: { limit: 20, ttl: MINUTE_MS } };
 export const PUBLIC_STATS_THROTTLE = { default: { limit: 30, ttl: MINUTE_MS } };
+
+export const ANAF_REFRESH_TOKEN_LIFETIME_MS = 365 * 24 * 3600 * 1000;

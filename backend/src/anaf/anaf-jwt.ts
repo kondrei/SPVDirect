@@ -44,6 +44,23 @@ export function decodeAnafClaims(token: string): AnafTokenClaims {
             .map((r) => r.trim())
             .filter(Boolean)
         : [],
-    exp: typeof payload.exp === 'number' ? new Date(payload.exp * 1000) : null,
+    exp: parseExp(payload.exp),
   };
+}
+
+function parseExp(exp: unknown): Date | null {
+  const seconds =
+    typeof exp === 'string' && /^\d+$/.test(exp) ? Number(exp) : exp;
+  return typeof seconds === 'number' && Number.isFinite(seconds) && seconds > 0
+    ? new Date(seconds * 1000)
+    : null;
+}
+
+export function describeTokenShape(token: string): string {
+  const payload = decodeJwtPayload(token);
+  if (!payload) {
+    return `opaque, ${token.split('.').length} segment(s), ${token.length} chars`;
+  }
+  const claims = Object.keys(payload).sort().join(', ') || 'none';
+  return `JWT, claims: ${claims}; exp is ${typeof payload.exp}`;
 }

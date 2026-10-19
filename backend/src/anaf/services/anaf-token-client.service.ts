@@ -2,7 +2,8 @@ import { ServiceUnavailableException, Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { isAxiosError } from 'axios';
-import { decodeAnafClaims } from '../anaf-jwt.js';
+import { decodeAnafClaims, describeTokenShape } from '../anaf-jwt.js';
+import { ANAF_REFRESH_TOKEN_LIFETIME_MS } from '../../common/constants.js';
 
 export interface AnafTokenSet {
   accessToken: string;
@@ -67,12 +68,18 @@ export class AnafTokenClient {
     });
   }
 
-  refreshTokens(refreshToken: string): Promise<AnafTokenSet> {
-    return this.requestTokens({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      token_content_type: 'jwt',
-    });
+  refreshTokens(
+    refreshToken: string,
+    refreshExpiresAt: Date,
+  ): Promise<AnafTokenSet> {
+    return this.requestTokens(
+      {
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+        token_content_type: 'jwt',
+      },
+      refreshExpiresAt,
+    );
   }
 
   async revokeToken(token: string, hint: AnafTokenHint): Promise<void> {
@@ -104,6 +111,7 @@ export class AnafTokenClient {
 
   private async requestTokens(
     form: Record<string, string>,
+    currentRefreshExpiresAt?: Date,
   ): Promise<AnafTokenSet> {
     let data: TokenResponse;
     try {
@@ -131,37 +139,51 @@ export class AnafTokenClient {
       }
       throw new AnafTokenError(unreachable('token', err), false);
     }
-
-    if (!data?.access_token) {
-      throw new AnafTokenError(
-        'ANAF token response has no access_token',
-        false,
-      );
-    }
-    const refreshToken = data.refresh_token ?? form.refresh_token;
-    if (!refreshToken) {
-      throw new AnafTokenError(
-        'ANAF token response has no refresh_token',
-        false,
-      );
-    }
-
-    const access = decodeAnafClaims(data.access_token);
-    const refresh = decodeAnafClaims(refreshToken);
-    const expiresInMs = Number(data.expires_in) * 1000;
-    const accessExpiresAt =
-      access.exp ??
-      (expiresInMs > 0 ? new Date(Date.now() + expiresInMs) : null);
-    if (!accessExpiresAt || !refresh.exp) {
-      throw new AnafTokenError('ANAF token has no exp claim', false);
-    }
-    return {
-      accessToken: data.access_token,
-      refreshToken,
-      accessExpiresAt,
-      refreshExpiresAt: refresh.exp,
-      serial: access.serial,
-      roles: access.roles,
-    };
+    return toTokenSet(data, form.refresh_token, currentRefreshExpiresAt);
   }
+}
+
+function toTokenSet(
+  data: TokenResponse | undefined,
+  previousRefreshToken: string | undefined,
+  previousRefreshExpiresAt: Date | undefined,
+): AnafTokenSet {
+  if (!data?.access_token) {
+    throw new AnafTokenError('ANAF token response has no access_token', false);
+  }
+  const refreshToken = data.refresh_token ?? previousRefreshToken;
+  if (!refreshToken) {
+    throw new AnafTokenError('ANAF token response has no refresh_token', false);
+  }
+
+  const access = decodeAnafClaims(data.access_token);
+  const expiresInMs = Number(data.expires_in) * 1000;
+  const accessExpiresAt =
+    access.exp ?? (expiresInMs > 0 ? new Date(Date.now() + expiresInMs) : null);
+  if (!accessExpiresAt) {
+    const expiresIn = data.expires_in === undefined ? 'absent' : 'invalid';
+    throw new AnafTokenError(
+      `ANAF access_token has no exp claim (${describeTokenShape(data.access_token)}; expires_in ${expiresIn})`,
+      false,
+    );
+  }
+  const refreshExpiresAt =
+    decodeAnafClaims(refreshToken).exp ??
+    (data.refresh_token
+      ? new Date(Date.now() + ANAF_REFRESH_TOKEN_LIFETIME_MS)
+      : previousRefreshExpiresAt);
+  if (!refreshExpiresAt) {
+    throw new AnafTokenError(
+      `ANAF refresh_token has no known expiry (${describeTokenShape(refreshToken)})`,
+      false,
+    );
+  }
+  return {
+    accessToken: data.access_token,
+    refreshToken,
+    accessExpiresAt,
+    refreshExpiresAt,
+    serial: access.serial,
+    roles: access.roles,
+  };
 }

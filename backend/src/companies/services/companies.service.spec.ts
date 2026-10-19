@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { QueryFailedError, type Repository } from 'typeorm';
 import type { AnafConnection } from '../../anaf/anaf-connection.entity.js';
+import type { AnafCompanyAccessService } from '../../anaf/services/anaf-company-access.service.js';
 import { anafTvaRecord } from '../../testing/anaf-tva-record.js';
 import type { AnafCompanyLookupService } from './anaf-company-lookup.service.js';
 import { CompaniesService } from './companies.service.js';
@@ -40,6 +41,7 @@ function setup({
     companies as unknown as Repository<Company>,
     {} as Repository<AnafConnection>,
     anaf as unknown as AnafCompanyLookupService,
+    {} as AnafCompanyAccessService,
   );
   return { service, companies, anaf };
 }

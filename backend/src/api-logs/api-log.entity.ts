@@ -7,14 +7,18 @@ import {
 
 @Entity('api_logs')
 export class ApiLog {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryGeneratedColumn('identity', {
+    type: 'integer',
+    generatedIdentity: 'ALWAYS',
+    primaryKeyConstraintName: 'api_logs_pkey',
+  })
+  id: number;
 
   @Column({ name: 'accountant_id', type: 'integer' })
   accountantId: number;
 
-  @Column({ name: 'anaf_connection_id', type: 'uuid', nullable: true })
-  anafConnectionId: string | null;
+  @Column({ name: 'anaf_connection_id', type: 'integer', nullable: true })
+  anafConnectionId: number | null;
 
   @Column({ name: 'company_id', type: 'integer', nullable: true })
   companyId: number | null;

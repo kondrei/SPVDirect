@@ -29,7 +29,7 @@ const REFRESH_AT_LIFETIME_FRACTION = 0.9;
 export class AnafOAuthService {
   private readonly logger = new Logger(AnafOAuthService.name);
   private readonly inFlightRefreshes = new Map<
-    string,
+    number,
     Promise<string | null>
   >();
 
@@ -40,7 +40,7 @@ export class AnafOAuthService {
     private readonly connections: Repository<AnafConnection>,
   ) {}
 
-  async revokeConnection(connectionId: string): Promise<boolean> {
+  async revokeConnection(connectionId: number): Promise<boolean> {
     await this.connections.update(connectionId, { status: 'revoked' });
     await this.inFlightRefreshes.get(connectionId)?.catch(() => undefined);
 
@@ -106,7 +106,7 @@ export class AnafOAuthService {
   }
 
   async getAccessToken(
-    connectionId: string,
+    connectionId: number,
     { force = false }: { force?: boolean } = {},
   ): Promise<string> {
     const connection = await this.loadWithTokens(connectionId);
@@ -189,7 +189,7 @@ export class AnafOAuthService {
     return run;
   }
 
-  private async claimRefresh(connectionId: string): Promise<boolean> {
+  private async claimRefresh(connectionId: number): Promise<boolean> {
     const now = Date.now();
     const result = await this.connections
       .createQueryBuilder()
@@ -209,11 +209,12 @@ export class AnafOAuthService {
     return result.affected === 1;
   }
 
-  private async refresh(connectionId: string): Promise<string> {
+  private async refresh(connectionId: number): Promise<string> {
     const connection = await this.loadWithTokens(connectionId);
     try {
       const tokens = await this.tokens.refreshTokens(
         this.cipher.decrypt(connection.refreshTokenEnc),
+        connection.refreshExpiresAt,
       );
       await this.connections.update(connectionId, {
         roles: tokens.roles.length ? tokens.roles : connection.roles,
@@ -264,7 +265,7 @@ export class AnafOAuthService {
   }
 
   private async waitForRefreshEnd(
-    connectionId: string,
+    connectionId: number,
   ): Promise<AnafConnection> {
     const deadline = Date.now() + REFRESH_LEASE_MS;
     for (;;) {
@@ -277,7 +278,7 @@ export class AnafOAuthService {
     }
   }
 
-  private async loadWithTokens(id: string): Promise<AnafConnection> {
+  private async loadWithTokens(id: number): Promise<AnafConnection> {
     const connection = await this.connections
       .createQueryBuilder('c')
       .addSelect(['c.accessTokenEnc', 'c.refreshTokenEnc'])

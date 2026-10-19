@@ -19,7 +19,7 @@ import { AnafOAuthService } from './anaf-oauth.service.js';
 
 export interface AnafRequest {
   accountantId: number;
-  connectionId: string;
+  connectionId: number;
   path: string;
   service: string;
   method?: Method;

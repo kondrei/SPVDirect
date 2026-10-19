@@ -14,7 +14,7 @@ function setup() {
   let issued = 0;
   const getAccessToken = vi.fn(() => Promise.resolve(`tok-${issued++}`));
   const row: Partial<AnafConnection> = {
-    id: 'c',
+    id: 9,
     deniedWithFreshTokenAt: null,
   };
   const connections = {
@@ -52,7 +52,7 @@ describe('AnafApiService base URL', () => {
     const { service, request } = setup();
     await service.request({
       accountantId: 1,
-      connectionId: 'c',
+      connectionId: 9,
       service: 'X',
       path: '/p',
     });
@@ -63,7 +63,7 @@ describe('AnafApiService base URL', () => {
     const { service, request } = setup();
     await service.request({
       accountantId: 1,
-      connectionId: 'c',
+      connectionId: 9,
       service: 'SPV',
       path: '/listaMesaje',
       baseUrl: 'https://webserviced.anaf.ro/SPVWS2/rest',
@@ -77,7 +77,7 @@ describe('AnafApiService base URL', () => {
 describe('AnafApiService allowStatuses', () => {
   const req = {
     accountantId: 1,
-    connectionId: 'c',
+    connectionId: 9,
     service: 'EFACTURA',
     path: '/p',
   };
@@ -107,7 +107,7 @@ describe('AnafApiService allowStatuses', () => {
 describe('AnafApiService token refresh on 401/403', () => {
   const req = {
     accountantId: 1,
-    connectionId: 'c',
+    connectionId: 9,
     service: 'EFACTURA',
     path: '/p',
   };
@@ -118,7 +118,7 @@ describe('AnafApiService token refresh on 401/403', () => {
       .mockResolvedValueOnce({ status: 401, data: {} })
       .mockResolvedValueOnce({ status: 200, data: {} });
     await expect(service.request(req)).resolves.toMatchObject({ status: 200 });
-    expect(getAccessToken).toHaveBeenLastCalledWith('c', { force: true });
+    expect(getAccessToken).toHaveBeenLastCalledWith(9, { force: true });
     expect(request.mock.calls[1][0].headers.Authorization).toBe('Bearer tok-1');
   });
 
@@ -131,7 +131,7 @@ describe('AnafApiService token refresh on 401/403', () => {
     getAccessToken.mockClear();
     await expect(service.request(req)).rejects.toThrow(/refuzat accesul/);
     expect(getAccessToken).toHaveBeenCalledTimes(1);
-    expect(getAccessToken).not.toHaveBeenCalledWith('c', { force: true });
+    expect(getAccessToken).not.toHaveBeenCalledWith(9, { force: true });
   });
 
   it('shares the 403 memory with other instances through the connection row', async () => {
@@ -142,7 +142,7 @@ describe('AnafApiService token refresh on 401/403', () => {
 
     getAccessToken.mockClear();
     await expect(instance().request(req)).rejects.toThrow(/refuzat accesul/);
-    expect(getAccessToken).not.toHaveBeenCalledWith('c', { force: true });
+    expect(getAccessToken).not.toHaveBeenCalledWith(9, { force: true });
   });
 
   it('tries a refresh again once the 403 memory is older than an hour', async () => {
@@ -154,7 +154,7 @@ describe('AnafApiService token refresh on 401/403', () => {
       .mockResolvedValueOnce({ status: 403, data: {} })
       .mockResolvedValueOnce({ status: 200, data: {} });
     await expect(service.request(req)).resolves.toMatchObject({ status: 200 });
-    expect(getAccessToken).toHaveBeenLastCalledWith('c', { force: true });
+    expect(getAccessToken).toHaveBeenLastCalledWith(9, { force: true });
   });
 
   it('does not mark the connection when the first 403 is not retried with a new token', async () => {

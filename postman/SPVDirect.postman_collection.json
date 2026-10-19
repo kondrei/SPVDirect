@@ -587,7 +587,7 @@
                 "exec": [
                   "const body = { name: 'Firma Test SRL (redenumit)' };",
                   "const connectionId = pm.collectionVariables.get('connectionId');",
-                  "if (connectionId) body.anafConnectionId = connectionId;",
+                  "if (connectionId) body.anafConnectionId = Number(connectionId);",
                   "pm.request.body.update(JSON.stringify(body, null, 2));"
                 ]
               }
@@ -597,11 +597,15 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "const connectionId = pm.collectionVariables.get('connectionId');",
+                  "if (connectionId && pm.response.code === 400) {",
+                  "  pm.test('ANAF refused the certificate for this CUI', () => pm.expect(pm.response.json().message).to.include('nu are drept în SPV'));",
+                  "  return;",
+                  "}",
                   "pm.test('Status 200', () => pm.response.to.have.status(200));",
                   "pm.test('Name updated', () => pm.expect(pm.response.json().name).to.eql('Firma Test SRL (redenumit)'));",
-                  "const connectionId = pm.collectionVariables.get('connectionId');",
                   "if (connectionId) {",
-                  "  pm.test('Certificate attached', () => pm.expect(pm.response.json().anafConnectionId).to.eql(connectionId));",
+                  "  pm.test('Certificate attached', () => pm.expect(pm.response.json().anafConnectionId).to.eql(Number(connectionId)));",
                   "}",
                   "",
                   "pm.test('Company has the expected shape', () => {",
@@ -635,7 +639,7 @@
                 }
               }
             },
-            "description": "Both fields optional: `name` (1-255 chars) and `anafConnectionId` (uuid of an own connection, or `null` to detach). The pre-request script adds `anafConnectionId` when `connectionId` is set."
+            "description": "Both fields optional: `name` (1-255 chars) and `anafConnectionId` (integer id of an own connection, or `null` to detach). Linking a different certificate first asks ANAF (`listaMesajeFactura?zile=1&cif=<CUI>`) whether it has SPV rights for the company's CUI; without them the answer is 400 \"Certificatul nu are drept în SPV pentru CUI ...\" and nothing is saved. Rate limited to 20/min. The pre-request script adds `anafConnectionId` when `connectionId` is set; the test accepts that 400 when the certificate is not authorized for the test CUI."
           }
         },
         {
@@ -667,7 +671,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"anafConnectionId\": \"00000000-0000-4000-8000-000000000000\"\n}",
+              "raw": "{\n  \"anafConnectionId\": 2147483647\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -709,7 +713,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"\",\n  \"anafConnectionId\": \"not-a-uuid\"\n}",
+              "raw": "{\n  \"name\": \"\",\n  \"anafConnectionId\": \"not-an-id\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -974,7 +978,7 @@
           ],
           "request": {
             "method": "PATCH",
-            "url": "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/not-a-uuid",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/not-an-id",
             "header": [
               {
                 "key": "Content-Type",
@@ -1008,7 +1012,7 @@
           ],
           "request": {
             "method": "PATCH",
-            "url": "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/00000000-0000-4000-8000-000000000000",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/2147483647",
             "header": [
               {
                 "key": "Content-Type",
@@ -1041,7 +1045,7 @@
           ],
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/00000000-0000-4000-8000-000000000000/test"
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/2147483647/test"
           }
         },
         {
@@ -1059,7 +1063,7 @@
           ],
           "request": {
             "method": "DELETE",
-            "url": "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/00000000-0000-4000-8000-000000000000"
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/2147483647"
           }
         }
       ]
@@ -1249,6 +1253,147 @@
             "method": "GET",
             "url": "{{baseUrl}}/accountants/{{accountantId}}/anaf/connect",
             "description": "Requires session. 302 to ANAF authorize and sets the `spv_anaf_oauth` state cookie. Open it in a browser to finish the flow."
+          }
+        }
+      ]
+    },
+    {
+      "name": "SPV archive",
+      "description": "Saved SPV messages. SPVWS2 does not accept ANAF OAuth tokens (docs/adr/0001-no-spv-inbox-over-oauth.md), so the list is imported from the browser: open https://webserviced.anaf.ro/SPVWS2/rest/listaMesaje?zile=60 with your certificate, save the JSON and send it to the import request.",
+      "item": [
+        {
+          "name": "List SPV archive",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Page shape', () => {",
+                  "  const p = pm.response.json();",
+                  "  pm.expect(p.items).to.be.an('array');",
+                  "  pm.expect(p.total).to.be.a('number');",
+                  "  pm.expect(p.page).to.eql(1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/spv/archive?page=1&pageSize=25"
+          }
+        },
+        {
+          "name": "Import SPV messages (choose the ANAF JSON file)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Summary', () => {",
+                  "  const s = pm.response.json();",
+                  "  pm.expect(s.fetched).to.be.a('number');",
+                  "  pm.expect(s.added).to.be.a('number').and.to.be.at.most(s.fetched);",
+                  "  pm.expect(s.rights).to.be.a('number');",
+                  "  pm.expect(s.unknownCuis).to.be.an('array');",
+                  "  pm.expect(s).to.have.keys('fetched', 'added', 'title', 'certSerial', 'notice', 'rights', 'unknownCuis');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/spv/archive/import",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "description": "Multipart field `file`: the JSON ANAF shows at listaMesaje (up to 5 MB, 10000 messages). Pick the saved file in the Body tab before sending. Returns `{ fetched, added, title, certSerial, notice, rights, unknownCuis }`; messages already saved are skipped. `rights` counts the CUI/CNPs in the list's `cui` field; `unknownCuis` are those CUIs (CNPs left out) that are not companies of the accountant yet. \"Nu exista mesaje...\" from ANAF imports nothing and comes back in `notice`. 60 requests/min."
+          }
+        },
+        {
+          "name": "Import SPV messages - no file (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errorMessage = () => {",
+                  "  const m = pm.response.json().message;",
+                  "  return Array.isArray(m) ? m.join(' | ') : m;",
+                  "};",
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Asks for the ANAF list', () => pm.expect(errorMessage()).to.include('lista de mesaje primită de la ANAF'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/spv/archive/import",
+            "body": {
+              "mode": "formdata",
+              "formdata": []
+            }
+          }
+        },
+        {
+          "name": "Upload SPV document - invalid id (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/spv/archive/abc/document",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "document",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "description": "Multipart field `document`: the PDF downloaded from https://webserviced.anaf.ro/SPVWS2/rest/descarcare?id=<anafMessageId> (up to 10 MB, must start with %PDF-). Saves it on the archived message and returns the message."
+          }
+        },
+        {
+          "name": "Download SPV document - not found (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/spv/archive/2147483647/download"
           }
         }
       ]

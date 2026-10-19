@@ -9,11 +9,13 @@ import {
   ArrayMinSize,
   IsArray,
   IsEmail,
+  IsInt,
   IsOptional,
   IsString,
-  IsUUID,
   Matches,
+  Max,
   MaxLength,
+  Min,
   MinLength,
   ValidateIf,
 } from 'class-validator';
@@ -110,6 +112,8 @@ export class UpdateCompanyDto extends UpdateCompanyInvoiceDetailsDto {
 
   @IsOptional()
   @ValidateIf((_, v) => v !== null)
-  @IsUUID()
-  anafConnectionId?: string | null;
+  @IsInt()
+  @Min(1)
+  @Max(2_147_483_647)
+  anafConnectionId?: number | null;
 }

@@ -17,7 +17,7 @@ function setup({ claimed = true, linkOk = true } = {}) {
   const oauth = {
     saveConnection: vi.fn(() => {
       calls.push('save');
-      return Promise.resolve({ id: 'conn-1' });
+      return Promise.resolve({ id: 7 });
     }),
   };
   const links = {
@@ -25,7 +25,7 @@ function setup({ claimed = true, linkOk = true } = {}) {
       linkOk
         ? {
             ok: true,
-            link: { id: 'link-1', accountantId: 3 },
+            link: { id: 3, accountantId: 3 },
             company: { id: 7, name: 'Firma SRL' },
           }
         : { ok: false, reason: 'expired' },
@@ -59,17 +59,17 @@ describe('AnafAuthorizationService.complete', () => {
   it('claims the link before storing any token', async () => {
     const { service, calls, links, companies } = setup();
     await expect(
-      service.complete({ state: 's', mode: 'link', linkId: 'link-1' }, 'code'),
+      service.complete({ state: 's', mode: 'link', linkId: 3 }, 'code'),
     ).resolves.toEqual({ kind: 'link', companyName: 'Firma SRL' });
     expect(calls).toEqual(['exchange', 'claim', 'save']);
-    expect(links.attachConnection).toHaveBeenCalledWith('link-1', 'conn-1');
-    expect(companies.attachConnection).toHaveBeenCalledWith(7, 'conn-1');
+    expect(links.attachConnection).toHaveBeenCalledWith(3, 7);
+    expect(companies.attachConnection).toHaveBeenCalledWith(7, 7);
   });
 
   it('stores nothing when another holder used the link first', async () => {
     const { service, oauth } = setup({ claimed: false });
     await expect(
-      service.complete({ state: 's', mode: 'link', linkId: 'link-1' }, 'code'),
+      service.complete({ state: 's', mode: 'link', linkId: 3 }, 'code'),
     ).resolves.toEqual({ kind: 'link-invalid', reason: 'used' });
     expect(oauth.saveConnection).not.toHaveBeenCalled();
   });
@@ -78,16 +78,16 @@ describe('AnafAuthorizationService.complete', () => {
     const { service, oauth, links } = setup();
     oauth.saveConnection.mockRejectedValueOnce(new Error('no serial'));
     await expect(
-      service.complete({ state: 's', mode: 'link', linkId: 'link-1' }, 'code'),
+      service.complete({ state: 's', mode: 'link', linkId: 3 }, 'code'),
     ).rejects.toThrow('no serial');
-    expect(links.release).toHaveBeenCalledWith('link-1');
+    expect(links.release).toHaveBeenCalledWith(3);
     expect(links.attachConnection).not.toHaveBeenCalled();
   });
 
   it('reports an expired link without claiming it', async () => {
     const { service, links } = setup({ linkOk: false });
     await expect(
-      service.complete({ state: 's', mode: 'link', linkId: 'link-1' }, 'code'),
+      service.complete({ state: 's', mode: 'link', linkId: 3 }, 'code'),
     ).resolves.toEqual({ kind: 'link-invalid', reason: 'expired' });
     expect(links.claim).not.toHaveBeenCalled();
   });
