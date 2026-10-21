@@ -119,7 +119,7 @@ describe('CompanyExportService', () => {
   it('packs the company, invoices with PDF and XML, e-Factura uploads and stored SPV documents', async () => {
     const { service, spv } = setup();
     const files = await unzip((await service.export(1, 7)).content);
-    expect(Object.keys(files).sort()).toEqual([
+    expect(Object.keys(files).toSorted((a, b) => a.localeCompare(b))).toEqual([
       'efactura.csv',
       'facturi.csv',
       'facturi.json',

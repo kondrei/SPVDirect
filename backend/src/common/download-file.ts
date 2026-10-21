@@ -14,7 +14,8 @@ export function attachment(
     type: file.contentType,
     disposition: `attachment; filename="${file.filename}"`,
   };
-  return Buffer.isBuffer(file.content)
-    ? new StreamableFile(file.content, options)
-    : new StreamableFile(file.content, options);
+  if (Buffer.isBuffer(file.content)) {
+    return new StreamableFile(file.content, options);
+  }
+  return new StreamableFile(file.content, options);
 }

@@ -105,8 +105,9 @@ export class AnafTokenClient {
   private clientAuthHeaders(): Record<string, string> {
     const clientId = this.config.getOrThrow<string>('ANAF_CLIENT_ID');
     const clientSecret = this.config.getOrThrow<string>('ANAF_CLIENT_SECRET');
+    const credentials = Buffer.from(`${clientId}:${clientSecret}`);
     return {
-      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
+      Authorization: `Basic ${credentials.toString('base64')}`,
       'Content-Type': 'application/x-www-form-urlencoded',
       Accept: 'application/json',
     };
@@ -135,8 +136,9 @@ export class AnafTokenClient {
           (form.grant_type === AnafGrantType.RefreshToken &&
             !clientError &&
             err.response.status === 400);
+        const reason = body?.error ? ` (${body.error})` : '';
         throw new AnafTokenError(
-          `ANAF token endpoint returned ${err.response.status}${body?.error ? ` (${body.error})` : ''}`,
+          `ANAF token endpoint returned ${err.response.status}${reason}`,
           invalidGrant,
         );
       }

@@ -46,8 +46,8 @@ function setup() {
 describe('RegisterAccountantHandler', () => {
   it('verifies the captcha for the register action with the client IP', async () => {
     const { run, verify } = setup();
-    await run('1.2.3.4');
-    expect(verify).toHaveBeenCalledWith('captcha', 'register', '1.2.3.4');
+    await run('203.0.113.4');
+    expect(verify).toHaveBeenCalledWith('captcha', 'register', '203.0.113.4');
   });
 
   it('stops before the database when the captcha fails', async () => {

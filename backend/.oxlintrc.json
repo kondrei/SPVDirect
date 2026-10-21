@@ -1,8 +1,25 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "typescript",
+    "unicorn",
+    "oxc",
+    "import"
+  ],
   "rules": {
     "typescript/no-explicit-any": "off",
-    "typescript/no-floating-promises": "error"
+    "typescript/no-floating-promises": "error",
+    "unicorn/prefer-string-replace-all": "error",
+    "unicorn/no-negated-condition": "error",
+    "unicorn/prefer-at": "error",
+    "unicorn/prefer-global-this": "error",
+    "unicorn/prefer-number-properties": "error",
+    "unicorn/prefer-set-has": "error",
+    "unicorn/prefer-dom-node-append": "error",
+    "unicorn/prefer-spread": "error",
+    "unicorn/prefer-logical-operator-over-ternary": "error",
+    "unicorn/prefer-single-call": "error",
+    "import/no-duplicates": "error"
   },
   "env": {
     "node": true

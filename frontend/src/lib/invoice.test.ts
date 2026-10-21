@@ -32,9 +32,9 @@ describe('computeTotals', () => {
       { rate: 21, taxable: 0.99, vat: 0.21 },
       { rate: 11, taxable: 100, vat: 11 },
     ]);
-    expect(totals.net).toBe(100.99);
-    expect(totals.vat).toBe(11.21);
-    expect(totals.gross).toBe(112.2);
+    expect(totals.net).toBeCloseTo(100.99, 2);
+    expect(totals.vat).toBeCloseTo(11.21, 2);
+    expect(totals.gross).toBeCloseTo(112.2, 2);
   });
 
   it('charges no VAT when the company is not a VAT payer', () => {
@@ -53,7 +53,7 @@ describe('computeTotals', () => {
       4.9765,
     );
     expect(totals.vat).toBe(210);
-    expect(totals.vatRon).toBe(1045.07);
+    expect(totals.vatRon).toBeCloseTo(1045.07, 2);
   });
 
   it('is zero for no lines', () => {

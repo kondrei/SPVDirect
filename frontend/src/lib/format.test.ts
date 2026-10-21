@@ -120,7 +120,7 @@ describe('safeNext', () => {
   it('blocks external and protocol-relative targets', () => {
     expect(safeNext('https://evil.example')).toBe('/');
     expect(safeNext('//evil.example')).toBe('/');
-    expect(safeNext('/\\evil.example')).toBe('/');
+    expect(safeNext(String.raw`/\evil.example`)).toBe('/');
     expect(safeNext(null)).toBe('/');
   });
 });

@@ -8,10 +8,10 @@ import { Alert, Button } from '../ui';
 export function InvoicePreview({
   invoice,
   onClose,
-}: {
+}: Readonly<{
   invoice: InvoiceSummary;
   onClose: () => void;
-}) {
+}>) {
   const titleId = useId();
   const dialog = useRef<HTMLDialogElement>(null);
   const frame = useRef<HTMLIFrameElement>(null);
@@ -94,13 +94,15 @@ export function InvoicePreview({
           <Alert tone="danger" title="Factura nu a putut fi afișată.">
             {pdf.error.message}
           </Alert>
-        ) : pdf.data ? (
+        ) : null}
+        {pdf.data && !pdf.isError ? (
           <iframe
             ref={frame}
             className="preview-frame"
             title={`Previzualizare factura ${number}`}
           />
-        ) : (
+        ) : null}
+        {pdf.isError || pdf.data ? null : (
           <div className="loading">Se încarcă factura…</div>
         )}
       </div>

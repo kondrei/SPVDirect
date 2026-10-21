@@ -28,7 +28,7 @@ interface RawSpvList {
 }
 
 interface RawSpvRequestResult {
-  id_solicitare?: string | number;
+  id_solicitare?: string | number | null;
   parametri?: string;
   serial?: string;
   cnp?: string;

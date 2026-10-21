@@ -6,12 +6,12 @@ export function EmptyState({
   title,
   children,
   actions,
-}: {
+}: Readonly<{
   icon: IconName;
   title: string;
   children?: ReactNode;
   actions?: ReactNode;
-}) {
+}>) {
   return (
     <div className="empty">
       <Icon name={icon} />

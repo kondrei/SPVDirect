@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { useActivity } from '../api/hooks/activity';
 import type { ActivityItem, Company } from '../api/types';
@@ -10,7 +10,7 @@ import { QueryError } from './QueryError';
 import { SelectField } from './SelectField';
 import { Badge, Button, Card, DataTable } from './ui';
 
-export function ActivityCard({ companies }: { companies: Company[] }) {
+export function ActivityCard({ companies }: Readonly<{ companies: Company[] }>) {
   const [companyId, setCompanyId] = useState<number | undefined>();
   const [page, setPage] = useState(1);
   const activity = useActivity({ companyId, page });
@@ -29,8 +29,82 @@ export function ActivityCard({ companies }: { companies: Company[] }) {
       );
     }
     const name = row.details.companyName;
-    return typeof name === 'string' ? name : '—';
+    return <>{typeof name === 'string' ? name : '—'}</>;
   };
+
+  let body: ReactNode = null;
+  if (activity.isPending) {
+    body = <div className="loading">Se încarcă…</div>;
+  } else if (activity.data?.items.length === 0) {
+    body = (
+      <EmptyState icon="clock" title="Nicio operațiune înregistrată.">
+        Aici apar firmele adăugate, facturile emise sau stornate, trimiterile
+        și validările e-Factura și celelalte operațiuni din cont.
+      </EmptyState>
+    );
+  } else if (activity.data) {
+    body = (
+      <>
+        <DataTable
+          caption="Activitate"
+          rows={activity.data.items}
+          rowKey={(r) => r.id}
+          stack
+          columns={[
+            {
+              key: 'date',
+              header: 'Data și ora',
+              mono: true,
+              render: (r) => formatDateTime(r.createdAt),
+            },
+            {
+              key: 'action',
+              header: 'Operațiune',
+              render: (r) => {
+                const meta = ACTIVITY_LABELS[r.action];
+                return meta ? (
+                  <Badge tone={meta.tone}>{meta.label}</Badge>
+                ) : (
+                  r.action
+                );
+              },
+            },
+            { key: 'company', header: 'Firmă', render: company },
+            {
+              key: 'description',
+              header: 'Detalii',
+              render: (r) => r.description,
+            },
+            {
+              key: 'user',
+              header: 'Utilizator',
+              render: (r) => r.accountantName,
+            },
+          ]}
+        />
+        <div className="spv-row">
+          <Button
+            size="sm"
+            disabled={page <= 1}
+            onClick={() => setPage(page - 1)}
+          >
+            Mai noi
+          </Button>
+          <span className="muted">
+            Pagina {page} din {lastPage} ·{' '}
+            {plural(total, 'operațiune', 'operațiuni')}
+          </span>
+          <Button
+            size="sm"
+            disabled={page >= lastPage}
+            onClick={() => setPage(page + 1)}
+          >
+            Mai vechi
+          </Button>
+        </div>
+      </>
+    );
+  }
 
   return (
     <Card
@@ -58,74 +132,7 @@ export function ActivityCard({ companies }: { companies: Company[] }) {
         {activity.isError ? (
           <QueryError error={activity.error} retry={() => activity.refetch()} />
         ) : null}
-        {activity.isPending ? (
-          <div className="loading">Se încarcă…</div>
-        ) : activity.data && activity.data.items.length === 0 ? (
-          <EmptyState icon="clock" title="Nicio operațiune înregistrată.">
-            Aici apar firmele adăugate, facturile emise sau stornate, trimiterile
-            și validările e-Factura și celelalte operațiuni din cont.
-          </EmptyState>
-        ) : activity.data ? (
-          <>
-            <DataTable
-              caption="Activitate"
-              rows={activity.data.items}
-              rowKey={(r) => r.id}
-              stack
-              columns={[
-                {
-                  key: 'date',
-                  header: 'Data și ora',
-                  mono: true,
-                  render: (r) => formatDateTime(r.createdAt),
-                },
-                {
-                  key: 'action',
-                  header: 'Operațiune',
-                  render: (r) => {
-                    const meta = ACTIVITY_LABELS[r.action];
-                    return meta ? (
-                      <Badge tone={meta.tone}>{meta.label}</Badge>
-                    ) : (
-                      r.action
-                    );
-                  },
-                },
-                { key: 'company', header: 'Firmă', render: company },
-                {
-                  key: 'description',
-                  header: 'Detalii',
-                  render: (r) => r.description,
-                },
-                {
-                  key: 'user',
-                  header: 'Utilizator',
-                  render: (r) => r.accountantName,
-                },
-              ]}
-            />
-            <div className="spv-row">
-              <Button
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage(page - 1)}
-              >
-                Mai noi
-              </Button>
-              <span className="muted">
-                Pagina {page} din {lastPage} ·{' '}
-                {plural(total, 'operațiune', 'operațiuni')}
-              </span>
-              <Button
-                size="sm"
-                disabled={page >= lastPage}
-                onClick={() => setPage(page + 1)}
-              >
-                Mai vechi
-              </Button>
-            </div>
-          </>
-        ) : null}
+        {body}
       </div>
     </Card>
   );

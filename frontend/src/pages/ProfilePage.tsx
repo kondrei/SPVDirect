@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type SubmitEvent } from 'react';
 import { useNavigate } from 'react-router';
 import {
   useCaen,
@@ -71,9 +71,19 @@ const CECCAR_BRANCHES = [
 const PHONE = /^\+?[0-9 ()./-]{6,30}$/;
 const MEMBER_NUMBER = /^[A-Za-z0-9/-]{1,20}$/;
 
-function ProfileForm({ profile }: { profile: AccountantProfile }) {
-  const update = useUpdateProfile();
-  const [form, setForm] = useState({
+function memberNumberError(value: string): string | undefined {
+  if (!value.trim()) return 'Completați numărul de legitimație.';
+  return MEMBER_NUMBER.test(value.trim()) ? undefined : 'Doar litere, cifre, „/” și „-”.';
+}
+
+function caenError(code: string, known: boolean): string | undefined {
+  if (!code) return undefined;
+  if (!/^\d{4}$/.test(code)) return 'Codul CAEN are 4 cifre.';
+  return known ? undefined : 'Cod necunoscut în nomenclatorul CAEN.';
+}
+
+function profileFields(profile: AccountantProfile) {
+  return {
     name: profile.name ?? '',
     phone: profile.phone ?? '',
     ceccarMember: profile.ceccarMember,
@@ -84,7 +94,39 @@ function ProfileForm({ profile }: { profile: AccountantProfile }) {
     firmName: profile.firmName ?? '',
     firmCui: profile.firmCui ?? '',
     firmCaenCode: profile.firmCaenCode ?? '',
-  });
+  };
+}
+
+type ProfileFields = ReturnType<typeof profileFields>;
+
+function profileErrors(form: ProfileFields, caenKnown: boolean) {
+  return {
+    phone:
+      form.phone.trim() && !PHONE.test(form.phone.trim())
+        ? 'Număr de telefon invalid.'
+        : undefined,
+    professionalTitle:
+      form.ceccarMember && !form.professionalTitle
+        ? 'Alegeți calitatea profesională.'
+        : undefined,
+    ceccarNumber: form.ceccarMember
+      ? memberNumberError(form.ceccarNumber)
+      : undefined,
+    ccfNumber:
+      form.ccfNumber.trim() && !MEMBER_NUMBER.test(form.ccfNumber.trim())
+        ? 'Doar litere, cifre, „/” și „-”.'
+        : undefined,
+    firmCui:
+      form.firmCui.trim() && !isValidCui(form.firmCui)
+        ? 'CUI invalid: 2–10 cifre, cu sau fără RO.'
+        : undefined,
+    firmCaenCode: caenError(form.firmCaenCode.trim(), caenKnown),
+  };
+}
+
+function ProfileForm({ profile }: Readonly<{ profile: AccountantProfile }>) {
+  const update = useUpdateProfile();
+  const [form, setForm] = useState(() => profileFields(profile));
   const [touched, setTouched] = useState(false);
   const lookup = useFirmLookup();
   const caenCode = form.firmCaenCode.trim();
@@ -112,42 +154,11 @@ function ProfileForm({ profile }: { profile: AccountantProfile }) {
     });
   };
 
-  const errors = {
-    phone:
-      form.phone.trim() && !PHONE.test(form.phone.trim())
-        ? 'Număr de telefon invalid.'
-        : undefined,
-    professionalTitle:
-      form.ceccarMember && !form.professionalTitle
-        ? 'Alegeți calitatea profesională.'
-        : undefined,
-    ceccarNumber: !form.ceccarMember
-      ? undefined
-      : !form.ceccarNumber.trim()
-        ? 'Completați numărul de legitimație.'
-        : !MEMBER_NUMBER.test(form.ceccarNumber.trim())
-          ? 'Doar litere, cifre, „/” și „-”.'
-          : undefined,
-    ccfNumber:
-      form.ccfNumber.trim() && !MEMBER_NUMBER.test(form.ccfNumber.trim())
-        ? 'Doar litere, cifre, „/” și „-”.'
-        : undefined,
-    firmCui:
-      form.firmCui.trim() && !isValidCui(form.firmCui)
-        ? 'CUI invalid: 2–10 cifre, cu sau fără RO.'
-        : undefined,
-    firmCaenCode: !caenCode
-      ? undefined
-      : !/^\d{4}$/.test(caenCode)
-        ? 'Codul CAEN are 4 cifre.'
-        : caen.data === null
-          ? 'Cod necunoscut în nomenclatorul CAEN.'
-          : undefined,
-  };
+  const errors = profileErrors(form, caen.data !== null);
   const invalid = Object.values(errors).some(Boolean);
   const show = (e: string | undefined) => (touched ? e : undefined);
 
-  const submit = (e: FormEvent) => {
+  const submit = (e: SubmitEvent) => {
     e.preventDefault();
     setTouched(true);
     if (invalid) return;
@@ -213,7 +224,7 @@ function ProfileForm({ profile }: { profile: AccountantProfile }) {
                 setForm((f) => ({ ...f, ceccarMember: e.target.checked }));
               }}
             />
-            Membru CECCAR
+            <span>Membru CECCAR</span>
           </label>
           {form.ceccarMember ? (
             <>
@@ -330,6 +341,15 @@ function ProfileForm({ profile }: { profile: AccountantProfile }) {
   );
 }
 
+function newPasswordError(next: string, current: string): string | undefined {
+  if (next.length < MIN_PASSWORD) {
+    return `Parola trebuie să aibă cel puțin ${MIN_PASSWORD} caractere.`;
+  }
+  return next === current
+    ? 'Parola nouă trebuie să fie diferită de cea actuală.'
+    : undefined;
+}
+
 function PasswordCard() {
   const change = useChangePassword();
   const [current, setCurrent] = useState('');
@@ -338,17 +358,12 @@ function PasswordCard() {
   const [touched, setTouched] = useState(false);
 
   const errors = {
-    current: !current ? 'Completați parola actuală.' : undefined,
-    next:
-      next.length < MIN_PASSWORD
-        ? `Parola trebuie să aibă cel puțin ${MIN_PASSWORD} caractere.`
-        : next === current
-          ? 'Parola nouă trebuie să fie diferită de cea actuală.'
-          : undefined,
-    confirm: confirm !== next ? 'Parolele nu coincid.' : undefined,
+    current: current ? undefined : 'Completați parola actuală.',
+    next: newPasswordError(next, current),
+    confirm: confirm === next ? undefined : 'Parolele nu coincid.',
   };
 
-  const submit = (e: FormEvent) => {
+  const submit = (e: SubmitEvent) => {
     e.preventDefault();
     setTouched(true);
     if (Object.values(errors).some(Boolean)) return;
@@ -433,7 +448,7 @@ function AccountDataCard() {
     setTouched(false);
     remove.reset();
   };
-  const submit = (e: FormEvent) => {
+  const submit = (e: SubmitEvent) => {
     e.preventDefault();
     setTouched(true);
     if (!password) return;

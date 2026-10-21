@@ -1,7 +1,7 @@
 import { Navigate, useSearchParams } from 'react-router';
 import type { AuthTab } from './AuthPanel';
 
-export function AuthRedirect({ tab }: { tab: AuthTab }) {
+export function AuthRedirect({ tab }: Readonly<{ tab: AuthTab }>) {
   const [params] = useSearchParams();
   const q = new URLSearchParams({ auth: tab });
   const next = params.get('next');

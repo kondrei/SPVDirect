@@ -69,7 +69,7 @@ export class ActivityLogsService {
       .limit(filter.pageSize)
       .getRawMany<ActivityRow>();
     return {
-      items: rows.map(toItem),
+      items: rows.map((row) => toItem(row)),
       total,
       page: filter.page,
       pageSize: filter.pageSize,
@@ -81,7 +81,7 @@ export class ActivityLogsService {
       this.activityOf(accountantId),
       'ASC',
     ).getRawMany<ActivityRow>();
-    return rows.map(toItem);
+    return rows.map((row) => toItem(row));
   }
 
   private activityOf(accountantId: number): SelectQueryBuilder<ApiLog> {

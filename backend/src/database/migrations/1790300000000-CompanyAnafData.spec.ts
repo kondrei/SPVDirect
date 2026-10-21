@@ -9,8 +9,11 @@ function recorder() {
   return { qr, addColumns, dropColumns };
 }
 
-const describeCol = (c: TableColumn) =>
-  `${c.name} ${c.type}${c.length ? `(${c.length})` : ''}${c.isNullable ? ' null' : ''}`;
+const describeCol = (c: TableColumn) => {
+  const length = c.length ? `(${c.length})` : '';
+  const nullable = c.isNullable ? ' null' : '';
+  return `${c.name} ${c.type}${length}${nullable}`;
+};
 
 describe('CompanyAnafData1790300000000', () => {
   it('adds the nullable ANAF columns to companies', async () => {
@@ -20,7 +23,7 @@ describe('CompanyAnafData1790300000000', () => {
     expect(addColumns).toHaveBeenCalledOnce();
     const [table, cols] = addColumns.mock.calls[0] as [string, TableColumn[]];
     expect(table).toBe('companies');
-    expect(cols.map(describeCol)).toEqual([
+    expect(cols.map((c) => describeCol(c))).toEqual([
       'reg_com text null',
       'address text null',
       'caen_code varchar(10) null',
@@ -49,6 +52,9 @@ describe('CompanyAnafData1790300000000', () => {
       TableColumn[],
     ];
     expect(table).toBe('companies');
-    expect(dropped.map((c) => c.name).sort()).toEqual([...added].sort());
+    const byName = (a: string, b: string) => a.localeCompare(b);
+    expect(dropped.map((c) => c.name).toSorted(byName)).toEqual(
+      added.toSorted(byName),
+    );
   });
 });

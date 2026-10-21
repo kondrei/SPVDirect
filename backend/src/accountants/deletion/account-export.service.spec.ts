@@ -95,7 +95,7 @@ describe('AccountExportService', () => {
     const result = await service.export(1, new Date('2026-10-20T09:00:00Z'));
     expect(result.filename).toBe('cont-spvdirect-export-2026-10-20.zip');
     const files = await unzip(result);
-    expect(Object.keys(files).sort()).toEqual([
+    expect(Object.keys(files).toSorted((a, b) => a.localeCompare(b))).toEqual([
       'activitate.csv',
       'certificate.csv',
       'cont.json',

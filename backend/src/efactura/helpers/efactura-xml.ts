@@ -15,16 +15,21 @@ const ENTITIES: Record<string, string> = {
 
 function decode(value: string): string {
   return value
-    .replace(/&(?:amp|lt|gt|quot|apos);/g, (m) => ENTITIES[m])
-    .replace(/&#(\d+);/g, (_, code: string) =>
+    .replaceAll(/&(?:amp|lt|gt|quot|apos);/g, (m) => ENTITIES[m])
+    .replaceAll(/&#(\d+);/g, (_, code: string) =>
       String.fromCodePoint(Number(code)),
     );
 }
 
 function attribute(xml: string, element: string, name: string): string | null {
-  const tag = new RegExp(`<(?:[\\w-]+:)?${element}\\b([^>]*)>`, 'i').exec(xml);
+  const tag = new RegExp(
+    String.raw`<(?:[\w-]+:)?${element}\b([^>]*)>`,
+    'i',
+  ).exec(xml);
   if (!tag) return null;
-  const attr = new RegExp(`\\b${name}\\s*=\\s*"([^"]*)"`, 'i').exec(tag[1]);
+  const attr = new RegExp(String.raw`\b${name}\s*=\s*"([^"]*)"`, 'i').exec(
+    tag[1],
+  );
   return attr ? decode(attr[1]) : null;
 }
 

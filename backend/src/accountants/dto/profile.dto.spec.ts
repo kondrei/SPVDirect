@@ -55,7 +55,7 @@ describe('UpdateProfileDto', () => {
       ceccarNumber: '12 34',
       firmCui: '1',
     });
-    expect(errors.sort()).toEqual([
+    expect(errors.toSorted((a, b) => a.localeCompare(b))).toEqual([
       'ceccarMember',
       'ceccarNumber',
       'firmCui',
@@ -69,7 +69,10 @@ describe('UpdateProfileDto', () => {
       email: 'x@example.com',
       passwordHash: 'x',
     });
-    expect(errors.sort()).toEqual(['email', 'passwordHash']);
+    expect(errors.toSorted((a, b) => a.localeCompare(b))).toEqual([
+      'email',
+      'passwordHash',
+    ]);
   });
 });
 

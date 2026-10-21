@@ -9,7 +9,7 @@ const ESCAPES: Record<string, string> = {
 };
 
 export function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (ch) => ESCAPES[ch]);
+  return value.replaceAll(/[&<>"']/g, (ch) => ESCAPES[ch]);
 }
 
 export function renderPage(title: string, bodyHtml: string): string {

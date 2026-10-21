@@ -3,10 +3,10 @@ import { Alert, Button } from './ui';
 export function QueryError({
   error,
   retry,
-}: {
+}: Readonly<{
   error: Error | null;
   retry?: () => void;
-}) {
+}>) {
   return (
     <Alert
       tone="danger"

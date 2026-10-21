@@ -36,11 +36,11 @@ function NavGroup({
   title,
   items,
   onNavigate,
-}: {
+}: Readonly<{
   title?: string;
   items: NavItem[];
   onNavigate: () => void;
-}) {
+}>) {
   return (
     <>
       {title ? <div className="spv-side-group">{title}</div> : null}

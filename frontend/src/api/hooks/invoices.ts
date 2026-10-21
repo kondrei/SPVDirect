@@ -111,7 +111,7 @@ export function useInvoicePdf(id: number) {
     queryKey: [...keys.invoices, id, 'pdf'] as const,
     queryFn: () => fetchFile(`${requirePath(path)}/${id}/pdf`, `factura-${id}.pdf`),
     enabled: !!path,
-    staleTime: Infinity,
+    staleTime: Number.POSITIVE_INFINITY,
   });
 }
 

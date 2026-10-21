@@ -68,8 +68,8 @@ function setup(connection?: Partial<AnafConnection>) {
       },
       execute() {
         const lastCall = Math.max(
-          stored.tokenCallAt?.getTime() ?? -Infinity,
-          stored.lastRefreshedAt?.getTime() ?? -Infinity,
+          stored.tokenCallAt?.getTime() ?? Number.NEGATIVE_INFINITY,
+          stored.lastRefreshedAt?.getTime() ?? Number.NEGATIVE_INFINITY,
         );
         const claimed =
           stored.status === 'active' &&

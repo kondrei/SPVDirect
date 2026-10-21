@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useRef, useState, type ChangeEvent, type SubmitEvent } from 'react';
 import { useCompanyLogoUrl, useRemoveCompanyLogo, useUpdateCompany, useUploadCompanyLogo } from '../../api/hooks/companies';
 import type { Company } from '../../api/types';
 import { MAX_LOGO_BYTES } from '../../common/constants';
@@ -9,10 +9,10 @@ const LOGO_TYPES = ['image/png', 'image/jpeg'];
 const IBAN = /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/;
 
 function compactIban(value: string): string {
-  return value.replace(/\s+/g, '').toUpperCase();
+  return value.replaceAll(/\s+/g, '').toUpperCase();
 }
 
-export function InvoiceDetailsCard({ company }: { company: Company }) {
+export function InvoiceDetailsCard({ company }: Readonly<{ company: Company }>) {
   const update = useUpdateCompany(company.id);
   const [iban, setIban] = useState(company.iban ?? '');
   const [bankName, setBankName] = useState(company.bankName ?? '');
@@ -27,7 +27,7 @@ export function InvoiceDetailsCard({ company }: { company: Company }) {
     email !== (company.email ?? '') ||
     phone !== (company.phone ?? '');
 
-  const submit = (e: FormEvent) => {
+  const submit = (e: SubmitEvent) => {
     e.preventDefault();
     if (ibanError) return;
     update.mutate({
@@ -100,7 +100,7 @@ export function InvoiceDetailsCard({ company }: { company: Company }) {
   );
 }
 
-export function LogoCard({ company }: { company: Company }) {
+export function LogoCard({ company }: Readonly<{ company: Company }>) {
   const upload = useUploadCompanyLogo(company.id);
   const remove = useRemoveCompanyLogo(company.id);
   const fileInput = useRef<HTMLInputElement>(null);

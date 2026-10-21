@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type SubmitEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import {
   useCompany,
@@ -41,10 +41,10 @@ import { SelectField } from '../../components/SelectField';
 function CertificateCard({
   companyId,
   current,
-}: {
+}: Readonly<{
   companyId: number;
   current: number | null;
-}) {
+}>) {
   const connections = useConnections();
   const update = useUpdateCompany(companyId);
   const appPath = useAppPath();
@@ -121,7 +121,8 @@ function CertificateCard({
               Salvează
             </Button>
           </div>
-        ) : connections.data ? (
+        ) : null}
+        {!usable.length && connections.data ? (
           <p className="muted">
             Nu aveți încă niciun certificat conectat.{' '}
             <Link to={appPath('/connections')}>Conectați unul</Link> sau folosiți linkul de
@@ -136,10 +137,10 @@ function CertificateCard({
 function AuthorizationLinkCard({
   companyId,
   companyName,
-}: {
+}: Readonly<{
   companyId: number;
   companyName: string;
-}) {
+}>) {
   const create = useCreateAuthorizationLink(companyId);
   return (
     <Card
@@ -181,7 +182,7 @@ function AuthorizationLinkCard({
   );
 }
 
-function ExportCompany({ id, cui }: { id: number; cui: string }) {
+function ExportCompany({ id, cui }: Readonly<{ id: number; cui: string }>) {
   const exportData = useExportCompany();
   return (
     <div className="stack">
@@ -203,7 +204,7 @@ function ExportCompany({ id, cui }: { id: number; cui: string }) {
   );
 }
 
-function DeleteCompany({ id, cui }: { id: number; cui: string }) {
+function DeleteCompany({ id, cui }: Readonly<{ id: number; cui: string }>) {
   const remove = useDeleteCompany();
   const exportData = useExportCompany();
   const navigate = useNavigate();
@@ -279,15 +280,15 @@ function DetailsCard({
   name,
   cui,
   createdAt,
-}: {
+}: Readonly<{
   id: number;
   name: string;
   cui: string;
   createdAt: string;
-}) {
+}>) {
   const update = useUpdateCompany(id);
   const [value, setValue] = useState(name);
-  const submit = (e: FormEvent) => {
+  const submit = (e: SubmitEvent) => {
     e.preventDefault();
     if (value.trim() && value.trim() !== name)
       update.mutate({ name: value.trim() });
@@ -310,7 +311,7 @@ function DetailsCard({
             value={value}
             onChange={(e) => setValue(e.target.value)}
             maxLength={255}
-            error={!value.trim() ? 'Completați denumirea.' : undefined}
+            error={value.trim() ? undefined : 'Completați denumirea.'}
           />
           <Button
             type="submit"
@@ -370,7 +371,7 @@ export function CompanyPage() {
           </span>
         }
         actions={
-          !c.anafConnectionId ? (
+          c.anafConnectionId ? undefined : (
             <ButtonAnchor
               variant="primary"
               icon="certificate"
@@ -378,7 +379,7 @@ export function CompanyPage() {
             >
               Conectează certificat
             </ButtonAnchor>
-          ) : undefined
+          )
         }
       />
       <div className="grid-1-1">

@@ -1,3 +1,5 @@
+import { blankToNull } from '../../common/text.js';
+
 export interface AnafTvaRecord {
   date_generale: {
     cui: number;
@@ -73,9 +75,4 @@ export function companyFieldsFromAnaf(record: AnafTvaRecord) {
     inactive: record.stare_inactiv?.statusInactivi ?? null,
     anafData: record,
   };
-}
-
-function blankToNull(value: string | null | undefined): string | null {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : null;
 }

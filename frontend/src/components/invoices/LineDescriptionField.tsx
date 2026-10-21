@@ -10,7 +10,7 @@ export function LineDescriptionField({
   onPick,
   onOpen,
   placeholder,
-}: {
+}: Readonly<{
   label: string;
   value: string;
   suggestions: LineSuggestion[];
@@ -18,7 +18,7 @@ export function LineDescriptionField({
   onPick: (suggestion: LineSuggestion) => void;
   onOpen: () => void;
   placeholder?: string;
-}) {
+}>) {
   const id = useId();
   const box = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -30,7 +30,7 @@ export function LineDescriptionField({
   const shown = open && matches.length > 0;
 
   const options = () =>
-    Array.from(box.current?.querySelectorAll<HTMLButtonElement>('.line-suggest-option') ?? []);
+    [...(box.current?.querySelectorAll<HTMLButtonElement>('.line-suggest-option') ?? [])];
   const focusOption = (index: number) => options()[index]?.focus();
   const backToInput = () => {
     setOpen(false);

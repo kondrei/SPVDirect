@@ -61,6 +61,9 @@ export function describeTokenShape(token: string): string {
   if (!payload) {
     return `opaque, ${token.split('.').length} segment(s), ${token.length} chars`;
   }
-  const claims = Object.keys(payload).sort().join(', ') || 'none';
+  const claims =
+    Object.keys(payload)
+      .toSorted((a, b) => a.localeCompare(b))
+      .join(', ') || 'none';
   return `JWT, claims: ${claims}; exp is ${typeof payload.exp}`;
 }

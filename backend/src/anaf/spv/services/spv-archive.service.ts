@@ -40,7 +40,7 @@ export const NOT_STORED =
 const MAX_CUI_DIGITS = 10;
 
 export function normalizeCif(value: string | null): string | null {
-  const cleaned = value?.replace(/\s+/g, '').replace(/^RO/i, '') ?? '';
+  const cleaned = value?.replaceAll(/\s+/g, '').replace(/^RO/i, '') ?? '';
   return cleaned || null;
 }
 
@@ -157,7 +157,7 @@ export class SpvArchiveService {
       .take(filter.pageSize)
       .getManyAndCount();
     return {
-      items: rows.map(toArchived),
+      items: rows.map((row) => toArchived(row)),
       total,
       page: filter.page,
       pageSize: filter.pageSize,

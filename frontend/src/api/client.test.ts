@@ -8,16 +8,13 @@ function stubFetch(
   body: unknown,
   contentType = 'application/json',
 ) {
+  const text = typeof body === 'string' ? body : JSON.stringify(body);
   const fn = vi.fn(
     async () =>
-      new Response(
-        status === 204
-          ? null
-          : typeof body === 'string'
-            ? body
-            : JSON.stringify(body),
-        { status, headers: { 'content-type': contentType } },
-      ),
+      new Response(status === 204 ? null : text, {
+        status,
+        headers: { 'content-type': contentType },
+      }),
   );
   vi.stubGlobal('fetch', fn);
   return fn;

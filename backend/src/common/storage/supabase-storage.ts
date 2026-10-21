@@ -53,7 +53,10 @@ export class SupabaseStorage {
   }
 
   private objectUrl(path: string): string {
-    const encoded = path.split('/').map(encodeURIComponent).join('/');
+    const encoded = path
+      .split('/')
+      .map((part) => encodeURIComponent(part))
+      .join('/');
     return `${this.baseUrl()}/storage/v1/object/${this.bucket()}/${encoded}`;
   }
 
@@ -100,7 +103,7 @@ export class SupabaseStorage {
           ...options.headers,
         },
         timeout: 60_000,
-        maxBodyLength: Infinity,
+        maxBodyLength: Number.POSITIVE_INFINITY,
         validateStatus: () => true,
       });
     } catch (err) {
@@ -116,7 +119,10 @@ export class SupabaseStorage {
   }
 
   private baseUrl(): string {
-    return this.config.getOrThrow<string>('SUPABASE_URL').replace(/\/+$/, '');
+    const url = this.config.getOrThrow<string>('SUPABASE_URL');
+    let end = url.length;
+    while (url[end - 1] === '/') end--;
+    return url.slice(0, end);
   }
 
   private bucket(): string {

@@ -10,22 +10,24 @@ SPVDirect is an accountant portal for ANAF SPV services (e-Factura, e-Transport)
 ## Commands (run in `backend/`)
 - `npm run dev`: dev server on :3000. Needs `backend/.env` (copy from `.env.example`).
 - `npm test`: unit tests (Vitest). `npm run test:e2e`: HTTP smoke test that needs no DB.
-- `npm run lint` (oxlint, type-aware) · `npm run format` (prettier) · `npm run build`
+- `npm run lint` (oxlint, type-aware) · `npm run lint:sonar` (ESLint with SonarJS, the rules SonarQube for IDE reports) · `npm run format` (prettier) · `npm run build`
 - `npm run migration:run | migration:revert | migration:show | migration:generate -- src/database/migrations/<Name>`
   - These build first, then run the TypeORM CLI against `dist/database/data-source.js`.
 
 ## Commands (run in `frontend/`)
 - `npm run dev`: http://localhost:5173. It proxies `/api/*` to the backend at https://localhost:3000, so start the backend first.
-- `npm test` (Vitest + Testing Library, no backend needed) · `npm run typecheck` · `npm run lint` · `npm run build`
+- `npm test` (Vitest + Testing Library, no backend needed) · `npm run typecheck` · `npm run lint` · `npm run lint:sonar` · `npm run build`
 - Frontend conventions: design-system tokens only (`src/styles/tokens.css`), `StatusBadge` for every status, Romanian copy. Details in `frontend/README.md`.
 
 ## MANDATORY workflow after every code change
 This rule always applies:
 1. **Code review first.** Review the whole diff for correctness, security, ANAF rules and conventions, and fix the findings. Follow `.claude/skills/review-and-test/SKILL.md`.
-2. **Then unit tests.** Add or update `*.spec.ts` for every changed behaviour, then run `npm test`, `npm run lint` and `npm run build` in `backend/` until all of them pass. When `frontend/` changed, add or update its `*.test.ts(x)` and run `npm test`, `npm run typecheck` and `npm run lint` there too.
+2. **Then unit tests.** Add or update `*.spec.ts` for every changed behaviour, then run `npm test`, `npm run lint`, `npm run lint:sonar` and `npm run build` in `backend/` until all of them pass. When `frontend/` changed, add or update its `*.test.ts(x)` and run `npm test`, `npm run typecheck`, `npm run lint` and `npm run lint:sonar` there too.
 3. **Only then** report the work as done or commit. Include the review findings and the test results in the report.
 
-A Stop hook (`.claude/settings.json` → `.claude/hooks/verify-backend.sh`) blocks finishing while tests or lint fail and backend code has uncommitted changes.
+A Stop hook (`.claude/settings.json` → `.claude/hooks/verify-changes.sh`) blocks finishing while checks fail on uncommitted changes: backend tests, `npm run lint` in both packages, and the SonarJS lint on the changed files.
+
+Sonar rules live in two places: the SonarJS rules that need type information in each package's `eslint.config.mjs`, and the ones oxlint has natively (unicorn, `import/no-duplicates`) in `.oxlintrc.json`. Don't silence a Sonar finding by making intentionally sequential code parallel: an `await` inside a loop is often deliberate here (ANAF rate limits, one `QueryRunner` per migration, ZIP streaming), so `no-await-in-loop` stays off.
 
 ## Stack and conventions
 - Node 24 LTS (`.nvmrc`). Don't move to Node 26 until it becomes LTS (late Oct 2026).

@@ -4,11 +4,16 @@ import { DAY_MS, EXPIRING_DAYS } from '../common/constants';
 import { AnafConnectionStatus } from '../api/enums';
 
 export function normalizeCui(value: string): string {
-  return value.replace(/\s+/g, '').replace(/^RO/i, '');
+  return value.replaceAll(/\s+/g, '').replace(/^RO/i, '');
 }
 
 export function isValidCui(value: string): boolean {
   return /^\d{2,10}$/.test(normalizeCui(value));
+}
+
+export function isEmailLike(value: string): boolean {
+  const at = value.indexOf('@', 1);
+  return at > 0 && !/\s/.test(value) && value.slice(at + 2, -1).includes('.');
 }
 
 export function formatCui(cui: string): string {
@@ -41,7 +46,7 @@ export function formatIsoDate(value: string): string {
 
 export function parseDecimal(value: string): number {
   const text = value.trim().replace(',', '.');
-  return text === '' ? NaN : Number(text);
+  return text === '' ? Number.NaN : Number(text);
 }
 
 export function formatDateTime(iso: string | Date): string {
@@ -88,9 +93,9 @@ export function initials(name: string | null, email: string): string {
 
 export function groupSerial(serial: string): string {
   return serial
-    .replace(/[\s:-]+/g, '')
+    .replaceAll(/[\s:-]+/g, '')
     .toUpperCase()
-    .replace(/(.{4})(?=.)/g, '$1 ');
+    .replaceAll(/(.{4})(?=.)/g, '$1 ');
 }
 
 const amountFmt = new Intl.NumberFormat('ro-RO', {

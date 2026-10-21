@@ -58,9 +58,8 @@ describe('parseSpvExport', () => {
   });
 
   it('caps the rights list so the company lookup stays one bounded query', () => {
-    const cui = Array.from(
-      { length: MAX_RIGHTS + 10 },
-      (_, i) => String(10_000_000 + i),
+    const cui = Array.from({ length: MAX_RIGHTS + 10 }, (_, i) =>
+      String(10_000_000 + i),
     ).join(',');
     expect(parseSpvExport(json({ mesaje: [], cui })).cuis).toHaveLength(
       MAX_RIGHTS,
@@ -114,6 +113,10 @@ describe('parseSpvExport', () => {
     [json({ titlu: 'x' }), 'câmpul „mesaje”'],
     [json({ eroare: 'Nu aveti drept' }), 'ANAF: Nu aveti drept'],
     [json({ mesaje: ['x'] }), 'Mesajul 1 din listă nu are formatul ANAF'],
+    [
+      json({ mesaje: [{ id: '1' }, { id: '12a' }] }),
+      'Mesajul 2 din listă nu are un id ANAF valid',
+    ],
     [json({ mesaje: [{ id: '12a' }] }), 'nu are un id ANAF valid'],
     [json({ mesaje: [{ id: '1', tip: { a: 1 } }] }), 'câmpul „tip” invalid'],
   ])('rejects %#', (content, message) => {

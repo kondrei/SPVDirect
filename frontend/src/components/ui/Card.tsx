@@ -17,7 +17,7 @@ export function Card({
   flush,
   className,
   children,
-}: CardProps) {
+}: Readonly<CardProps>) {
   return (
     <section className={cx('spv-card', flush && 'spv-card-flush', className)}>
       {title || actions ? (

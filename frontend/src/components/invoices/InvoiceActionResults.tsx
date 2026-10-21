@@ -8,9 +8,9 @@ import { UploadStatus } from '../../api/enums';
 
 export function InvoiceActionResults({
   states,
-}: {
+}: Readonly<{
   states: InvoiceActionStates;
-}) {
+}>) {
   const items: ReactNode[] = [];
   for (const key of ['pdf', 'xml'] as const) {
     const state = states[key];
@@ -24,13 +24,13 @@ export function InvoiceActionResults({
   }
   if (states.store?.status === 'error') {
     items.push(
-      <Alert key="store" tone="danger" title="Factura nu a fost salvată în Storage.">
+      <Alert key="store" tone="danger" title="Factura nu a fost salvată în cloud.">
         {states.store.error.message}
       </Alert>,
     );
   } else if (states.store?.status === 'success') {
     items.push(
-      <Alert key="store" tone="success" title="PDF-ul a fost salvat în Storage." />,
+      <Alert key="store" tone="success" title="PDF-ul a fost salvat în cloud." />,
     );
   }
   if (states.anaf?.status === 'error') {
@@ -78,18 +78,18 @@ export function InvoiceActionResults({
   return <>{items}</>;
 }
 
-export function DeliveryResults({ result }: { result: CreatedInvoice }) {
+export function DeliveryResults({ result }: Readonly<{ result: CreatedInvoice }>) {
   const { invoice } = result;
   return (
     <>
       {invoice.storagePath ? (
-        <Alert tone="success" title="PDF-ul a fost salvat în Storage." />
+        <Alert tone="success" title="PDF-ul a fost salvat în cloud." />
       ) : null}
       {invoice.emailedTo ? (
         <Alert tone="success" title={`Emailul a fost trimis la ${invoice.emailedTo}.`} />
       ) : null}
       {result.storageError ? (
-        <Alert tone="warning" title="Salvarea în Storage a eșuat.">
+        <Alert tone="warning" title="Salvarea în cloud a eșuat.">
           {result.storageError}
         </Alert>
       ) : null}

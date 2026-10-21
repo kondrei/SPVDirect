@@ -7,11 +7,11 @@ export function ComingSoonPage({
   title,
   icon,
   what,
-}: {
+}: Readonly<{
   title: string;
   icon: IconName;
   what: string;
-}) {
+}>) {
   const appPath = useAppPath();
   return (
     <>

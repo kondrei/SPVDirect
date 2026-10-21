@@ -142,7 +142,10 @@ export class CompanyExportService {
     zip.add(`${prefix}${CompanyExportFile.Invoices}`, json(invoices));
     zip.add(
       `${prefix}${CompanyExportFile.InvoiceList}`,
-      toCsv(INVOICE_HEADER, invoices.map(invoiceRow)),
+      toCsv(
+        INVOICE_HEADER,
+        invoices.map((i) => invoiceRow(i)),
+      ),
     );
     const invoiceFolder = `${prefix}${CompanyExportFile.InvoicesFolder}`;
     for (const invoice of invoices) {
@@ -157,7 +160,10 @@ export class CompanyExportService {
 
     zip.add(
       `${prefix}${CompanyExportFile.Uploads}`,
-      toCsv(UPLOAD_HEADER, uploads.map(uploadRow)),
+      toCsv(
+        UPLOAD_HEADER,
+        uploads.map((u) => uploadRow(u)),
+      ),
     );
     return this.writeSpv(
       zip,
@@ -175,7 +181,13 @@ export class CompanyExportService {
     name: string,
     errors: string[],
   ): Promise<boolean> {
-    zip.add(`${name}.csv`, toCsv(SPV_HEADER, messages.map(spvRow)));
+    zip.add(
+      `${name}.csv`,
+      toCsv(
+        SPV_HEADER,
+        messages.map((m) => spvRow(m)),
+      ),
+    );
     for (const message of messages) {
       if (!message.downloadedAt) continue;
       if (!(await zip.ready())) return false;

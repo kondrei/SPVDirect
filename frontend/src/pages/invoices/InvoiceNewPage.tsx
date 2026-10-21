@@ -1,4 +1,4 @@
-import { useReducer, useState, type Dispatch, type FormEvent } from 'react';
+import { useReducer, useState, type Dispatch, type SubmitEvent } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useCompanies } from '../../api/hooks/companies';
 import {
@@ -45,13 +45,13 @@ function InvoiceHeaderCard({
   companies,
   suggestedNumber,
   dispatch,
-}: {
+}: Readonly<{
   header: InvoiceHeader;
   company: Company;
   companies: Company[];
   suggestedNumber: number | undefined;
   dispatch: Dispatch<InvoiceFormAction>;
-}) {
+}>) {
   const set = (patch: Partial<InvoiceHeader>) => dispatch({ type: 'header', patch });
   return (
     <Card
@@ -89,23 +89,22 @@ function InvoiceHeaderCard({
             hint="Lăsați gol pentru următorul număr din serie."
           />
         </div>
-        {company.vatPayer === true ? (
-          company.vatOnCollection ? (
-            <Alert tone="info" title="Firma aplică TVA la încasare.">
-              Mențiunea „TVA la încasare” se adaugă automat pe factură.
-            </Alert>
-          ) : null
-        ) : (
+        {company.vatPayer === true && company.vatOnCollection ? (
+          <Alert tone="info" title="Firma aplică TVA la încasare.">
+            Mențiunea „TVA la încasare” se adaugă automat pe factură.
+          </Alert>
+        ) : null}
+        {company.vatPayer === true ? null : (
           <Alert tone="info" title="Firma nu este plătitoare de TVA.">
             Factura se emite fără TVA, cu mențiunea corespunzătoare.
           </Alert>
         )}
-        {!company.address ? (
+        {company.address ? null : (
           <Alert tone="danger" title="Firma nu are adresă.">
             Reîmprospătați datele din ANAF pe pagina firmei înainte de a emite
             facturi.
           </Alert>
-        ) : null}
+        )}
         <div className="form-row">
           <TextField
             label="Data emiterii"
@@ -138,7 +137,7 @@ function InvoiceHeaderCard({
               </option>
             ))}
           </SelectField>
-          {header.currency !== Currency.RON ? (
+          {header.currency === Currency.RON ? null : (
             <TextField
               label={`Curs BNR (RON pentru 1 ${header.currency})`}
               mono
@@ -148,7 +147,7 @@ function InvoiceHeaderCard({
               placeholder="4,9750"
               hint="Necesar pentru TVA exprimat în RON."
             />
-          ) : null}
+          )}
           <SelectField
             label="Mod de plată"
             value={header.paymentMethod}
@@ -166,7 +165,7 @@ function InvoiceHeaderCard({
   );
 }
 
-function InvoiceForm({ companies }: { companies: Company[] }) {
+function InvoiceForm({ companies }: Readonly<{ companies: Company[] }>) {
   const appPath = useAppPath();
   const [params] = useSearchParams();
   const requested = Number(params.get('company'));
@@ -205,7 +204,7 @@ function InvoiceForm({ companies }: { companies: Company[] }) {
     exchange !== null && Number.isFinite(exchange) ? exchange : null,
   );
 
-  const submit = (e: FormEvent) => {
+  const submit = (e: SubmitEvent) => {
     e.preventDefault();
     const problem = validateInvoiceForm(state);
     setError(problem);

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type SubmitEvent } from 'react';
 import { useSendInvoice } from '../../api/hooks/invoices';
 import type { InvoiceSummary } from '../../api/types';
 import { invoiceNumber } from '../../lib/invoice';
@@ -8,14 +8,14 @@ export function SendPanel({
   invoice,
   defaultTo = '',
   onClose,
-}: {
+}: Readonly<{
   invoice: Pick<InvoiceSummary, 'id' | 'series' | 'number'>;
   defaultTo?: string;
   onClose: () => void;
-}) {
+}>) {
   const send = useSendInvoice();
   const [to, setTo] = useState(defaultTo);
-  const submit = (e: FormEvent) => {
+  const submit = (e: SubmitEvent) => {
     e.preventDefault();
     send.mutate({ id: invoice.id, to: to.trim() || undefined });
   };

@@ -10,9 +10,12 @@ import {
   stornoReference,
   vatId,
 } from '../helpers/invoice-format.js';
-import type { InvoiceParty } from '../dto/invoice.types.js';
+import type {
+  InvoiceParty,
+  InvoiceLogo,
+  InvoicePdfData,
+} from '../dto/invoice.types.js';
 import { PaymentMethod, VatCategory, Currency } from '../dto/invoice.enums.js';
-import type { InvoiceLogo, InvoicePdfData } from '../dto/invoice.types.js';
 
 const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   transfer: 'Transfer bancar',

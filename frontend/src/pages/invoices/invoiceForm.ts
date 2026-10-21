@@ -1,6 +1,7 @@
 import type { BuyerLookup, Company, CreateInvoiceInput, InvoiceUnit, LineSuggestion } from '../../api/types';
 import {
   decimalText,
+  isEmailLike,
   isValidCui,
   normalizeCui,
   parseDecimal,
@@ -222,8 +223,7 @@ export function exchangeRateOf(header: InvoiceHeader): number | null {
   return header.currency === Currency.RON ? null : parseDecimal(header.exchangeRate);
 }
 
-export function validateInvoiceForm(state: InvoiceFormState): string | null {
-  const { header, buyer, lines, delivery } = state;
+function validateHeader(header: InvoiceHeader): string | null {
   const exchange = exchangeRateOf(header);
   if (!/^[A-Za-z0-9]{1,10}$/.test(header.series.trim())) {
     return 'Seria poate avea 1–10 litere sau cifre.';
@@ -240,24 +240,41 @@ export function validateInvoiceForm(state: InvoiceFormState): string | null {
   if (header.currency !== Currency.RON && !(exchange && exchange > 0)) {
     return 'Introduceți cursul BNR pentru a calcula TVA în RON.';
   }
+  return null;
+}
+
+function validateBuyer(buyer: BuyerForm): string | null {
   if (!buyer.name.trim() || !buyer.address.trim()) {
     return 'Completați denumirea și adresa cumpărătorului.';
   }
   if (buyer.cui.trim() && !isValidCui(buyer.cui)) {
     return 'CUI-ul cumpărătorului este invalid.';
   }
-  for (const [index, line] of lines.entries()) {
-    if (!line.description.trim()) {
-      return `Linia ${index + 1}: completați denumirea.`;
-    }
-    if (!(parseDecimal(line.quantity) > 0)) {
-      return `Linia ${index + 1}: cantitatea trebuie să fie pozitivă.`;
-    }
-    if (!(parseDecimal(line.unitPrice) >= 0)) {
-      return `Linia ${index + 1}: introduceți prețul unitar fără TVA.`;
-    }
+  return null;
+}
+
+function validateLine(line: LineForm, index: number): string | null {
+  if (!line.description.trim()) {
+    return `Linia ${index + 1}: completați denumirea.`;
   }
-  if (delivery.sendEmail && !/^\S+@\S+\.\S+$/.test(emailRecipient(state).trim())) {
+  const quantity = parseDecimal(line.quantity);
+  if (Number.isNaN(quantity) || quantity <= 0) {
+    return `Linia ${index + 1}: cantitatea trebuie să fie pozitivă.`;
+  }
+  const unitPrice = parseDecimal(line.unitPrice);
+  if (Number.isNaN(unitPrice) || unitPrice < 0) {
+    return `Linia ${index + 1}: introduceți prețul unitar fără TVA.`;
+  }
+  return null;
+}
+
+export function validateInvoiceForm(state: InvoiceFormState): string | null {
+  const error =
+    validateHeader(state.header) ??
+    validateBuyer(state.buyer) ??
+    state.lines.map((line, index) => validateLine(line, index)).find((e) => e !== null);
+  if (error) return error;
+  if (state.delivery.sendEmail && !isEmailLike(emailRecipient(state).trim())) {
     return 'Introduceți adresa de email la care se trimite factura.';
   }
   return null;

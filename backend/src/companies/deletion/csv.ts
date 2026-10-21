@@ -15,6 +15,8 @@ function cell(value: CsvValue): string {
 }
 
 export function toCsv(header: string[], rows: CsvValue[][]): string {
-  const lines = [header, ...rows].map((row) => row.map(cell).join(';'));
+  const lines = [header, ...rows].map((row) =>
+    row.map((value) => cell(value)).join(';'),
+  );
   return `${BOM}${lines.join('\r\n')}\r\n`;
 }

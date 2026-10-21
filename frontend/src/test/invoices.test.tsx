@@ -264,7 +264,7 @@ describe('Facturi list', () => {
     });
     await user.click(
       await screen.findByRole('button', {
-        name: /Salvează în Storage FCT 000012/,
+        name: /Salvează în cloud FCT 000012/,
       }),
     );
     await waitFor(() =>
@@ -391,7 +391,7 @@ describe('Factură nouă', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Stornează' })).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Salvează în Storage' }),
+      screen.getByRole('button', { name: 'Salvează în cloud' }),
     ).toBeInTheDocument();
   });
 
@@ -414,7 +414,7 @@ describe('Factură nouă', () => {
     });
     await screen.findByRole('heading', { name: 'Factură nouă' });
     await fillBasics(user);
-    await user.click(screen.getByLabelText('Salvează PDF-ul în Supabase Storage'));
+    await user.click(screen.getByLabelText('Salvează PDF-ul în cloud'));
     await user.click(
       screen.getByLabelText('Trimite factura pe email cumpărătorului'),
     );

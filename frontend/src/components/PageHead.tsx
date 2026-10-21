@@ -6,12 +6,12 @@ export function PageHead({
   context,
   crumbs,
   actions,
-}: {
+}: Readonly<{
   title: string;
   context?: ReactNode;
   crumbs?: ReactNode;
   actions?: ReactNode;
-}) {
+}>) {
   useDocumentTitle(title);
   return (
     <div className="page-head">

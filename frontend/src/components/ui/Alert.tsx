@@ -24,7 +24,7 @@ export function Alert({
   children,
   action,
   className,
-}: AlertProps) {
+}: Readonly<AlertProps>) {
   return (
     <div
       className={cx('spv-alert', `spv-alert-${tone}`, className)}

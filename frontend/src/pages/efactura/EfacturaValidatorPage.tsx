@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type SubmitEvent } from 'react';
 import { detailsOf } from '../../api/client';
 import { useCompanies } from '../../api/hooks/companies';
 import { useInvoices } from '../../api/hooks/invoices';
@@ -12,6 +12,11 @@ import { formatAmount } from '../../lib/format';
 import { invoiceNumber } from '../../lib/invoice';
 
 type Standard = 'FACT1' | 'FCN';
+
+function invoicePlaceholder(companyId: number | undefined, count: number): string {
+  if (!companyId) return 'Alegeți întâi firma';
+  return count === 0 ? 'Nicio factură emisă' : 'Alegeți factura';
+}
 
 export function EfacturaValidatorPage() {
   const appPath = useAppPath();
@@ -52,7 +57,7 @@ export function EfacturaValidatorPage() {
     return false;
   };
 
-  const check = (e: FormEvent) => {
+  const check = (e: SubmitEvent) => {
     e.preventDefault();
     if (!hasSource()) return;
     if (invoiceId) validateInvoice.mutate(invoiceId);
@@ -101,11 +106,7 @@ export function EfacturaValidatorPage() {
               }
             >
               <option value="">
-                {!companyId
-                  ? 'Alegeți întâi firma'
-                  : items.length === 0
-                    ? 'Nicio factură emisă'
-                    : 'Alegeți factura'}
+                {invoicePlaceholder(companyId, items.length)}
               </option>
               {items.map((i) => (
                 <option key={i.id} value={i.id}>
@@ -145,7 +146,7 @@ export function EfacturaValidatorPage() {
               checked={skip}
               onChange={(e) => setSkip(e.target.checked)}
             />
-            Convertește în PDF fără validare (ANAF nu garantează datele din PDF)
+            <span>Convertește în PDF fără validare (ANAF nu garantează datele din PDF)</span>
           </label>
           {error ? <Alert tone="danger" title={error} /> : null}
           {validate.isError ? (
@@ -153,18 +154,17 @@ export function EfacturaValidatorPage() {
               {validate.error.message}
             </Alert>
           ) : null}
-          {validate.isSuccess ? (
-            validate.data.valid ? (
-              <Alert tone="success" title="XML-ul este valid.">
-                {validate.data.traceId
-                  ? `Cod de urmărire ANAF: ${validate.data.traceId}`
-                  : null}
-              </Alert>
-            ) : (
-              <Alert tone="danger" title="XML-ul nu este valid.">
-                <ErrorLog lines={validate.data.messages} />
-              </Alert>
-            )
+          {validate.isSuccess && validate.data.valid ? (
+            <Alert tone="success" title="XML-ul este valid.">
+              {validate.data.traceId
+                ? `Cod de urmărire ANAF: ${validate.data.traceId}`
+                : null}
+            </Alert>
+          ) : null}
+          {validate.isSuccess && !validate.data.valid ? (
+            <Alert tone="danger" title="XML-ul nu este valid.">
+              <ErrorLog lines={validate.data.messages} />
+            </Alert>
           ) : null}
           {transform.isError ? (
             <Alert tone="danger" title="PDF-ul nu a putut fi generat.">

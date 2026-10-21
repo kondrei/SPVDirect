@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useRef, useState, type ChangeEvent, type ReactNode, type SubmitEvent } from 'react';
 import { useConnections } from '../api/hooks/connections';
 import {
   useCreateSpvRequest,
@@ -64,12 +64,12 @@ function ConnectionSelect({
   value,
   onChange,
   options,
-}: {
+}: Readonly<{
   id: string;
   value: number;
   onChange: (v: number) => void;
   options: Certificate[];
-}) {
+}>) {
   return (
     <SelectField
       id={id}
@@ -86,10 +86,11 @@ function ConnectionSelect({
   );
 }
 
-function ImportResult({ summary }: { summary: SpvImportSummary }) {
+function ImportResult({ summary }: Readonly<{ summary: SpvImportSummary }>) {
   const appPath = useAppPath();
   const { fetched, added, notice, certSerial, rights, unknownCuis } = summary;
   const toAdd = unknownCuis.slice(0, MAX_BULK_CUIS);
+  const existing = fetched > added ? `, ${fetched - added} existau deja.` : '.';
   return (
     <>
       <Alert tone="success" title="Import încheiat.">
@@ -97,9 +98,7 @@ function ImportResult({ summary }: { summary: SpvImportSummary }) {
           <span>
             {notice
               ? `ANAF: ${notice}.`
-              : `${fetched} mesaje în listă, ${added} noi${
-                  fetched > added ? `, ${fetched - added} existau deja.` : '.'
-                }`}
+              : `${fetched} mesaje în listă, ${added} noi${existing}`}
           </span>
           {certSerial || rights > 0 ? (
             <span className="muted">
@@ -169,7 +168,7 @@ function ImportCard() {
     setText(await file.text());
   };
 
-  const submit = (e: FormEvent) => {
+  const submit = (e: SubmitEvent) => {
     e.preventDefault();
     if (!text.trim()) {
       setError('Lipiți textul copiat de la ANAF sau încărcați fișierul salvat.');
@@ -266,11 +265,11 @@ function UploadPdfButton({
   message,
   loading,
   onPick,
-}: {
+}: Readonly<{
   message: ArchivedSpvMessage;
   loading: boolean;
   onPick: (file: File) => void;
-}) {
+}>) {
   const input = useRef<HTMLInputElement>(null);
   return (
     <>
@@ -315,9 +314,9 @@ function ArchiveCard() {
     upload.mutate({ id: message.id, file });
   };
 
-  const submit = (e: FormEvent) => {
+  const submit = (e: SubmitEvent) => {
     e.preventDefault();
-    const cif = cifInput.replace(/\s+/g, '');
+    const cif = cifInput.replaceAll(/\s+/g, '');
     if (cif && !DIGITS.test(cif)) {
       setError('CIF/CNP-ul trebuie să conțină doar cifre (2–13).');
       return;
@@ -394,6 +393,43 @@ function ArchiveCard() {
     },
   ];
 
+  let body: ReactNode = null;
+  if (archive.isPending) {
+    body = <div className="loading">Se încarcă…</div>;
+  } else if (archive.data?.items.length === 0) {
+    body = <EmptyState icon="invoice" title="Niciun mesaj salvat." />;
+  } else if (archive.data) {
+    body = (
+      <>
+        <DataTable
+          caption="Mesaje SPV salvate"
+          columns={columns}
+          rows={archive.data.items}
+          rowKey={(m) => m.id}
+        />
+        <div className="spv-row">
+          <Button
+            size="sm"
+            disabled={query.page <= 1}
+            onClick={() => setQuery({ ...query, page: query.page - 1 })}
+          >
+            Anterioare
+          </Button>
+          <span className="muted">
+            Pagina {query.page} din {lastPage} · {total} mesaje
+          </span>
+          <Button
+            size="sm"
+            disabled={query.page >= lastPage}
+            onClick={() => setQuery({ ...query, page: query.page + 1 })}
+          >
+            Următoarele
+          </Button>
+        </div>
+      </>
+    );
+  }
+
   return (
     <Card
       title="Mesaje salvate"
@@ -426,39 +462,7 @@ function ArchiveCard() {
         {archive.isError ? (
           <QueryError error={archive.error} retry={() => archive.refetch()} />
         ) : null}
-        {archive.isPending ? (
-          <div className="loading">Se încarcă…</div>
-        ) : archive.data && archive.data.items.length === 0 ? (
-          <EmptyState icon="invoice" title="Niciun mesaj salvat." />
-        ) : archive.data ? (
-          <>
-            <DataTable
-              caption="Mesaje SPV salvate"
-              columns={columns}
-              rows={archive.data.items}
-              rowKey={(m) => m.id}
-            />
-            <div className="spv-row">
-              <Button
-                size="sm"
-                disabled={query.page <= 1}
-                onClick={() => setQuery({ ...query, page: query.page - 1 })}
-              >
-                Anterioare
-              </Button>
-              <span className="muted">
-                Pagina {query.page} din {lastPage} · {total} mesaje
-              </span>
-              <Button
-                size="sm"
-                disabled={query.page >= lastPage}
-                onClick={() => setQuery({ ...query, page: query.page + 1 })}
-              >
-                Următoarele
-              </Button>
-            </div>
-          </>
-        ) : null}
+        {body}
       </div>
     </Card>
   );
@@ -468,11 +472,11 @@ function MonthField({
   months,
   value,
   onChange,
-}: {
+}: Readonly<{
   months?: number[];
   value: string;
   onChange: (v: string) => void;
-}) {
+}>) {
   if (!months) {
     return (
       <TextField
@@ -506,11 +510,11 @@ function RequestCard({
   connectionId,
   certificates,
   onSelect,
-}: {
+}: Readonly<{
   connectionId: number;
   certificates: Certificate[];
   onSelect: (id: number) => void;
-}) {
+}>) {
   const create = useCreateSpvRequest();
   const [tip, setTip] = useState('');
   const [cui, setCui] = useState('');
@@ -524,7 +528,7 @@ function RequestCard({
   const type = spvRequestType(tip);
   const needs = (field: SpvRequestField) => usesField(type, field);
 
-  const submit = (e: FormEvent) => {
+  const submit = (e: SubmitEvent) => {
     e.preventDefault();
     const form = {
       tip,
@@ -533,7 +537,7 @@ function RequestCard({
       luna,
       motiv,
       numarInregistrare: numarInregistrare.trim(),
-      cuiPunctDeLucru: cuiPunctDeLucru.replace(/\s+/g, ''),
+      cuiPunctDeLucru: cuiPunctDeLucru.replaceAll(/\s+/g, ''),
     };
     const problem = spvRequestError(type, form);
     setError(problem);

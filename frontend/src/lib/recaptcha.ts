@@ -4,9 +4,7 @@ interface Grecaptcha {
 }
 
 declare global {
-  interface Window {
-    grecaptcha?: Grecaptcha;
-  }
+  var grecaptcha: Grecaptcha | undefined;
 }
 
 const SITE_KEY: string | undefined = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
@@ -23,7 +21,7 @@ export function loadRecaptcha(): Promise<Grecaptcha> {
     script.src = `https://www.google.com/recaptcha/api.js?render=${encodeURIComponent(SITE_KEY)}`;
     script.async = true;
     script.onload = () => {
-      const g = window.grecaptcha;
+      const g = globalThis.grecaptcha;
       if (g) g.ready(() => resolve(g));
       else reject(new Error(RECAPTCHA_UNAVAILABLE));
     };
@@ -32,7 +30,7 @@ export function loadRecaptcha(): Promise<Grecaptcha> {
       script.remove();
       reject(new Error(RECAPTCHA_UNAVAILABLE));
     };
-    document.head.appendChild(script);
+    document.head.append(script);
   });
   return loading;
 }

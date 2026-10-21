@@ -13,7 +13,7 @@ import {
   companyUpdated,
 } from '../../api-logs/activity-entries.js';
 import { EDITABLE_COMPANY_FIELDS } from '../dto/company.constants.js';
-import type { CompanyField } from '../dto/company.types.js';
+import type { CompanyField, BulkCreateResult } from '../dto/company.types.js';
 import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import { AnafConnection } from '../../anaf/anaf-connection.entity.js';
 import { AnafCompanyAccessService } from '../../anaf/services/anaf-company-access.service.js';
@@ -31,7 +31,6 @@ import {
   UpdateCompanyDto,
 } from '../dto/company.dto.js';
 import { BulkCreateStatus } from '../dto/company.enums.js';
-import type { BulkCreateResult } from '../dto/company.types.js';
 
 export const CUI_NOT_FOUND =
   'CUI incorect: nu există nicio firmă cu acest CUI în baza de date ANAF.';

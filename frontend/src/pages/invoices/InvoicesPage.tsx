@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import { useCompanies } from '../../api/hooks/companies';
 import { useInvoiceUploads } from '../../api/hooks/efactura';
 import { useInvoices } from '../../api/hooks/invoices';
@@ -39,19 +39,19 @@ import {
 import { invoiceNumber } from '../../lib/invoice';
 import { UploadStatus } from '../../api/enums';
 
-const SENT_TO_ANAF: EfacturaUpload['status'][] = [
+const SENT_TO_ANAF = new Set<EfacturaUpload['status']>([
   UploadStatus.Sending,
   UploadStatus.Processing,
   UploadStatus.Ok,
-];
+]);
 
 function InvoiceStatuses({
   invoice,
   upload,
-}: {
+}: Readonly<{
   invoice: InvoiceSummary;
   upload: EfacturaUpload | undefined;
-}) {
+}>) {
   const empty =
     !invoice.stored &&
     !invoice.emailedAt &&
@@ -90,16 +90,16 @@ function InvoiceRowActions({
   actions,
   onSend,
   onStorno,
-}: {
+}: Readonly<{
   invoice: InvoiceSummary;
   upload: EfacturaUpload | undefined;
   actions: InvoiceActions;
   onSend: () => void;
   onStorno: () => void;
-}) {
+}>) {
   const label = invoiceNumber(invoice.series, invoice.number);
   const sentToAnaf =
-    (upload && SENT_TO_ANAF.includes(upload.status)) ||
+    (upload && SENT_TO_ANAF.has(upload.status)) ||
     anafAccepted(actions.statesFor(invoice.id));
   return (
     <div className="invoice-actions">
@@ -122,7 +122,7 @@ function InvoiceRowActions({
         XML
       </Button>
       <Button size="sm" aria-label={`Trimite pe email ${label}`} onClick={onSend}>
-        Trimite
+        Trimite pe email
       </Button>
       {sentToAnaf ? null : (
         <Button
@@ -131,7 +131,7 @@ function InvoiceRowActions({
           loading={actions.isPending(invoice.id, 'anaf')}
           onClick={() => actions.sendToAnaf(invoice.id)}
         >
-          e-Factura
+          Trimite la ANAF
         </Button>
       )}
       <Button
@@ -142,22 +142,22 @@ function InvoiceRowActions({
       >
         Validează
       </Button>
-      {!invoice.stornoOfNumber ? (
+      {invoice.stornoOfNumber ? null : (
         <Button size="sm" aria-label={`Stornează ${label}`} onClick={onStorno}>
           Stornează
         </Button>
-      ) : null}
-      {!invoice.stored ? (
+      )}
+      {invoice.stored ? null : (
         <Button
           size="sm"
           icon="upload"
-          aria-label={`Salvează în Storage ${label}`}
+          aria-label={`Salvează în cloud ${label}`}
           loading={actions.isPending(invoice.id, 'store')}
           onClick={() => actions.saveToStorage(invoice.id)}
         >
-          Salvează
+          Salvează în cloud
         </Button>
-      ) : null}
+      )}
     </div>
   );
 }
@@ -257,6 +257,61 @@ export function InvoicesPage() {
     </div>
   );
 
+  let body: ReactNode = null;
+  if (invoices.isPending) {
+    body = (
+      <div className="loading">Se încarcă…</div>
+    );
+  } else if (invoices.data?.items.length === 0) {
+    body = (
+      <EmptyState
+        icon="invoice"
+        title="Nicio factură emisă."
+        actions={
+          <ButtonLink to={appPath('/invoices/new')} variant="primary">
+            Emite prima factură
+          </ButtonLink>
+        }
+      >
+        Alegeți firma emitentă, introduceți CUI-ul clientului și datele lui
+        se completează din ANAF.
+      </EmptyState>
+    );
+  } else if (invoices.data) {
+    body = (
+      <>
+        <DataTable
+          caption="Facturi emise"
+          columns={columns}
+          rows={invoices.data.items}
+          rowKey={(i) => i.id}
+          stack
+          rowNote={rowNote}
+          onRowClick={setPreviewing}
+        />
+        <div className="spv-row">
+          <Button
+            size="sm"
+            disabled={page <= 1}
+            onClick={() => setPage(page - 1)}
+          >
+            Anterioare
+          </Button>
+          <span className="muted">
+            Pagina {page} din {lastPage} · {pluralFacturi(total)}
+          </span>
+          <Button
+            size="sm"
+            disabled={page >= lastPage}
+            onClick={() => setPage(page + 1)}
+          >
+            Următoarele
+          </Button>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <PageHead
@@ -290,53 +345,7 @@ export function InvoicesPage() {
           {invoices.isError ? (
             <QueryError error={invoices.error} retry={() => invoices.refetch()} />
           ) : null}
-          {invoices.isPending ? (
-            <div className="loading">Se încarcă…</div>
-          ) : invoices.data && invoices.data.items.length === 0 ? (
-            <EmptyState
-              icon="invoice"
-              title="Nicio factură emisă."
-              actions={
-                <ButtonLink to={appPath('/invoices/new')} variant="primary">
-                  Emite prima factură
-                </ButtonLink>
-              }
-            >
-              Alegeți firma emitentă, introduceți CUI-ul clientului și datele lui
-              se completează din ANAF.
-            </EmptyState>
-          ) : invoices.data ? (
-            <>
-              <DataTable
-                caption="Facturi emise"
-                columns={columns}
-                rows={invoices.data.items}
-                rowKey={(i) => i.id}
-                stack
-                rowNote={rowNote}
-                onRowClick={setPreviewing}
-              />
-              <div className="spv-row">
-                <Button
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage(page - 1)}
-                >
-                  Anterioare
-                </Button>
-                <span className="muted">
-                  Pagina {page} din {lastPage} · {pluralFacturi(total)}
-                </span>
-                <Button
-                  size="sm"
-                  disabled={page >= lastPage}
-                  onClick={() => setPage(page + 1)}
-                >
-                  Următoarele
-                </Button>
-              </div>
-            </>
-          ) : null}
+          {body}
         </div>
       </Card>
       {previewing ? <InvoicePreview invoice={previewing} onClose={closePreview} /> : null}

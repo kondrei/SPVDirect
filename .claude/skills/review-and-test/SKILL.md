@@ -25,8 +25,11 @@ Run this after **every** code change in this repo, before saying the work is don
    ```bash
    npm test
    npm run lint
+   npm run lint:sonar
    npm run build
    ```
+   When `frontend/` changed, run `npm test`, `npm run typecheck`, `npm run lint` and `npm run lint:sonar` there.
+   `lint:sonar` runs the SonarJS rules that SonarQube for IDE shows. Fix the code, don't disable the rule. When a finding is wrong for this code (for example a TypeORM `find(Entity, …)` read as `Array#find`), say why in the report instead of rewriting working code. When you wrap a callback to satisfy a rule, keep every argument it used: `.map(fn)` passes the index too.
 3. If something fails, fix it and rerun until everything passes. Don't weaken or delete a test to make it pass unless the test itself is wrong, and say so if it is.
 
 ## 3. Report
@@ -35,4 +38,4 @@ End with a short summary:
 - the tests added or changed
 - the exact results of test, lint and build (pass counts, or the failures)
 
-A Stop hook (`.claude/hooks/verify-backend.sh`) also runs tests and lint automatically whenever backend code has uncommitted changes.
+A Stop hook (`.claude/hooks/verify-changes.sh`) also runs the backend tests, `npm run lint` and the SonarJS lint on changed files whenever backend or frontend code has uncommitted changes.

@@ -6,7 +6,7 @@ function recorder() {
   const calls: string[] = [];
   const qr = {
     addColumns: vi.fn((table: string, cols: TableColumn[]) => {
-      calls.push(`add ${table} ${cols.map(describeCol).join(', ')}`);
+      calls.push(`add ${table} ${cols.map((c) => describeCol(c)).join(', ')}`);
     }),
     dropColumns: vi.fn((table: string, cols: TableColumn[]) => {
       calls.push(`drop ${table} ${cols.map((c) => c.name).join(', ')}`);
@@ -21,8 +21,13 @@ function recorder() {
   return { qr, calls };
 }
 
-const describeCol = (c: TableColumn) =>
-  `${c.name} ${c.type}${c.length ? `(${c.length})` : ''}${c.isNullable ? ' null' : ''}${c.default !== undefined ? ` default ${String(c.default)}` : ''}`;
+const describeCol = (c: TableColumn) => {
+  const length = c.length ? `(${c.length})` : '';
+  const nullable = c.isNullable ? ' null' : '';
+  const fallback =
+    c.default === undefined ? '' : ` default ${String(c.default)}`;
+  return `${c.name} ${c.type}${length}${nullable}${fallback}`;
+};
 
 describe('AccountantProfile1790500000000', () => {
   it('adds the profile columns and the title check', async () => {
