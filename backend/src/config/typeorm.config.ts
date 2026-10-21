@@ -7,6 +7,7 @@ import { ApiLog } from '../api-logs/api-log.entity.js';
 import { BannedEmail } from '../auth/banned-email.entity.js';
 import { Company } from '../companies/company.entity.js';
 import { EfacturaUpload } from '../efactura/efactura-upload.entity.js';
+import { EfacturaInvoice } from '../efactura/efactura-invoice.entity.js';
 import { Invoice } from '../invoices/invoice.entity.js';
 import { migrations } from '../database/migrations/index.js';
 
@@ -18,6 +19,7 @@ export const entities = [
   BannedEmail,
   Company,
   EfacturaUpload,
+  EfacturaInvoice,
   Invoice,
   SpvMessage,
 ];

@@ -1,5 +1,5 @@
 $kind: http-request
-url: "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/00000000-0000-4000-8000-000000000000"
+url: "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/2147483647"
 method: DELETE
 scripts:
   - type: afterResponse

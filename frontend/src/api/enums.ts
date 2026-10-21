@@ -79,6 +79,18 @@ export enum EfacturaStandard {
   RASP = 'RASP',
 }
 
+export enum EfacturaDirection {
+  Received = 'received',
+  Sent = 'sent',
+}
+
+export enum ImportStatus {
+  Imported = 'imported',
+  Already = 'already',
+  Skipped = 'skipped',
+  Failed = 'failed',
+}
+
 export enum MessageFilter {
   Errors = 'E',
   Received = 'P',
@@ -107,6 +119,8 @@ export enum ActivityAction {
   EfacturaMessagesLoaded = 'efactura.messages_loaded',
   EfacturaValidated = 'efactura.validated',
   EfacturaTransformed = 'efactura.transformed',
+  EfacturaArchiveImported = 'efactura.archive_imported',
+  EfacturaArchiveEmailed = 'efactura.archive_emailed',
   SpvImported = 'spv.imported',
   SpvDocumentSaved = 'spv.document_saved',
   CertificateConnected = 'certificate.connected',

@@ -1,0 +1,18 @@
+$kind: http-request
+url: "{{baseUrl}}/accountants/{{accountantId}}/efactura/companies/2147483647/messages/import"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "messageIds": [
+        "3001"
+      ]
+    }
+scripts:
+  - type: afterResponse
+    code: pm.test('Status 404', () => pm.response.to.have.status(404));
+    language: text/javascript
+order: 5000

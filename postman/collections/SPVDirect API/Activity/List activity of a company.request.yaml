@@ -1,0 +1,23 @@
+$kind: http-request
+url: "{{baseUrl}}/accountants/{{accountantId}}/activity?companyId={{companyId}}&pageSize=100"
+method: GET
+queryParams:
+  companyId: "{{companyId}}"
+  pageSize: "100"
+scripts:
+  - type: beforeRequest
+    code: |-
+      if (!pm.collectionVariables.get('companyId')) {
+        console.log('No company yet: run the Companies folder first.');
+        pm.execution.skipRequest();
+      }
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('Status 200', () => pm.response.to.have.status(200));
+      pm.test('Only that company', () => {
+        const id = Number(pm.collectionVariables.get('companyId'));
+        pm.response.json().items.forEach((i) => pm.expect(i.companyId).to.eql(id));
+      });
+    language: text/javascript
+order: 2000

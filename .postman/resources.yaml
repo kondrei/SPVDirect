@@ -6,7 +6,7 @@ workspace:
 
 cloudResources:
   collections:
-    ../postman/collections/SPVDirect API: 7b476ded-ba38-43b5-adaf-c5db56c8c491
+    ../postman/collections/SPVDirect API: b23dd5fd-9117-420e-8a7a-af374ad80b22
 
 # All resources in the `postman/` folder are automatically registered in Local View.
 # Point to additional files outside the `postman/` folder to register them individually. Example:

@@ -15,6 +15,8 @@ export enum CompanyExportFile {
   InvoiceList = 'facturi.csv',
   InvoicesFolder = 'facturi',
   Uploads = 'efactura.csv',
+  EfacturaArchiveList = 'efactura-arhiva.csv',
+  EfacturaArchiveFolder = 'efactura-arhiva',
   Spv = 'spv',
   Logo = 'logo',
   Errors = 'erori.txt',

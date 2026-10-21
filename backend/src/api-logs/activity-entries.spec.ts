@@ -1,17 +1,28 @@
 import {
+  EfacturaDirection,
   UploadStatus,
   ValidateStandard,
 } from '../efactura/dto/efactura.enums.js';
 import type { Invoice } from '../invoices/invoice.entity.js';
 import {
   companyUpdated,
+  efacturaArchiveEmailed,
+  efacturaArchiveImported,
+  efacturaArchiveSyncCompleted,
   efacturaMessagesLoaded,
   efacturaUploaded,
   efacturaValidated,
   invoiceIssued,
+  jobFailed,
+  purgeCompleted,
   spvImported,
 } from './activity-entries.js';
-import { ActivityAction } from './dto/api-log.enums.js';
+import { MAX_JOB_ERROR_LENGTH } from './dto/api-log.constants.js';
+import {
+  ActivityAction,
+  JobActivityAction,
+  ScheduledJob,
+} from './dto/api-log.enums.js';
 
 const COMPANY = { id: 7, name: 'ALFA SRL', cui: '123' };
 
@@ -144,5 +155,83 @@ describe('activity entries', () => {
     expect(
       spvImported({ fetched: 10, added: 1, certSerial: 'AB' }).description,
     ).toBe('Lista de mesaje SPV a fost importată: 1 mesaj nou din 10');
+  });
+
+  it('summarizes an e-Factura archive import with what was left out', () => {
+    expect(
+      efacturaArchiveImported(
+        COMPANY,
+        { imported: 3, already: 1, skipped: 1, failed: 1 },
+        false,
+      ),
+    ).toEqual({
+      action: ActivityAction.EfacturaArchiveImported,
+      companyId: 7,
+      description:
+        'Au fost importate în arhiva e-Factura a firmei ALFA SRL (CUI 123) 3 facturi (2 existau deja sau nu sunt facturi, 1 eroare)',
+      details: {
+        companyName: 'ALFA SRL',
+        cui: '123',
+        imported: 3,
+        already: 1,
+        skipped: 1,
+        failed: 1,
+        automatic: false,
+      },
+    });
+    expect(
+      efacturaArchiveImported(
+        COMPANY,
+        { imported: 1, already: 0, skipped: 0, failed: 0 },
+        true,
+      ).description,
+    ).toBe(
+      'Importul automat a adăugat în arhiva e-Factura a firmei ALFA SRL (CUI 123) 1 factură',
+    );
+  });
+
+  it('logs an archived invoice sent by email with its partner', () => {
+    expect(
+      efacturaArchiveEmailed(
+        {
+          id: 31,
+          companyId: 7,
+          anafMessageId: '3001',
+          direction: EfacturaDirection.Received,
+          number: 'F-1',
+          issueDate: '2026-10-02',
+          supplierName: 'GAMA SRL',
+          customerName: 'ALFA SRL',
+        },
+        'contabil@example.com',
+      ),
+    ).toMatchObject({
+      action: ActivityAction.EfacturaArchiveEmailed,
+      companyId: 7,
+      description:
+        'Factura primită F-1 (GAMA SRL) a fost trimisă pe email la contabil@example.com',
+      details: { archiveId: 31, to: 'contabil@example.com' },
+    });
+  });
+
+  it('describes a clean job run without an error count', () => {
+    expect(
+      purgeCompleted({ companies: 0, accountants: 2, failed: 0 }).description,
+    ).toBe(
+      'Ștergerea definitivă a datelor șterse a rulat: 0 firme și 2 conturi șterse definitiv',
+    );
+    expect(
+      efacturaArchiveSyncCompleted({ companies: 25, imported: 1, failed: 0 })
+        .description,
+    ).toBe(
+      'Importul automat în arhiva e-Factura a rulat: 1 factură importată pentru 25 de firme',
+    );
+  });
+
+  it('cuts a long job error and accepts non-Error values', () => {
+    const entry = jobFailed(ScheduledJob.Purge, new Error('x'.repeat(900)));
+    expect(entry.action).toBe(JobActivityAction.Failed);
+    expect(entry.error).toHaveLength(MAX_JOB_ERROR_LENGTH);
+    expect(jobFailed(ScheduledJob.SpvSync, 'timeout').error).toBe('timeout');
   });
 });

@@ -6,6 +6,8 @@ import { CompaniesPage } from './pages/companies/CompaniesPage';
 import { CompanyPage } from './pages/companies/CompanyPage';
 import { ConnectionsPage } from './pages/ConnectionsPage';
 import { DashboardPage } from './pages/DashboardPage';
+import { EfacturaArchivePage } from './pages/efactura/EfacturaArchivePage';
+import { EfacturaArchivedInvoicePage } from './pages/efactura/EfacturaArchivedInvoicePage';
 import { EfacturaMessagesPage } from './pages/efactura/EfacturaMessagesPage';
 import { EfacturaPage } from './pages/efactura/EfacturaPage';
 import { EfacturaValidatorPage } from './pages/efactura/EfacturaValidatorPage';
@@ -36,6 +38,11 @@ export const routes = [
       { path: 'efactura', element: <EfacturaPage /> },
       { path: 'efactura/messages', element: <EfacturaMessagesPage /> },
       { path: 'efactura/validator', element: <EfacturaValidatorPage /> },
+      { path: 'efactura/archive', element: <EfacturaArchivePage /> },
+      {
+        path: 'efactura/archive/:archiveId',
+        element: <EfacturaArchivedInvoicePage />,
+      },
       {
         path: 'etransport',
         element: (

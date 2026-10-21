@@ -1,0 +1,38 @@
+$kind: http-request
+description: Lists FACTURA PRIMITA / FACTURA TRIMISA messages of the period (paginated), downloads each new one once and stores the signed ZIP. At most 50 per call; call again while `remaining > 0`. Needs a certificate on the company (400 otherwise).
+url: "{{baseUrl}}/accountants/{{accountantId}}/efactura/companies/{{companyId}}/messages/import-period"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "zile": 60
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      if (!pm.collectionVariables.get('companyId')) {
+        console.log('No company yet: run the Companies folder first.');
+        pm.execution.skipRequest();
+      }
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('Imports or explains why not (no certificate on the company)', () => {
+        pm.expect([200, 400]).to.include(pm.response.code);
+      });
+      if (pm.response.code === 200) {
+        pm.test('Batch shape', () => {
+          const r = pm.response.json();
+          pm.expect(r.found).to.be.a('number');
+          pm.expect(r.remaining).to.be.a('number');
+          pm.expect(r.results).to.be.an('array');
+          r.results.forEach((i) => pm.expect(['imported', 'already', 'skipped', 'failed']).to.include(i.status));
+        });
+        const first = pm.response.json().results.find((i) => i.id);
+        if (first) pm.collectionVariables.set('archiveId', first.id);
+      }
+    language: text/javascript
+order: 1000

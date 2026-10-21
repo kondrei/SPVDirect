@@ -147,6 +147,22 @@ export function filenameFrom(disposition: string | null): string | null {
   return /filename="?([^";]+)"?/i.exec(disposition)?.[1] ?? null;
 }
 
+export async function openFile(path: string, target: Window | null): Promise<void> {
+  try {
+    const res = await fetchOk(path, {});
+    const url = URL.createObjectURL(await res.blob());
+    if (target) {
+      target.opener = null;
+      target.location.href = url;
+    }
+    else window.open(url, '_blank', 'noopener');
+    setTimeout(() => URL.revokeObjectURL(url), BLOB_URL_LIFETIME_MS);
+  } catch (err) {
+    target?.close();
+    throw err;
+  }
+}
+
 export async function downloadFile(
   path: string,
   fallbackName: string,

@@ -26,13 +26,13 @@ import {
   LatestUploadsQuery,
   ListMessagesQuery,
   ListUploadsQuery,
-  MAX_XML_BYTES,
   ParseAnafIdPipe,
   TransformXmlDto,
   UploadInvoiceDto,
   UploadXmlDto,
   ValidateXmlDto,
 } from '../dto/efactura.dto.js';
+import { MAX_XML_BYTES } from '../dto/efactura.constants.js';
 import { EfacturaService } from '../services/efactura.service.js';
 
 const xmlFile = () =>

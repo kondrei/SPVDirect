@@ -1,0 +1,22 @@
+$kind: http-request
+description: "Query: `companyId`, `direction` (`received` | `sent`), `from`/`to` (issue date, YYYY-MM-DD), `q` (number, partner name or CUI), `page`, `pageSize` (default 25, max 100). Returns `{ items, total, page, pageSize, totals }`; `totals` sums each currency, credit notes negative."
+url: "{{baseUrl}}/accountants/{{accountantId}}/efactura/archive?direction=received&pageSize=10"
+method: GET
+queryParams:
+  direction: received
+  pageSize: "10"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status 200', () => pm.response.to.have.status(200));
+      pm.test('Page shape with totals per currency', () => {
+        const p = pm.response.json();
+        pm.expect(p.items).to.be.an('array');
+        pm.expect(p.total).to.be.a('number');
+        pm.expect(p.pageSize).to.eql(10);
+        pm.expect(p.totals).to.be.an('array');
+        p.items.forEach((i) => pm.expect(i.direction).to.eql('received'));
+        p.items.forEach((i) => pm.expect(i).to.not.have.any.keys('zipContent', 'zipStoragePath', 'pdfContent'));
+      });
+    language: text/javascript
+order: 6000

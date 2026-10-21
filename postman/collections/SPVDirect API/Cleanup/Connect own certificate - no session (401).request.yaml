@@ -7,4 +7,4 @@ scripts:
     language: text/javascript
 settings:
   followRedirects: false
-order: 7000
+order: 13000

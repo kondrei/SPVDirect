@@ -1,0 +1,24 @@
+$kind: http-request
+description: "Multipart field `file`: the JSON ANAF shows at listaMesaje (up to 5 MB, 10000 messages). Pick the saved file in the Body tab before sending. Returns `{ fetched, added, title, certSerial, notice, rights, unknownCuis }`; messages already saved are skipped. `rights` counts the CUI/CNPs in the list's `cui` field; `unknownCuis` are those CUIs (CNPs left out) that are not companies of the accountant yet. \"Nu exista mesaje...\" from ANAF imports nothing and comes back in `notice`. 60 requests/min."
+url: "{{baseUrl}}/accountants/{{accountantId}}/spv/archive/import"
+method: POST
+body:
+  type: formdata
+  content:
+    - type: file
+      key: file
+      src: []
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status 200', () => pm.response.to.have.status(200));
+      pm.test('Summary', () => {
+        const s = pm.response.json();
+        pm.expect(s.fetched).to.be.a('number');
+        pm.expect(s.added).to.be.a('number').and.to.be.at.most(s.fetched);
+        pm.expect(s.rights).to.be.a('number');
+        pm.expect(s.unknownCuis).to.be.an('array');
+        pm.expect(s).to.have.keys('fetched', 'added', 'title', 'certSerial', 'notice', 'rights', 'unknownCuis');
+      });
+    language: text/javascript
+order: 2000

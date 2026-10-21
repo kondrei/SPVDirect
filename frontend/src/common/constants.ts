@@ -1,4 +1,4 @@
-import { ActivityAction } from '../api/enums';
+import { ActivityAction, ImportStatus } from '../api/enums';
 import type { Tone } from '../components/ui';
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
@@ -13,6 +13,14 @@ export const SPV_PAGE_SIZE = 25;
 export const MIN_PASSWORD = 10;
 
 export const INVOICE_PAGE_SIZE = 25;
+
+export const ARCHIVE_PAGE_SIZE = 25;
+export const MAX_IMPORT_IDS = 50;
+export const MAX_MESSAGE_DAYS = 60;
+export const IMPORT_PROBLEM_STATUSES: ReadonlySet<ImportStatus> = new Set([
+  ImportStatus.Skipped,
+  ImportStatus.Failed,
+]);
 
 export const MAX_LOGO_BYTES = 512 * 1024;
 
@@ -39,6 +47,8 @@ export const ACTIVITY_LABELS: Record<ActivityAction, { label: string; tone: Tone
   [ActivityAction.EfacturaMessagesLoaded]: { label: 'Mesaje e-Factura încărcate', tone: 'neutral' },
   [ActivityAction.EfacturaValidated]: { label: 'Validare ANAF', tone: 'neutral' },
   [ActivityAction.EfacturaTransformed]: { label: 'XML transformat în PDF', tone: 'neutral' },
+  [ActivityAction.EfacturaArchiveImported]: { label: 'Import în arhiva e-Factura', tone: 'brand' },
+  [ActivityAction.EfacturaArchiveEmailed]: { label: 'Factură din arhivă trimisă pe email', tone: 'brand' },
   [ActivityAction.SpvImported]: { label: 'Import mesaje SPV', tone: 'neutral' },
   [ActivityAction.SpvDocumentSaved]: { label: 'PDF SPV încărcat', tone: 'neutral' },
   [ActivityAction.CertificateConnected]: { label: 'Certificat conectat', tone: 'success' },

@@ -1,5 +1,5 @@
 $kind: http-request
-url: "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/not-a-uuid"
+url: "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/not-an-id"
 method: PATCH
 headers:
   Content-Type: application/json

@@ -10,7 +10,9 @@ import { ApiLog } from '../../api-logs/api-log.entity.js';
 import { ApiLogService } from '../../api-logs/dto/api-log.enums.js';
 import { SpvFileStore } from '../../anaf/spv/services/spv-file-store.service.js';
 import { SpvMessage } from '../../anaf/spv/spv-message.entity.js';
+import { EfacturaInvoice } from '../../efactura/efactura-invoice.entity.js';
 import { EfacturaUpload } from '../../efactura/efactura-upload.entity.js';
+import { EfacturaFileStore } from '../../efactura/services/efactura-file-store.service.js';
 import { Invoice } from '../../invoices/invoice.entity.js';
 import { InvoiceFileStore } from '../../invoices/services/invoice-file-store.service.js';
 import { lockLiveCompany } from '../company-lock.js';
@@ -29,6 +31,7 @@ export class CompanyDeletionService {
     private readonly companies: CompaniesService,
     private readonly invoiceFiles: InvoiceFileStore,
     private readonly spvFiles: SpvFileStore,
+    private readonly efacturaFiles: EfacturaFileStore,
     private readonly connections: AnafConnectionsService,
     private readonly activity: ActivityLogsService,
   ) {}
@@ -61,6 +64,7 @@ export class CompanyDeletionService {
       }
       await manager.softDelete(Invoice, { companyId: id });
       await manager.softDelete(EfacturaUpload, { companyId: id });
+      await manager.softDelete(EfacturaInvoice, { companyId: id });
       await manager.softDelete(SpvMessage, { companyId: id });
       await manager.delete(AuthorizationLink, {
         companyId: id,
@@ -72,7 +76,7 @@ export class CompanyDeletionService {
   }
 
   async purge(companyId: number): Promise<void> {
-    const [invoices, messages] = await Promise.all([
+    const [invoices, messages, archived] = await Promise.all([
       this.dataSource.getRepository(Invoice).find({
         select: { id: true, storagePath: true },
         where: { companyId, storagePath: Not(IsNull()) },
@@ -83,13 +87,23 @@ export class CompanyDeletionService {
         where: { companyId, storagePath: Not(IsNull()) },
         withDeleted: true,
       }),
+      this.dataSource.getRepository(EfacturaInvoice).find({
+        select: { id: true, zipStoragePath: true, pdfStoragePath: true },
+        where: { companyId },
+        withDeleted: true,
+      }),
     ]);
     const invoicePaths = storedPaths(invoices);
     const spvPaths = await this.unusedSpvPaths(storedPaths(messages));
     if (invoicePaths.length) await this.invoiceFiles.remove(invoicePaths);
     if (spvPaths.length) await this.spvFiles.remove(spvPaths);
+    const archivePaths = archived.flatMap((r) =>
+      [r.zipStoragePath, r.pdfStoragePath].filter((p) => p !== null),
+    );
+    if (archivePaths.length) await this.efacturaFiles.remove(archivePaths);
 
     await this.dataSource.transaction(async (manager) => {
+      await manager.delete(EfacturaInvoice, { companyId });
       await manager.delete(EfacturaUpload, { companyId });
       await manager.delete(Invoice, {
         companyId,

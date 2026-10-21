@@ -10,6 +10,7 @@ import type {
   ActivityItem,
   ActivityPage,
   ActivityRow,
+  JobEntry,
 } from './dto/api-log.types.js';
 
 @Injectable()
@@ -24,9 +25,17 @@ export class ActivityLogsService {
     return this.recordMany(accountantId, [entry]);
   }
 
-  async recordMany(
-    accountantId: number,
-    entries: ActivityEntry[],
+  recordMany(accountantId: number, entries: ActivityEntry[]): Promise<void> {
+    return this.insert(accountantId, entries);
+  }
+
+  recordJob(entry: JobEntry): Promise<void> {
+    return this.insert(null, [entry]);
+  }
+
+  private async insert(
+    accountantId: number | null,
+    entries: (ActivityEntry | JobEntry)[],
   ): Promise<void> {
     if (!entries.length) return;
     try {
@@ -34,13 +43,13 @@ export class ActivityLogsService {
         entries.map((entry) => ({
           accountantId,
           anafConnectionId: null,
-          companyId: entry.companyId ?? null,
+          companyId: 'companyId' in entry ? (entry.companyId ?? null) : null,
           service: ApiLogService.Activity,
           method: ApiLogMethod.Log,
           endpoint: entry.action,
           statusCode: null,
           responseTimeMs: null,
-          error: null,
+          error: 'error' in entry ? (entry.error ?? null) : null,
           description: entry.description,
           details: entry.details ?? {},
         })),

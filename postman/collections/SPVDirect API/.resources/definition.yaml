@@ -6,7 +6,7 @@ description: |-
 
   Variables: `baseUrl`, `email`, `password`, `cui` (a real CUI; creating a company looks it up at ANAF). `accountantId`, `companyId`, `connectionId` and `linkToken` are filled in by the test scripts.
 
-  Safety: the run deletes only a company it created itself (`companyCreatedByRun`). *Delete connection* revokes the certificate's tokens at ANAF, so it is skipped unless you set `allowConnectionDelete` to `true`. Requests that need an ANAF connection are skipped until one exists: connect a certificate in the browser (`/accountants/:accountantId/anaf/connect`) and run again.
+  Safety: the run deletes only a company it created itself (`companyCreatedByRun`). *Delete connection* revokes the certificate's tokens at ANAF, so it is skipped unless you set `allowConnectionDelete` to `true`. *Delete account* deletes the account the run logged in with, so it is skipped unless you set `allowAccountDelete` to `true`. Requests that need an ANAF connection are skipped until one exists: connect a certificate in the browser (`/accountants/:accountantId/anaf/connect`) and run again.
 
   Register and Login are throttled to 10 requests per minute; creating or refreshing a company to 20 per minute.
 variables:
@@ -19,7 +19,9 @@ variables:
   companyCreatedByRun: ""
   connectionId: ""
   linkToken: ""
+  archiveId: ""
   allowConnectionDelete: "false"
+  allowAccountDelete: "false"
 scripts:
   - type: http:afterResponse
     code: |-

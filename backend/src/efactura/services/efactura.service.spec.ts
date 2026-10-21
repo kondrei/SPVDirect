@@ -17,11 +17,9 @@ import { sampleInvoice } from '../../testing/invoice-fixtures.js';
 import type { EfacturaUpload } from '../efactura-upload.entity.js';
 import { QueryFailedError } from 'typeorm';
 import { EfacturaValidator } from './efactura-validator.service.js';
-import {
-  EfacturaService,
-  NO_CERTIFICATE,
-  STALE_SENDING_MS,
-} from './efactura.service.js';
+import { EfacturaService } from './efactura.service.js';
+import { NO_CERTIFICATE, STALE_SENDING_MS } from '../dto/efactura.constants.js';
+import type { EfacturaInvoice } from '../efactura-invoice.entity.js';
 import {
   UploadStatus,
   EfacturaStandard,
@@ -123,6 +121,7 @@ function setup({ company = COMPANY }: { company?: Company } = {}) {
     apiLogs as unknown as ApiLogsService,
   );
   const activity = fakeActivityLogs();
+  const archive = { find: vi.fn().mockResolvedValue([]) };
   const service = new EfacturaService(
     api as unknown as AnafApiService,
     validator,
@@ -130,8 +129,10 @@ function setup({ company = COMPANY }: { company?: Company } = {}) {
     invoices as unknown as InvoicesService,
     uploads as unknown as Repository<EfacturaUpload>,
     activity as unknown as ActivityLogsService,
+    archive as unknown as Repository<EfacturaInvoice>,
   );
   return {
+    archive,
     activity,
     service,
     validator,
@@ -538,7 +539,32 @@ describe('EfacturaService.listMessages', () => {
       cif: '12345678',
       createdAt: '2022-10-31T12:52:00.000Z',
       createdAtRaw: '202210311452',
+      archivedId: null,
     });
+  });
+
+  it('marks the messages already in the archive', async () => {
+    const { service, api, archive } = setup();
+    api.request.mockResolvedValue({ status: 200, data: body });
+    archive.find.mockResolvedValue([{ id: 42, anafMessageId: '3001474425' }]);
+    const list = await service.listMessages(1, 7, {});
+    expect(archive.find).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ companyId: 7, environment: 'test' }),
+      }),
+    );
+    expect(list.messages[0].archivedId).toBe(42);
+  });
+
+  it('answers an empty list when ANAF has no messages', async () => {
+    const { service, api, archive } = setup();
+    api.request.mockResolvedValue({
+      status: 200,
+      data: { eroare: 'Nu exista mesaje in ultimele 30 zile', titlu: 'Lista' },
+    });
+    const list = await service.listMessages(1, 7, {});
+    expect(list.messages).toEqual([]);
+    expect(archive.find).not.toHaveBeenCalled();
   });
 
   it('logs the loaded messages with their count for the company', async () => {
@@ -559,7 +585,7 @@ describe('EfacturaService.listMessages', () => {
     const { service, api, activity } = setup();
     api.request.mockResolvedValue({
       status: 200,
-      data: { eroare: 'Nu exista mesaje' },
+      data: { eroare: 'Nu aveti drept in SPV pentru CIF=12345678' },
     });
     await expect(service.listMessages(1, 7, {})).rejects.toThrow();
     expect(activity.record).not.toHaveBeenCalled();

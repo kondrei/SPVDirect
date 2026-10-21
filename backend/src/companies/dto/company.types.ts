@@ -17,3 +17,8 @@ export type BulkCreateResult =
     };
 
 export type CompanyField = keyof typeof COMPANY_FIELD_LABELS;
+
+export interface PurgeTally {
+  purged: number;
+  failed: number;
+}

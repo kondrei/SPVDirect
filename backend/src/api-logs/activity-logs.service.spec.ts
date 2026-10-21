@@ -8,6 +8,8 @@ import {
   ActivityAction,
   ApiLogMethod,
   ApiLogService,
+  JobActivityAction,
+  ScheduledJob,
 } from './dto/api-log.enums.js';
 
 function setup(rows: object[] = [], total = rows.length) {
@@ -68,6 +70,43 @@ describe('ActivityLogsService.record', () => {
         details: { cui: '123' },
       },
     ]);
+  });
+
+  it('stores a scheduled job run without an accountant, with its error', async () => {
+    const { service, repo } = setup();
+    await service.recordJob({
+      action: JobActivityAction.Failed,
+      description: 'Sincronizarea SPV a eșuat: down',
+      details: { job: ScheduledJob.SpvSync },
+      error: 'down',
+    });
+    expect(repo.insert).toHaveBeenCalledWith([
+      {
+        accountantId: null,
+        anafConnectionId: null,
+        companyId: null,
+        service: ApiLogService.Activity,
+        method: ApiLogMethod.Log,
+        endpoint: JobActivityAction.Failed,
+        statusCode: null,
+        responseTimeMs: null,
+        error: 'down',
+        description: 'Sincronizarea SPV a eșuat: down',
+        details: { job: ScheduledJob.SpvSync },
+      },
+    ]);
+  });
+
+  it('never fails the job when the activity row cannot be written', async () => {
+    const { service, repo } = setup();
+    repo.insert.mockRejectedValueOnce(new Error('db down'));
+    await expect(
+      service.recordJob({
+        action: JobActivityAction.Completed,
+        description: 'x',
+        details: { job: ScheduledJob.Purge },
+      }),
+    ).resolves.toBeUndefined();
   });
 
   it('defaults to no company and empty details', async () => {

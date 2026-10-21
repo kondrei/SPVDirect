@@ -1,29 +1,36 @@
 import type { CommandBus } from '@nestjs/cqrs';
 import type { Repository } from 'typeorm';
 import type { Accountant } from '../../accountants/accountant.entity.js';
+import type { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
+import {
+  JobActivityAction,
+  ScheduledJob,
+} from '../../api-logs/dto/api-log.enums.js';
+import { ADMIN_APPROVAL_RETRY_SCHEDULE } from '../../common/constants.js';
 import {
   AdminApprovalRetryJob,
   RETRY_BATCH,
   RETRY_GRACE_MS,
-  RETRY_SCHEDULE,
 } from './admin-approval-retry.job.js';
 import { ResendAdminApprovalCommand } from './resend-admin-approval.command.js';
 
 function setup(ids: number[]) {
   const execute = vi.fn().mockResolvedValue('sent');
   const find = vi.fn().mockResolvedValue(ids.map((id) => ({ id })));
+  const recordJob = vi.fn().mockResolvedValue(undefined);
   const job = new AdminApprovalRetryJob(
     { execute } as unknown as CommandBus,
     { find } as unknown as Repository<Accountant>,
+    { recordJob } as unknown as ActivityLogsService,
   );
-  return { job, execute, find };
+  return { job, execute, find, recordJob };
 }
 
 describe('AdminApprovalRetryJob', () => {
   afterEach(() => vi.useRealTimers());
 
   it('runs once a day at 08:00', () => {
-    expect(RETRY_SCHEDULE).toBe('0 08 * * *');
+    expect(ADMIN_APPROVAL_RETRY_SCHEDULE).toBe('0 08 * * *');
   });
 
   it('picks unnotified pending requests older than the grace period', async () => {
@@ -80,5 +87,38 @@ describe('AdminApprovalRetryJob', () => {
     await expect(job.run()).resolves.toBeUndefined();
     await job.run();
     expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it('logs each run with the emails sent, skipped and failed', async () => {
+    const { job, execute, recordJob } = setup([3, 4, 5]);
+    execute
+      .mockResolvedValueOnce('sent')
+      .mockResolvedValueOnce('skipped')
+      .mockResolvedValueOnce('failed');
+    await job.run();
+    expect(recordJob).toHaveBeenCalledWith({
+      action: JobActivityAction.Completed,
+      description:
+        'Retrimiterea cererilor de cont către administrator a rulat: 1 email trimis (1 eroare)',
+      details: {
+        job: ScheduledJob.AdminApprovalRetry,
+        sent: 1,
+        skipped: 1,
+        failed: 1,
+      },
+    });
+  });
+
+  it('logs a failed run with the error', async () => {
+    const { job, find, recordJob } = setup([]);
+    find.mockRejectedValueOnce(new Error('connection lost'));
+    await job.run();
+    expect(recordJob).toHaveBeenCalledWith({
+      action: JobActivityAction.Failed,
+      description:
+        'Retrimiterea cererilor de cont către administrator a eșuat: connection lost',
+      details: { job: ScheduledJob.AdminApprovalRetry },
+      error: 'connection lost',
+    });
   });
 });

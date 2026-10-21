@@ -1,0 +1,17 @@
+$kind: http-request
+url: "{{baseUrl}}/accountants/{{accountantId}}/efactura/archive/2147483647/email"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "to": "client@example.com",
+      "message": "Factura atașată."
+    }
+scripts:
+  - type: afterResponse
+    code: pm.test('Status 404', () => pm.response.to.have.status(404));
+    language: text/javascript
+order: 16000

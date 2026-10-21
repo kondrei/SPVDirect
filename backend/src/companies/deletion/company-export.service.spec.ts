@@ -5,6 +5,7 @@ import type { Repository } from 'typeorm';
 import type { SpvArchiveService } from '../../anaf/spv/services/spv-archive.service.js';
 import type { SpvMessage } from '../../anaf/spv/spv-message.entity.js';
 import type { EfacturaUpload } from '../../efactura/efactura-upload.entity.js';
+import type { EfacturaArchiveService } from '../../efactura/services/efactura-archive.service.js';
 import type { Invoice } from '../../invoices/invoice.entity.js';
 import type { InvoiceDeliveryService } from '../../invoices/services/invoice-delivery.service.js';
 import type { Company } from '../company.entity.js';
@@ -85,6 +86,29 @@ function setup() {
       filename: 'mesaj-900.pdf',
     }),
   };
+  const efacturaArchive = {
+    forCompany: vi.fn().mockResolvedValue([
+      {
+        id: 31,
+        anafMessageId: '55',
+        environment: 'prod',
+        direction: 'received',
+        standard: 'UBL',
+        number: 'F1',
+        issueDate: '2026-10-02',
+        supplierName: 'GAMA SRL',
+        supplierCui: '789',
+        customerName: 'ALFA SRL',
+        customerCui: '123',
+        totalGross: 50,
+      },
+    ]),
+    zip: vi.fn().mockResolvedValue({
+      content: Buffer.from('PK-archived'),
+      contentType: 'application/zip',
+      filename: 'factura-F1-55.zip',
+    }),
+  };
   const activity = fakeActivityLogs();
   const service = new CompanyExportService(
     companies as unknown as CompaniesService,
@@ -93,9 +117,19 @@ function setup() {
     messages as unknown as Repository<SpvMessage>,
     delivery as unknown as InvoiceDeliveryService,
     spv as unknown as SpvArchiveService,
+    efacturaArchive as unknown as EfacturaArchiveService,
     activity as unknown as ActivityLogsService,
   );
-  return { service, companies, invoices, uploads, delivery, spv, activity };
+  return {
+    service,
+    companies,
+    invoices,
+    uploads,
+    delivery,
+    spv,
+    efacturaArchive,
+    activity,
+  };
 }
 
 async function unzip(stream: Readable): Promise<Record<string, string>> {
@@ -120,6 +154,8 @@ describe('CompanyExportService', () => {
     const { service, spv } = setup();
     const files = await unzip((await service.export(1, 7)).content);
     expect(Object.keys(files).toSorted((a, b) => a.localeCompare(b))).toEqual([
+      'efactura-arhiva.csv',
+      'efactura-arhiva/factura-F1-55.zip',
       'efactura.csv',
       'facturi.csv',
       'facturi.json',
@@ -136,12 +172,16 @@ describe('CompanyExportService', () => {
     expect(files['facturi/factura-A-000001.xml']).toBe('<Invoice/>');
     expect(files['efactura.csv']).toContain('5;11;test;');
     expect(files['spv.csv']).toContain('21;901;123');
+    expect(files['efactura-arhiva.csv']).toContain(
+      '31;55;;prod;received;UBL;;F1;2026-10-02;;;GAMA SRL;789;ALFA SRL;123;;;50',
+    );
+    expect(files['efactura-arhiva/factura-F1-55.zip']).toBe('PK-archived');
     expect(spv.download).toHaveBeenCalledOnce();
     expect(spv.download).toHaveBeenCalledWith(1, 20);
   });
 
   it('reads only live rows of this accountant and company', async () => {
-    const { service, invoices, uploads } = setup();
+    const { service, invoices, uploads, efacturaArchive } = setup();
     await unzip((await service.export(1, 7)).content);
     expect(invoices.find).toHaveBeenCalledWith(
       expect.objectContaining({ where: { accountantId: 1, companyId: 7 } }),
@@ -149,6 +189,7 @@ describe('CompanyExportService', () => {
     expect(uploads.find).toHaveBeenCalledWith(
       expect.objectContaining({ where: { accountantId: 1, companyId: 7 } }),
     );
+    expect(efacturaArchive.forCompany).toHaveBeenCalledWith(1, 7);
   });
 
   it('lists a file that could not be read in erori.txt and keeps going', async () => {

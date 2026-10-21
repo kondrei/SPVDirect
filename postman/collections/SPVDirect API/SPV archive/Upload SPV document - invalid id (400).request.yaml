@@ -1,0 +1,15 @@
+$kind: http-request
+description: "Multipart field `document`: the PDF downloaded from https://webserviced.anaf.ro/SPVWS2/rest/descarcare?id=<anafMessageId> (up to 10 MB, must start with %PDF-). Saves it on the archived message and returns the message."
+url: "{{baseUrl}}/accountants/{{accountantId}}/spv/archive/abc/document"
+method: PUT
+body:
+  type: formdata
+  content:
+    - type: file
+      key: document
+      src: []
+scripts:
+  - type: afterResponse
+    code: pm.test('Status 400', () => pm.response.to.have.status(400));
+    language: text/javascript
+order: 4000

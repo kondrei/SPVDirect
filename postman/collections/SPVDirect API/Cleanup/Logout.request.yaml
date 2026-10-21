@@ -11,4 +11,4 @@ scripts:
         pm.expect(setCookie).to.include('spv_session=;');
       });
     language: text/javascript
-order: 3000
+order: 8000

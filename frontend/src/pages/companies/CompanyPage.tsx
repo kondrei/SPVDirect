@@ -371,15 +371,20 @@ export function CompanyPage() {
           </span>
         }
         actions={
-          c.anafConnectionId ? undefined : (
-            <ButtonAnchor
-              variant="primary"
-              icon="certificate"
-              href={connectUrl}
-            >
-              Conectează certificat
-            </ButtonAnchor>
-          )
+          <>
+            <ButtonLink to={appPath(`/efactura/archive?companyId=${c.id}`)}>
+              Arhivă e-Factura
+            </ButtonLink>
+            {c.anafConnectionId ? null : (
+              <ButtonAnchor
+                variant="primary"
+                icon="certificate"
+                href={connectUrl}
+              >
+                Conectează certificat
+              </ButtonAnchor>
+            )}
+          </>
         }
       />
       <div className="grid-1-1">

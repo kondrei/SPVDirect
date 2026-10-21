@@ -3,7 +3,11 @@ import { BadRequestException } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import {
+  ArchiveQuery,
   assertXmlPayload,
+  EmailArchiveDto,
+  ImportMessagesDto,
+  ImportPeriodDto,
   LatestUploadsQuery,
   ListMessagesQuery,
   ParseAnafIdPipe,
@@ -124,5 +128,70 @@ describe('assertXmlPayload', () => {
       'Fișierul depășește 10 MB',
     );
     expect(() => assertXmlPayload('<Invoice/>')).not.toThrow();
+  });
+});
+
+describe('ImportMessagesDto', () => {
+  it('accepts up to 50 distinct ANAF message ids', async () => {
+    expect(
+      await errors(ImportMessagesDto, { messageIds: ['3001', '3002'] }),
+    ).toEqual([]);
+  });
+
+  it.each([
+    [{ messageIds: [] }],
+    [{ messageIds: ['3001', '3001'] }],
+    [{ messageIds: ['30x1'] }],
+    [{ messageIds: [3001] }],
+    [{ messageIds: Array.from({ length: 51 }, (_, i) => String(i + 1)) }],
+    [{}],
+  ])('refuses %j', async (plain) => {
+    expect(await errors(ImportMessagesDto, plain)).toEqual(['messageIds']);
+  });
+});
+
+describe('ImportPeriodDto', () => {
+  it('takes 1 to 60 days', async () => {
+    expect(await errors(ImportPeriodDto, { zile: '60' })).toEqual([]);
+    expect(await errors(ImportPeriodDto, { zile: 61 })).toEqual(['zile']);
+    expect(await errors(ImportPeriodDto, { zile: 0 })).toEqual(['zile']);
+  });
+});
+
+describe('ArchiveQuery', () => {
+  it('accepts the filters and defaults the page', async () => {
+    const dto = plainToInstance(ArchiveQuery, {
+      companyId: '7',
+      direction: 'received',
+      from: '2026-10-01',
+      to: '2026-10-31',
+      q: 'alfa',
+    });
+    expect(await validate(dto)).toEqual([]);
+    expect(dto).toMatchObject({ companyId: 7, page: 1, pageSize: 25 });
+  });
+
+  it('refuses a bad direction, date, search or page size', async () => {
+    expect(
+      await errors(ArchiveQuery, {
+        direction: 'both',
+        from: '2026-13-01',
+        to: '01.10.2026',
+        q: 'x'.repeat(101),
+        pageSize: 101,
+      }),
+    ).toEqual(['direction', 'from', 'to', 'q', 'pageSize']);
+  });
+});
+
+describe('EmailArchiveDto', () => {
+  it('needs a valid address and keeps the note short', async () => {
+    expect(await errors(EmailArchiveDto, { to: 'a@b.ro' })).toEqual([]);
+    expect(
+      await errors(EmailArchiveDto, {
+        to: 'not-an-email',
+        message: 'x'.repeat(2001),
+      }),
+    ).toEqual(['to', 'message']);
   });
 });
