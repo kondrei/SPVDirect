@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
+import type { ActivityItem } from '../../api-logs/dto/api-log.types.js';
+import { accountExported } from '../../api-logs/activity-entries.js';
+import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import { AnafConnection } from '../../anaf/anaf-connection.entity.js';
 import { normalizeCif } from '../../anaf/spv/services/spv-archive.service.js';
 import { SpvMessage } from '../../anaf/spv/spv-message.entity.js';
@@ -8,26 +11,19 @@ import type { Company } from '../../companies/company.entity.js';
 import {
   CompanyExportService,
   json,
-  type CompanyExport,
 } from '../../companies/deletion/company-export.service.js';
+import type { CompanyExport } from '../../companies/dto/company.types.js';
 import { toCsv, type CsvValue } from '../../companies/deletion/csv.js';
 import { ZipStream } from '../../companies/deletion/zip-stream.js';
 import { CompaniesService } from '../../companies/services/companies.service.js';
 import { AccountantsService } from '../services/accountants.service.js';
-
-const CONNECTION_HEADER = [
-  'id',
-  'eticheta',
-  'serie_certificat',
-  'drepturi',
-  'sursa',
-  'stare',
-  'acces_expira_la',
-  'reimprospatare_expira_la',
-  'creat_la',
-];
-
-const COMPANY_HEADER = ['id', 'cui', 'denumire', 'dosar', 'adaugata_la'];
+import {
+  ACTIVITY_HEADER,
+  COMPANY_HEADER,
+  CONNECTION_HEADER,
+  accountExportFilename,
+} from '../dto/accountant.constants.js';
+import { AccountExportFile } from '../dto/accountant.enums.js';
 
 @Injectable()
 export class AccountExportService {
@@ -39,28 +35,38 @@ export class AccountExportService {
     private readonly connections: Repository<AnafConnection>,
     @InjectRepository(SpvMessage)
     private readonly messages: Repository<SpvMessage>,
+    private readonly activity: ActivityLogsService,
   ) {}
 
   async export(accountantId: number, now = new Date()): Promise<CompanyExport> {
     const profile = await this.accountants.getProfile(accountantId);
+    await this.activity.record(accountantId, accountExported());
     const zip = new ZipStream();
     void this.companyExport.stream(
       zip,
       `account ${accountantId}`,
       async (errors) => {
-        const [companies, connections] = await Promise.all([
+        const [companies, connections, activity] = await Promise.all([
           this.companies.list(accountantId),
           this.connections.find({
             where: { accountantId },
             order: { id: 'ASC' },
           }),
+          this.activity.all(accountantId),
         ]);
-        zip.add('cont.json', json(profile));
+        zip.add(AccountExportFile.Profile, json(profile));
         zip.add(
-          'certificate.csv',
+          AccountExportFile.Connections,
           toCsv(CONNECTION_HEADER, connections.map(connectionRow)),
         );
-        zip.add('firme.csv', toCsv(COMPANY_HEADER, companies.map(companyRow)));
+        zip.add(
+          AccountExportFile.Companies,
+          toCsv(COMPANY_HEADER, companies.map(companyRow)),
+        );
+        zip.add(
+          AccountExportFile.Activity,
+          toCsv(ACTIVITY_HEADER, activity.map(activityRow)),
+        );
         for (const company of companies) {
           const done = await this.companyExport.writeCompany(
             zip,
@@ -74,7 +80,7 @@ export class AccountExportService {
           zip,
           accountantId,
           await this.unmatchedMessages(accountantId, companies),
-          'spv-fara-firma',
+          AccountExportFile.UnmatchedSpv,
           errors,
         );
       },
@@ -82,7 +88,7 @@ export class AccountExportService {
     return {
       content: zip.output,
       contentType: 'application/zip',
-      filename: `cont-spvdirect-export-${now.toISOString().slice(0, 10)}.zip`,
+      filename: accountExportFilename(now),
     };
   }
 
@@ -100,7 +106,7 @@ export class AccountExportService {
 }
 
 function folder(company: Company): string {
-  return `firme/${company.cui}`;
+  return `${AccountExportFile.CompaniesFolder}/${company.cui}`;
 }
 
 function connectionRow(c: AnafConnection): CsvValue[] {
@@ -114,6 +120,17 @@ function connectionRow(c: AnafConnection): CsvValue[] {
     c.accessExpiresAt,
     c.refreshExpiresAt,
     c.createdAt,
+  ];
+}
+
+function activityRow(a: ActivityItem): CsvValue[] {
+  return [
+    a.createdAt,
+    a.accountantName,
+    a.action,
+    a.companyId,
+    a.description,
+    JSON.stringify(a.details),
   ];
 }
 

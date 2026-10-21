@@ -1,0 +1,125 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, type SelectQueryBuilder } from 'typeorm';
+import { Accountant } from '../accountants/accountant.entity.js';
+import { ApiLog } from './api-log.entity.js';
+import { ApiLogMethod, ApiLogService } from './dto/api-log.enums.js';
+import type {
+  ActivityEntry,
+  ActivityFilter,
+  ActivityItem,
+  ActivityPage,
+  ActivityRow,
+} from './dto/api-log.types.js';
+
+@Injectable()
+export class ActivityLogsService {
+  private readonly logger = new Logger(ActivityLogsService.name);
+
+  constructor(
+    @InjectRepository(ApiLog) private readonly logs: Repository<ApiLog>,
+  ) {}
+
+  record(accountantId: number, entry: ActivityEntry): Promise<void> {
+    return this.recordMany(accountantId, [entry]);
+  }
+
+  async recordMany(
+    accountantId: number,
+    entries: ActivityEntry[],
+  ): Promise<void> {
+    if (!entries.length) return;
+    try {
+      await this.logs.insert(
+        entries.map((entry) => ({
+          accountantId,
+          anafConnectionId: null,
+          companyId: entry.companyId ?? null,
+          service: ApiLogService.Activity,
+          method: ApiLogMethod.Log,
+          endpoint: entry.action,
+          statusCode: null,
+          responseTimeMs: null,
+          error: null,
+          description: entry.description,
+          details: entry.details ?? {},
+        })),
+      );
+    } catch (err) {
+      this.logger.error(
+        `Could not write activity to api_logs (${entries.map((e) => e.action).join(', ')}): ${String(err)}`,
+      );
+    }
+  }
+
+  async list(
+    accountantId: number,
+    filter: ActivityFilter,
+  ): Promise<ActivityPage> {
+    const qb = this.activityOf(accountantId);
+    if (filter.companyId) {
+      qb.andWhere('l.companyId = :companyId', { companyId: filter.companyId });
+    }
+    if (filter.action) {
+      qb.andWhere('l.endpoint = :action', { action: filter.action });
+    }
+    const total = await qb.getCount();
+    const rows = await this.select(qb, 'DESC')
+      .offset((filter.page - 1) * filter.pageSize)
+      .limit(filter.pageSize)
+      .getRawMany<ActivityRow>();
+    return {
+      items: rows.map(toItem),
+      total,
+      page: filter.page,
+      pageSize: filter.pageSize,
+    };
+  }
+
+  async all(accountantId: number): Promise<ActivityItem[]> {
+    const rows = await this.select(
+      this.activityOf(accountantId),
+      'ASC',
+    ).getRawMany<ActivityRow>();
+    return rows.map(toItem);
+  }
+
+  private activityOf(accountantId: number): SelectQueryBuilder<ApiLog> {
+    return this.logs
+      .createQueryBuilder('l')
+      .leftJoin(Accountant, 'a', 'a.id = l.accountantId')
+      .where('l.accountantId = :accountantId', { accountantId })
+      .andWhere('l.service = :service', { service: ApiLogService.Activity });
+  }
+
+  private select(
+    qb: SelectQueryBuilder<ApiLog>,
+    order: 'ASC' | 'DESC',
+  ): SelectQueryBuilder<ApiLog> {
+    return qb
+      .select('l.id', 'id')
+      .addSelect('l.endpoint', 'action')
+      .addSelect('l.company_id', 'companyId')
+      .addSelect('l.description', 'description')
+      .addSelect('l.details', 'details')
+      .addSelect('l.created_at', 'createdAt')
+      .addSelect(
+        `COALESCE(NULLIF(TRIM(a.name), ''), a.email::text)`,
+        'accountantName',
+      )
+      .orderBy('l.created_at', order)
+      .addOrderBy('l.id', order);
+  }
+}
+
+function toItem(row: ActivityRow): ActivityItem {
+  return {
+    id: Number(row.id),
+    action: row.action,
+    companyId: row.companyId === null ? null : Number(row.companyId),
+    description: row.description ?? '',
+    details: row.details ?? {},
+    accountantName: row.accountantName ?? '',
+    createdAt: new Date(row.createdAt),
+  };
+}

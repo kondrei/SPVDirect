@@ -1,7 +1,9 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import type { Readable } from 'node:stream';
+
 import { Repository } from 'typeorm';
+import { companyExported } from '../../api-logs/activity-entries.js';
+import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import { SpvArchiveService } from '../../anaf/spv/services/spv-archive.service.js';
 import { SpvMessage } from '../../anaf/spv/spv-message.entity.js';
 import type { DownloadFile } from '../../common/download-file.js';
@@ -13,13 +15,9 @@ import { CompaniesService } from '../services/companies.service.js';
 import { companySpvMessages } from './company-records.js';
 import { toCsv, type CsvValue } from './csv.js';
 import { ZipStream } from './zip-stream.js';
-import { LogoContentType } from '../dto/company.enums.js';
-
-export interface CompanyExport {
-  content: Readable;
-  contentType: string;
-  filename: string;
-}
+import { companyExportFilename } from '../dto/company.constants.js';
+import { CompanyExportFile, LogoContentType } from '../dto/company.enums.js';
+import type { CompanyExport } from '../dto/company.types.js';
 
 const INVOICE_HEADER = [
   'id',
@@ -76,6 +74,7 @@ export class CompanyExportService {
     private readonly messages: Repository<SpvMessage>,
     private readonly delivery: InvoiceDeliveryService,
     private readonly spv: SpvArchiveService,
+    private readonly activity: ActivityLogsService,
   ) {}
 
   async export(
@@ -84,6 +83,7 @@ export class CompanyExportService {
     now = new Date(),
   ): Promise<CompanyExport> {
     const company = await this.companies.get(accountantId, id);
+    await this.activity.record(accountantId, companyExported(company));
     const zip = new ZipStream();
     void this.stream(zip, `company ${company.id}`, async (errors) => {
       await this.writeCompany(zip, company, '', errors);
@@ -91,7 +91,7 @@ export class CompanyExportService {
     return {
       content: zip.output,
       contentType: 'application/zip',
-      filename: `firma-${company.cui}-export-${now.toISOString().slice(0, 10)}.zip`,
+      filename: companyExportFilename(company.cui, now),
     };
   }
 
@@ -104,7 +104,8 @@ export class CompanyExportService {
     try {
       await write(errors);
       if (!zip.output.destroyed) {
-        if (errors.length) zip.add('erori.txt', `${errors.join('\n')}\n`);
+        if (errors.length)
+          zip.add(CompanyExportFile.Errors, `${errors.join('\n')}\n`);
         zip.end();
       }
     } catch (err) {
@@ -135,29 +136,36 @@ export class CompanyExportService {
         .getMany(),
     ]);
 
-    zip.add(`${prefix}firma.json`, json(company));
+    zip.add(`${prefix}${CompanyExportFile.Company}`, json(company));
     await this.addLogo(zip, errors, company, prefix);
 
-    zip.add(`${prefix}facturi.json`, json(invoices));
+    zip.add(`${prefix}${CompanyExportFile.Invoices}`, json(invoices));
     zip.add(
-      `${prefix}facturi.csv`,
+      `${prefix}${CompanyExportFile.InvoiceList}`,
       toCsv(INVOICE_HEADER, invoices.map(invoiceRow)),
     );
+    const invoiceFolder = `${prefix}${CompanyExportFile.InvoicesFolder}`;
     for (const invoice of invoices) {
       if (!(await zip.ready())) return false;
-      await this.addFile(zip, errors, `${prefix}facturi`, false, () =>
+      await this.addFile(zip, errors, invoiceFolder, false, () =>
         this.delivery.pdf(accountantId, invoice.id),
       );
-      await this.addFile(zip, errors, `${prefix}facturi`, true, () =>
+      await this.addFile(zip, errors, invoiceFolder, true, () =>
         this.delivery.xml(accountantId, invoice.id),
       );
     }
 
     zip.add(
-      `${prefix}efactura.csv`,
+      `${prefix}${CompanyExportFile.Uploads}`,
       toCsv(UPLOAD_HEADER, uploads.map(uploadRow)),
     );
-    return this.writeSpv(zip, accountantId, messages, `${prefix}spv`, errors);
+    return this.writeSpv(
+      zip,
+      accountantId,
+      messages,
+      `${prefix}${CompanyExportFile.Spv}`,
+      errors,
+    );
   }
 
   async writeSpv(
@@ -191,10 +199,12 @@ export class CompanyExportService {
         company.id,
       );
       const ext = logo.contentType === LogoContentType.Png ? 'png' : 'jpg';
-      zip.add(`${prefix}logo.${ext}`, logo.content, false);
+      zip.add(`${prefix}${CompanyExportFile.Logo}.${ext}`, logo.content, false);
     } catch (err) {
       if (err instanceof NotFoundException) return;
-      errors.push(`${prefix}logo: ${(err as Error).message}`);
+      errors.push(
+        `${prefix}${CompanyExportFile.Logo}: ${(err as Error).message}`,
+      );
     }
   }
 

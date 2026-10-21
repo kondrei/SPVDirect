@@ -29,6 +29,9 @@ import {
   ValidateStandard,
 } from '../dto/efactura.enums.js';
 import { AnafEnvironment } from '../../anaf/dto/anaf.enums.js';
+import type { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
+import { ActivityAction } from '../../api-logs/dto/api-log.enums.js';
+import { fakeActivityLogs } from '../../testing/activity-logs.js';
 
 const CONNECTION = 7;
 const COMPANY = {
@@ -119,14 +122,17 @@ function setup({ company = COMPANY }: { company?: Company } = {}) {
     http as unknown as HttpService,
     apiLogs as unknown as ApiLogsService,
   );
+  const activity = fakeActivityLogs();
   const service = new EfacturaService(
     api as unknown as AnafApiService,
     validator,
     companies as unknown as CompaniesService,
     invoices as unknown as InvoicesService,
     uploads as unknown as Repository<EfacturaUpload>,
+    activity as unknown as ActivityLogsService,
   );
   return {
+    activity,
     service,
     validator,
     api,
@@ -245,6 +251,22 @@ describe('EfacturaService.uploadInvoice', () => {
     expect(api.request).toHaveBeenCalledOnce();
     expect(uploads.create).toHaveBeenCalledWith(
       expect.objectContaining({ invoiceId: 3, companyId: 7, standard: 'UBL' }),
+    );
+  });
+
+  it('logs the invoice sent to e-Factura with the ANAF index', async () => {
+    const { service, activity } = setup();
+    await service.uploadInvoice(1, 3);
+    expect(activity.record).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        action: ActivityAction.EfacturaUploaded,
+        companyId: 7,
+        details: expect.objectContaining({
+          invoiceNumber: 'FCT 000012',
+          uploadIndex: '3828',
+        }),
+      }),
     );
   });
 
@@ -519,6 +541,30 @@ describe('EfacturaService.listMessages', () => {
     });
   });
 
+  it('logs the loaded messages with their count for the company', async () => {
+    const { service, api, activity } = setup();
+    api.request.mockResolvedValue({ status: 200, data: body });
+    await service.listMessages(1, 7, { zile: 10 });
+    expect(activity.record).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        action: ActivityAction.EfacturaMessagesLoaded,
+        companyId: 7,
+        details: expect.objectContaining({ count: 1, days: 10 }),
+      }),
+    );
+  });
+
+  it('logs nothing when ANAF answers with a business error', async () => {
+    const { service, api, activity } = setup();
+    api.request.mockResolvedValue({
+      status: 200,
+      data: { eroare: 'Nu exista mesaje' },
+    });
+    await expect(service.listMessages(1, 7, {})).rejects.toThrow();
+    expect(activity.record).not.toHaveBeenCalled();
+  });
+
   it('uses the paginated list for an interval', async () => {
     const { service, api } = setup();
     api.request.mockResolvedValue({
@@ -653,6 +699,32 @@ describe('EfacturaValidator.validate', () => {
     const { service, invoices } = setup();
     expect((await service.validateInvoice(1, 3)).valid).toBe(true);
     expect(invoices.xml).toHaveBeenCalledWith(1, 3);
+  });
+
+  it('logs the validation of an invoice with its outcome', async () => {
+    const { service, activity } = setup();
+    await service.validateInvoice(1, 3);
+    expect(activity.record).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        action: ActivityAction.EfacturaValidated,
+        companyId: 7,
+        details: expect.objectContaining({ valid: true, errors: 0 }),
+      }),
+    );
+  });
+
+  it('logs the validation of an uploaded XML file', async () => {
+    const { service, activity } = setup();
+    await service.validateXml(1, '<Invoice/>', ValidateStandard.FCN);
+    expect(activity.record).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        action: ActivityAction.EfacturaValidated,
+        companyId: null,
+        details: expect.objectContaining({ standard: 'FCN' }),
+      }),
+    );
   });
 });
 

@@ -6,6 +6,15 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
+import {
+  companyAnafRefreshed,
+  companyCreated,
+  companyLogoChanged,
+  companyUpdated,
+} from '../../api-logs/activity-entries.js';
+import { EDITABLE_COMPANY_FIELDS } from '../dto/company.constants.js';
+import type { CompanyField } from '../dto/company.types.js';
+import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import { AnafConnection } from '../../anaf/anaf-connection.entity.js';
 import { AnafCompanyAccessService } from '../../anaf/services/anaf-company-access.service.js';
 import { isUniqueViolation } from '../../common/db-errors.js';
@@ -22,16 +31,10 @@ import {
   UpdateCompanyDto,
 } from '../dto/company.dto.js';
 import { BulkCreateStatus } from '../dto/company.enums.js';
+import type { BulkCreateResult } from '../dto/company.types.js';
 
 export const CUI_NOT_FOUND =
   'CUI incorect: nu există nicio firmă cu acest CUI în baza de date ANAF.';
-
-export type BulkCreateResult =
-  | { cui: string; status: BulkCreateStatus.Created; company: Company }
-  | {
-      cui: string;
-      status: BulkCreateStatus.Exists | BulkCreateStatus.NotFound;
-    };
 
 @Injectable()
 export class CompaniesService {
@@ -42,6 +45,7 @@ export class CompaniesService {
     private readonly connections: Repository<AnafConnection>,
     private readonly anaf: AnafCompanyLookupService,
     private readonly access: AnafCompanyAccessService,
+    private readonly activity: ActivityLogsService,
   ) {}
 
   list(accountantId: number): Promise<Company[]> {
@@ -67,8 +71,9 @@ export class CompaniesService {
     }
     const record = await this.anaf.lookup(accountantId, dto.cui);
     if (!record) throw new BadRequestException(CUI_NOT_FOUND);
+    let company: Company;
     try {
-      return await this.companies.save(
+      company = await this.companies.save(
         this.companies.create({
           accountantId,
           cui: dto.cui,
@@ -82,6 +87,8 @@ export class CompaniesService {
       }
       throw err;
     }
+    await this.activity.record(accountantId, companyCreated(company));
+    return company;
   }
 
   async createMany(
@@ -135,6 +142,14 @@ export class CompaniesService {
         results.push({ cui, status: BulkCreateStatus.Exists });
       }
     }
+    await this.activity.recordMany(
+      accountantId,
+      results.flatMap((r) =>
+        r.status === BulkCreateStatus.Created
+          ? [companyCreated(r.company)]
+          : [],
+      ),
+    );
     return results;
   }
 
@@ -146,7 +161,9 @@ export class CompaniesService {
       name: company.name,
       anafSyncedAt: new Date(),
     });
-    return this.companies.save(company);
+    const saved = await this.companies.save(company);
+    await this.activity.record(accountantId, companyAnafRefreshed(saved));
+    return saved;
   }
 
   async update(
@@ -155,11 +172,13 @@ export class CompaniesService {
     dto: UpdateCompanyDto,
   ): Promise<Company> {
     const company = await this.get(accountantId, id);
-    if (dto.name !== undefined) company.name = dto.name;
-    if (dto.iban !== undefined) company.iban = dto.iban;
-    if (dto.bankName !== undefined) company.bankName = dto.bankName;
-    if (dto.email !== undefined) company.email = dto.email;
-    if (dto.phone !== undefined) company.phone = dto.phone;
+    const changed: CompanyField[] = [];
+    for (const field of EDITABLE_COMPANY_FIELDS) {
+      const value = dto[field];
+      if (value === undefined || value === company[field]) continue;
+      Object.assign(company, { [field]: value });
+      changed.push(field);
+    }
     if (
       dto.anafConnectionId !== undefined &&
       dto.anafConnectionId !== company.anafConnectionId
@@ -181,8 +200,13 @@ export class CompaniesService {
         );
       }
       company.anafConnectionId = dto.anafConnectionId;
+      changed.push('anafConnectionId');
     }
-    return this.companies.save(company);
+    const saved = await this.companies.save(company);
+    if (changed.length) {
+      await this.activity.record(accountantId, companyUpdated(saved, changed));
+    }
+    return saved;
   }
 
   async attachConnection(companyId: number, connectionId: number) {
@@ -204,6 +228,10 @@ export class CompaniesService {
       { logo: logo.content, logoContentType: logo.contentType },
     );
     company.logoContentType = logo.contentType;
+    await this.activity.record(
+      accountantId,
+      companyLogoChanged(company, false),
+    );
     return company;
   }
 
@@ -233,6 +261,7 @@ export class CompaniesService {
       { logo: null, logoContentType: null },
     );
     company.logoContentType = null;
+    await this.activity.record(accountantId, companyLogoChanged(company, true));
     return company;
   }
 }

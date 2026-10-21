@@ -14,6 +14,9 @@ import {
 import type { SpvFileStore } from './spv-file-store.service.js';
 import type { SpvMessage } from '../spv-message.entity.js';
 import type { SpvService } from './spv.service.js';
+import type { ActivityLogsService } from '../../../api-logs/activity-logs.service.js';
+import { ActivityAction } from '../../../api-logs/dto/api-log.enums.js';
+import { fakeActivityLogs } from '../../../testing/activity-logs.js';
 
 const MSG = {
   id: '100',
@@ -50,13 +53,16 @@ function setup(storeEnabled = false) {
     put: vi.fn().mockResolvedValue(undefined),
     get: vi.fn(),
   };
+  const activity = fakeActivityLogs();
   const service = new SpvArchiveService(
     { listMessages, downloadMessage } as unknown as SpvService,
     messages as unknown as Repository<SpvMessage>,
     companies as unknown as Repository<Company>,
     store as unknown as SpvFileStore,
+    activity as unknown as ActivityLogsService,
   );
   return {
+    activity,
     service,
     listMessages,
     downloadMessage,
@@ -319,6 +325,16 @@ describe('SpvArchiveService.importMessages', () => {
         serial: 'ABC',
       }),
     );
+
+  it('logs the import with the new and fetched counts', async () => {
+    const { service, activity } = setup();
+    await service.importMessages(1, anafList([]));
+    expect(activity.record).toHaveBeenCalledWith(1, {
+      action: ActivityAction.SpvImported,
+      description: 'Lista de mesaje SPV a fost importată: 0 mesaje noi din 0',
+      details: { fetched: 0, added: 0, certSerial: 'ABC' },
+    });
+  });
 
   it('saves the messages from the ANAF list without a certificate and links them to companies', async () => {
     const { service, insertChain, companies, listMessages } = setup();

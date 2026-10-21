@@ -19,45 +19,16 @@ import {
   type InvoiceStats,
 } from '../helpers/invoice-stats.js';
 import { Invoice } from '../invoice.entity.js';
-import {
-  InvoiceDeliveryService,
-  type CreatedInvoice,
-} from './invoice-delivery.service.js';
+import { InvoiceDeliveryService } from './invoice-delivery.service.js';
+import type { CreatedInvoice } from '../dto/invoice.types.js';
 import { findOwnedInvoice } from './invoice-lookup.js';
 import { InvoiceNumbering } from './invoice-numbering.service.js';
 import { Currency } from '../dto/invoice.enums.js';
-
-export interface InvoiceSummary {
-  id: number;
-  companyId: number;
-  series: string;
-  number: number;
-  issueDate: string;
-  dueDate: string | null;
-  sellerName: string;
-  buyerName: string;
-  buyerCui: string | null;
-  currency: string;
-  totalGross: number;
-  stored: boolean;
-  stornoOfInvoiceId: number | null;
-  stornoOfSeries: string | null;
-  stornoOfNumber: number | null;
-  stornoed: boolean;
-  emailedTo: string | null;
-  emailedAt: string | null;
-}
-
-export interface InvoicePage {
-  items: InvoiceSummary[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
-
-export type InvoiceDetail = Invoice & {
-  remainingQuantities: number[] | null;
-};
+import type {
+  InvoiceSummary,
+  InvoicePage,
+  InvoiceDetail,
+} from '../dto/invoice.types.js';
 
 function toSummary(invoice: Invoice, stornoed: boolean): InvoiceSummary {
   return {

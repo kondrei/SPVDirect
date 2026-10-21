@@ -3,10 +3,8 @@ import { JwtService } from '@nestjs/jwt';
 import type { Request, Response } from 'express';
 import { AnafOAuthController } from './anaf-oauth.controller.js';
 import type { AuthorizationLinksService } from '../authorization-links/authorization-links.service.js';
-import type {
-  AnafAuthorizationService,
-  AuthorizationOutcome,
-} from '../services/anaf-authorization.service.js';
+import type { AnafAuthorizationService } from '../services/anaf-authorization.service.js';
+import type { AuthorizationOutcome } from '../dto/anaf.types.js';
 import { OAUTH_STATE_AUDIENCE, OAUTH_STATE_COOKIE } from '../oauth-state.js';
 import {
   AnafConnectionSource,

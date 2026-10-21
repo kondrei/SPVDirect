@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { certificateConnected } from '../../api-logs/activity-entries.js';
+import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import { CompaniesService } from '../../companies/services/companies.service.js';
 import { AuthorizationLinksService } from '../authorization-links/authorization-links.service.js';
+import type { AnafConnection } from '../anaf-connection.entity.js';
 import type { OAuthStatePayload } from '../oauth-state.js';
 import { AnafOAuthService } from './anaf-oauth.service.js';
 import { AnafTokenClient } from './anaf-token-client.service.js';
@@ -9,11 +12,7 @@ import {
   LinkFailure,
   AuthorizationOutcomeKind,
 } from '../dto/anaf.enums.js';
-
-export type AuthorizationOutcome =
-  | { kind: AuthorizationOutcomeKind.Self; accountantId: number }
-  | { kind: AuthorizationOutcomeKind.Link; companyName: string }
-  | { kind: AuthorizationOutcomeKind.LinkInvalid; reason: LinkFailure };
+import type { AuthorizationOutcome } from '../dto/anaf.types.js';
 
 @Injectable()
 export class AnafAuthorizationService {
@@ -24,6 +23,7 @@ export class AnafAuthorizationService {
     private readonly oauth: AnafOAuthService,
     private readonly links: AuthorizationLinksService,
     private readonly companies: CompaniesService,
+    private readonly activity: ActivityLogsService,
   ) {}
 
   authorizeUrl(state: string): string {
@@ -36,10 +36,14 @@ export class AnafAuthorizationService {
   ): Promise<AuthorizationOutcome> {
     const tokens = await this.tokens.exchangeCode(code);
     if (payload.mode === AnafConnectionSource.Self) {
-      await this.oauth.saveConnection(
+      const connection = await this.oauth.saveConnection(
         payload.accountantId,
         tokens,
         AnafConnectionSource.Self,
+      );
+      await this.activity.record(
+        payload.accountantId,
+        certificateConnected(connection, null),
       );
       return {
         kind: AuthorizationOutcomeKind.Self,
@@ -59,21 +63,23 @@ export class AnafAuthorizationService {
         reason: LinkFailure.Used,
       };
     }
-    let connectionId: number;
+    let connection: AnafConnection;
     try {
-      connectionId = (
-        await this.oauth.saveConnection(
-          lookup.link.accountantId,
-          tokens,
-          AnafConnectionSource.Link,
-        )
-      ).id;
+      connection = await this.oauth.saveConnection(
+        lookup.link.accountantId,
+        tokens,
+        AnafConnectionSource.Link,
+      );
     } catch (err) {
       await this.links.release(lookup.link.id);
       throw err;
     }
-    await this.links.attachConnection(lookup.link.id, connectionId);
-    await this.companies.attachConnection(lookup.company.id, connectionId);
+    await this.links.attachConnection(lookup.link.id, connection.id);
+    await this.companies.attachConnection(lookup.company.id, connection.id);
+    await this.activity.record(
+      lookup.link.accountantId,
+      certificateConnected(connection, lookup.company),
+    );
     this.logger.log(
       `Authorization link ${lookup.link.id} completed for company ${lookup.company.id}`,
     );

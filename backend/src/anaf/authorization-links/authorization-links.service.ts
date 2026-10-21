@@ -3,16 +3,15 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { createHash, randomBytes } from 'node:crypto';
 import { IsNull, Repository } from 'typeorm';
+import { authorizationLinkCreated } from '../../api-logs/activity-entries.js';
+import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import { CompaniesService } from '../../companies/services/companies.service.js';
-import { Company } from '../../companies/company.entity.js';
+
 import { AuthorizationLink } from './authorization-link.entity.js';
 import { LinkFailure } from '../dto/anaf.enums.js';
+import type { LinkLookup } from '../dto/anaf.types.js';
 
 export const LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-
-export type LinkLookup =
-  | { ok: true; link: AuthorizationLink; company: Company }
-  | { ok: false; reason: LinkFailure };
 
 export function hashLinkToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
@@ -25,6 +24,7 @@ export class AuthorizationLinksService {
     private readonly companies: CompaniesService,
     @InjectRepository(AuthorizationLink)
     private readonly links: Repository<AuthorizationLink>,
+    private readonly activity: ActivityLogsService,
   ) {}
 
   async create(accountantId: number, companyId: number) {
@@ -37,6 +37,10 @@ export class AuthorizationLinksService {
         tokenHash: hashLinkToken(token),
         expiresAt: new Date(Date.now() + LINK_TTL_MS),
       }),
+    );
+    await this.activity.record(
+      accountantId,
+      authorizationLinkCreated(company, link.expiresAt),
     );
     return {
       id: link.id,

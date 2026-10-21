@@ -1,8 +1,9 @@
 import { BadRequestException } from '@nestjs/common';
-import type { Invoice } from '../invoice.entity.js';
 import { stornoReference, vatId } from '../helpers/invoice-format.js';
-import { UNITS, type InvoiceParty } from '../invoice.types.js';
+import { UNITS } from '../dto/invoice.constants.js';
+import type { InvoiceParty } from '../dto/invoice.types.js';
 import { VatCategory, Currency, PaymentMethod } from '../dto/invoice.enums.js';
+import type { InvoiceXmlData } from '../dto/invoice.types.js';
 
 export const CIUS_RO_CUSTOMIZATION_ID =
   'urn:cen.eu:en16931:2017#compliant#urn:efactura.mfinante.ro:CIUS-RO:1.0.1';
@@ -59,32 +60,7 @@ function categoryXml(
   return `<cac:TaxCategory>${tag('cbc:ID', category)}${category === VatCategory.NotSubject ? '' : tag('cbc:Percent', rate.toFixed(2))}${category !== VatCategory.Standard && reason ? tag('cbc:TaxExemptionReason', reason) : ''}<cac:TaxScheme>${tag('cbc:ID', 'VAT')}</cac:TaxScheme></cac:TaxCategory>`;
 }
 
-type InvoiceData = Pick<
-  Invoice,
-  | 'series'
-  | 'number'
-  | 'issueDate'
-  | 'deliveryDate'
-  | 'dueDate'
-  | 'currency'
-  | 'exchangeRate'
-  | 'paymentMethod'
-  | 'vatOnCollection'
-  | 'seller'
-  | 'buyer'
-  | 'lines'
-  | 'vatBreakdown'
-  | 'totalNet'
-  | 'totalVat'
-  | 'totalGross'
-  | 'totalVatRon'
-  | 'stornoOfSeries'
-  | 'stornoOfNumber'
-  | 'stornoOfIssueDate'
-  | 'notes'
->;
-
-export function renderInvoiceXml(invoice: InvoiceData): string {
+export function renderInvoiceXml(invoice: InvoiceXmlData): string {
   if (!invoice.buyer.cui) {
     throw new BadRequestException(
       'Factura nu are CUI pentru cumpărător, deci nu poate fi exportată ca XML e-Factura.',

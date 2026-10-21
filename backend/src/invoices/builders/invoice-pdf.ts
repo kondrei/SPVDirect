@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import PDFDocument from 'pdfkit';
-import type { Invoice } from '../invoice.entity.js';
+
 import {
   formatAmount,
   formatIsoDate,
@@ -10,38 +10,9 @@ import {
   stornoReference,
   vatId,
 } from '../helpers/invoice-format.js';
-import type { InvoiceParty } from '../invoice.types.js';
+import type { InvoiceParty } from '../dto/invoice.types.js';
 import { PaymentMethod, VatCategory, Currency } from '../dto/invoice.enums.js';
-
-export interface InvoiceLogo {
-  content: Buffer;
-  contentType: string;
-}
-
-type InvoiceData = Pick<
-  Invoice,
-  | 'series'
-  | 'number'
-  | 'issueDate'
-  | 'deliveryDate'
-  | 'dueDate'
-  | 'currency'
-  | 'exchangeRate'
-  | 'paymentMethod'
-  | 'vatOnCollection'
-  | 'seller'
-  | 'buyer'
-  | 'lines'
-  | 'vatBreakdown'
-  | 'totalNet'
-  | 'totalVat'
-  | 'totalGross'
-  | 'totalVatRon'
-  | 'stornoOfSeries'
-  | 'stornoOfNumber'
-  | 'stornoOfIssueDate'
-  | 'notes'
->;
+import type { InvoiceLogo, InvoicePdfData } from '../dto/invoice.types.js';
 
 const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   transfer: 'Transfer bancar',
@@ -85,7 +56,7 @@ function vatLabel(category: string, rate: number): string {
 }
 
 export function renderInvoicePdf(
-  invoice: InvoiceData,
+  invoice: InvoicePdfData,
   logo: InvoiceLogo | null,
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -128,7 +99,7 @@ export function renderInvoicePdf(
 
 function drawHeader(
   doc: PDFKit.PDFDocument,
-  invoice: InvoiceData,
+  invoice: InvoicePdfData,
   number: string,
   logo: InvoiceLogo | null,
 ): void {
@@ -216,7 +187,7 @@ function drawParties(
 
 function drawLines(
   doc: PDFKit.PDFDocument,
-  invoice: InvoiceData,
+  invoice: InvoicePdfData,
   ensureSpace: (height: number) => void,
 ): void {
   const drawHead = () => {
@@ -280,7 +251,7 @@ function drawLines(
 
 function drawTotals(
   doc: PDFKit.PDFDocument,
-  invoice: InvoiceData,
+  invoice: InvoicePdfData,
   ensureSpace: (height: number) => void,
 ): void {
   const rows = invoice.vatBreakdown.length;
@@ -349,7 +320,7 @@ function drawTotals(
 
 function drawMentions(
   doc: PDFKit.PDFDocument,
-  invoice: InvoiceData,
+  invoice: InvoicePdfData,
   ensureSpace: (height: number) => void,
 ): void {
   const mentions: string[] = [

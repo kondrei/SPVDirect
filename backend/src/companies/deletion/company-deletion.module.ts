@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ApiLogsModule } from '../../api-logs/api-logs.module.js';
 import { Accountant } from '../../accountants/accountant.entity.js';
 import { AnafModule } from '../../anaf/anaf.module.js';
 import { SpvMessage } from '../../anaf/spv/spv-message.entity.js';
@@ -15,6 +16,7 @@ import { PurgeJob } from './purge.job.js';
 
 @Module({
   imports: [
+    ApiLogsModule,
     CompaniesModule,
     InvoicesModule,
     AnafModule,

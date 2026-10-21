@@ -1,16 +1,18 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import {
+  certificateRemoved,
+  certificateRenamed,
+  certificateTested,
+} from '../../api-logs/activity-entries.js';
+import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import { AnafConnection } from '../anaf-connection.entity.js';
 import { redactBearerTokens } from '../redact-bearer.js';
 import { AnafApiService } from './anaf-api.service.js';
 import { AnafOAuthService } from './anaf-oauth.service.js';
 import { ApiLogService } from '../../api-logs/dto/api-log.enums.js';
-
-export interface ConnectionTestResult {
-  status: number;
-  body: string;
-}
+import type { ConnectionTestResult } from '../dto/anaf.types.js';
 
 @Injectable()
 export class AnafConnectionsService {
@@ -21,6 +23,7 @@ export class AnafConnectionsService {
     private readonly oauth: AnafOAuthService,
     @InjectRepository(AnafConnection)
     private readonly connections: Repository<AnafConnection>,
+    private readonly activity: ActivityLogsService,
   ) {}
 
   list(accountantId: number): Promise<AnafConnection[]> {
@@ -37,13 +40,21 @@ export class AnafConnectionsService {
   ): Promise<AnafConnection> {
     const connection = await this.get(accountantId, id);
     connection.label = label;
-    return this.connections.save(connection);
+    const saved = await this.connections.save(connection);
+    await this.activity.record(accountantId, certificateRenamed(saved));
+    return saved;
   }
 
   async remove(accountantId: number, id: number): Promise<void> {
-    const connection = await this.get(accountantId, id);
-    await this.oauth.revokeConnection(connection.id);
-    await this.connections.remove(connection);
+    const connection = await this.removeConnection(accountantId, id);
+    await this.activity.record(
+      accountantId,
+      certificateRemoved({
+        id,
+        label: connection.label,
+        certSerial: connection.certSerial,
+      }),
+    );
   }
 
   async removeAll(accountantId: number): Promise<number[]> {
@@ -52,7 +63,7 @@ export class AnafConnectionsService {
       where: { accountantId },
     });
     const results = await Promise.allSettled(
-      connections.map(({ id }) => this.remove(accountantId, id)),
+      connections.map(({ id }) => this.removeConnection(accountantId, id)),
     );
     const failed: number[] = [];
     results.forEach((result, i) => {
@@ -67,6 +78,7 @@ export class AnafConnectionsService {
   }
 
   async test(accountantId: number, id: number): Promise<ConnectionTestResult> {
+    const connection = await this.get(accountantId, id);
     const res = await this.api.request<string>({
       accountantId,
       connectionId: id,
@@ -75,7 +87,21 @@ export class AnafConnectionsService {
       params: { name: 'SPVDirect' },
       responseType: 'text',
     });
+    await this.activity.record(
+      accountantId,
+      certificateTested(connection, res.status),
+    );
     return { status: res.status, body: redactBearerTokens(res.data) };
+  }
+
+  private async removeConnection(
+    accountantId: number,
+    id: number,
+  ): Promise<AnafConnection> {
+    const connection = await this.get(accountantId, id);
+    await this.oauth.revokeConnection(connection.id);
+    await this.connections.remove(connection);
+    return connection;
   }
 
   private async get(accountantId: number, id: number): Promise<AnafConnection> {

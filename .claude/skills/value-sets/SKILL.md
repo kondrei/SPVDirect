@@ -11,7 +11,7 @@ A **value set** is a closed list of strings or numbers that is stored in a colum
 
 - Backend: `src/<module>/dto/<module>.enums.ts`, one file per module (`accountants/dto/accountant.enums.ts`, `anaf/dto/anaf.enums.ts`, `efactura/dto/efactura.enums.ts`, `invoices/dto/invoice.enums.ts`, ...). Cross-cutting sets go in `common/dto/`, env sets in `config/dto/env.enums.ts`. Add a member to the existing file before creating a new enum; one value set has one enum in the backend.
 - Frontend: `frontend/src/api/enums.ts`, a mirror of the backend enums the API exposes. Same enum name, same member names, same values.
-- Entities, services and DTOs import the enum; `types.ts`/entity files hold interfaces and classes only.
+- Entities, services and DTOs import the enum; interfaces and types live in `dto/<module>.types.ts` (`module-dto` skill).
 
 ## Writing one
 
@@ -40,9 +40,9 @@ export enum UploadStatus {
 - Migrations: frozen snapshots, they keep their SQL strings and import nothing from `src/`.
 - Catalogs: long Romanian lists used only for validation (`SPV_REQUEST_TYPES`, `SPV_INCOME_REASONS`, the `UNITS` code map) stay `as const` in a `dto/` file.
 - Language and library values: `typeof x === 'string'`, `Promise.allSettled` `'fulfilled'`, TypeORM `lock.mode`, axios `responseType`, TanStack `'pending'`.
-- Text: user-facing Romanian messages, CSV headers, SQL aliases, input parsing (`'true'`, `'DA'`).
+- Text: user-facing Romanian messages, SQL aliases, input parsing (`'true'`, `'DA'`). CSV headers are constants in the module's `dto/` folder (`module-dto` skill); file names an export writes are enums.
 - Frontend view state: theme, open panel, reducer action types, component variants, the `StatusBadge` vocabulary. These are string-literal unions; an API enum member is assignable to them.
-- A single standalone value gets a named `const` in its file (`BUCHAREST_COUNTY_CODE`), not an enum.
+- A single standalone value gets a named `const` in `dto/<module>.constants.ts` (`BUCHAREST_COUNTY_CODE`), not an enum.
 
 ## Done when
 

@@ -34,7 +34,6 @@ import {
   ValidateXmlDto,
 } from '../dto/efactura.dto.js';
 import { EfacturaService } from '../services/efactura.service.js';
-import { EfacturaValidator } from '../services/efactura-validator.service.js';
 
 const xmlFile = () =>
   FileInterceptor('file', { limits: { fileSize: MAX_XML_BYTES + 1 } });
@@ -49,10 +48,7 @@ function xmlOf(file: { buffer: Buffer } | undefined): string {
 @Controller('accountants/:accountantId/efactura')
 @UseGuards(JwtAuthGuard, AccountantParamGuard)
 export class EfacturaController {
-  constructor(
-    private readonly efactura: EfacturaService,
-    private readonly validator: EfacturaValidator,
-  ) {}
+  constructor(private readonly efactura: EfacturaService) {}
 
   @Get('uploads')
   @Throttle(EFACTURA_THROTTLE)
@@ -177,7 +173,7 @@ export class EfacturaController {
     @Body() dto: ValidateXmlDto,
     @UploadedFile() file: { buffer: Buffer } | undefined,
   ) {
-    return this.validator.validate(accountantId, xmlOf(file), dto.standard);
+    return this.efactura.validateXml(accountantId, xmlOf(file), dto.standard);
   }
 
   @Post('transform')
@@ -191,7 +187,7 @@ export class EfacturaController {
     @UploadedFile() file: { buffer: Buffer } | undefined,
   ) {
     return attachment(
-      await this.validator.transform(
+      await this.efactura.transformXml(
         accountantId,
         xmlOf(file),
         dto.standard,

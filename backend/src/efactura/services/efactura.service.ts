@@ -8,6 +8,15 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 
+import {
+  efacturaDownloaded,
+  efacturaMessagesLoaded,
+  efacturaStatusChecked,
+  efacturaTransformed,
+  efacturaUploaded,
+  efacturaValidated,
+} from '../../api-logs/activity-entries.js';
+import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import { AnafApiService } from '../../anaf/services/anaf-api.service.js';
 import { isUniqueViolation } from '../../common/db-errors.js';
 import { lockLiveCompany } from '../../companies/company-lock.js';
@@ -46,83 +55,21 @@ import {
   ValidateStandard,
   MessageFilter,
 } from '../dto/efactura.enums.js';
+import type {
+  UploadInput,
+  UploadPage,
+  MessageList,
+  CertifiedCompany,
+  AnafTarget,
+  SendOutcome,
+  RawMessageList,
+} from '../dto/efactura.types.js';
 
 export const NO_CERTIFICATE =
   'Firma nu are un certificat ANAF asociat. Legați un certificat din pagina firmei.';
 export const STALE_SENDING_MS = 5 * 60 * 1000;
 const INTERRUPTED = 'Trimiterea a fost întreruptă înainte de răspunsul ANAF';
 const ZIP_MAGIC = [0x50, 0x4b];
-
-export interface UploadInput {
-  companyId: number;
-  xml: string;
-  standard: EfacturaStandard;
-  extern?: boolean;
-  autofactura?: boolean;
-  executare?: boolean;
-  b2c?: boolean;
-}
-
-export interface UploadPage {
-  items: EfacturaUpload[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
-
-export interface EfacturaMessage {
-  id: string;
-  requestId: string | null;
-  type: string | null;
-  details: string | null;
-  cif: string | null;
-  createdAt: string | null;
-  createdAtRaw: string | null;
-}
-
-export interface MessageList {
-  title: string | null;
-  messages: EfacturaMessage[];
-  total: number | null;
-  page: number | null;
-  pages: number | null;
-}
-
-interface CertifiedCompany {
-  id: number;
-  cui: string;
-  connectionId: number;
-}
-
-interface AnafTarget {
-  accountantId: number;
-  connectionId: number;
-  companyId: number;
-}
-
-interface SendOutcome {
-  uploadIndex: string | null;
-  status: UploadStatus;
-  errorMessage: string | null;
-}
-
-interface RawMessage {
-  id?: string | number;
-  id_solicitare?: string | number | null;
-  tip?: string;
-  detalii?: string;
-  cif?: string | number;
-  data_creare?: string;
-}
-
-interface RawMessageList {
-  titlu?: string;
-  eroare?: string;
-  mesaje?: RawMessage[];
-  numar_total_inregistrari?: number;
-  numar_total_pagini?: number;
-  index_pagina_curenta?: number;
-}
 
 function certified(company: Company): CertifiedCompany {
   if (!company.anafConnectionId) throw new BadRequestException(NO_CERTIFICATE);
@@ -150,6 +97,7 @@ export class EfacturaService {
     private readonly invoices: InvoicesService,
     @InjectRepository(EfacturaUpload)
     private readonly uploads: Repository<EfacturaUpload>,
+    private readonly activity: ActivityLogsService,
   ) {}
 
   async upload(
@@ -159,12 +107,14 @@ export class EfacturaService {
     assertXmlPayload(input.xml);
     const company = await this.certifiedCompany(accountantId, input.companyId);
     const outcome = await this.send(accountantId, company, input);
-    return this.uploads.save(
+    const saved = await this.uploads.save(
       this.uploads.create({
         ...this.newUpload(accountantId, company, null, input.standard),
         ...outcome,
       }),
     );
+    await this.activity.record(accountantId, efacturaUploaded(saved, null));
+    return saved;
   }
 
   async uploadInvoice(
@@ -202,7 +152,9 @@ export class EfacturaService {
       await this.uploads.delete({ id: claim.id, status: UploadStatus.Sending });
       throw err;
     }
-    return this.uploads.save(Object.assign(claim, outcome));
+    const saved = await this.uploads.save(Object.assign(claim, outcome));
+    await this.activity.record(accountantId, efacturaUploaded(saved, invoice));
+    return saved;
   }
 
   async list(
@@ -283,7 +235,9 @@ export class EfacturaService {
     upload.status = parsed.status;
     upload.downloadId = parsed.downloadId ?? upload.downloadId;
     upload.checkedAt = new Date();
-    return this.uploads.save(upload);
+    const saved = await this.uploads.save(upload);
+    await this.activity.record(accountantId, efacturaStatusChecked(saved));
+    return saved;
   }
 
   async download(accountantId: number, id: number): Promise<EfacturaFile> {
@@ -296,7 +250,7 @@ export class EfacturaService {
     if (!upload.anafConnectionId) {
       throw new ConflictException('Certificatul încărcării a fost șters');
     }
-    return this.fetchZip(
+    const file = await this.fetchZip(
       {
         accountantId,
         connectionId: upload.anafConnectionId,
@@ -305,6 +259,11 @@ export class EfacturaService {
       upload.environment,
       upload.downloadId,
     );
+    await this.activity.record(
+      accountantId,
+      efacturaDownloaded(upload.companyId, upload.downloadId),
+    );
+    return file;
   }
 
   async listMessages(
@@ -318,7 +277,8 @@ export class EfacturaService {
       pagina?: number;
     },
   ): Promise<MessageList> {
-    const company = await this.certifiedCompany(accountantId, companyId);
+    const record = await this.companies.get(accountantId, companyId);
+    const company = certified(record);
     const paged = query.startTime !== undefined;
     if (paged && query.endTime === undefined) {
       throw new BadRequestException(
@@ -353,7 +313,7 @@ export class EfacturaService {
     const failure = body.eroare ?? (res.status === 400 ? body.message : null);
     if (failure) throw new BadRequestException(failure);
 
-    return {
+    const list: MessageList = {
       title: orNull(body.titlu),
       messages: (body.mesaje ?? []).map((m) => ({
         id: String(m.id),
@@ -368,6 +328,11 @@ export class EfacturaService {
       page: body.index_pagina_curenta ?? null,
       pages: body.numar_total_pagini ?? null,
     };
+    await this.activity.record(
+      accountantId,
+      efacturaMessagesLoaded(record, list.messages.length, query),
+    );
+    return list;
   }
 
   async downloadMessage(
@@ -376,22 +341,62 @@ export class EfacturaService {
     messageId: string,
   ): Promise<EfacturaFile> {
     const company = await this.certifiedCompany(accountantId, companyId);
-    return this.fetchZip(
+    const file = await this.fetchZip(
       { accountantId, connectionId: company.connectionId, companyId },
       this.api.environment(),
       messageId,
     );
+    await this.activity.record(
+      accountantId,
+      efacturaDownloaded(companyId, messageId),
+    );
+    return file;
   }
 
   async validateInvoice(
     accountantId: number,
     invoiceId: number,
   ): Promise<ValidationResult> {
-    return this.validator.validate(
+    const invoice = await this.invoices.get(accountantId, invoiceId);
+    const result = await this.validator.validate(
       accountantId,
       await this.invoices.xml(accountantId, invoiceId),
       ValidateStandard.FACT1,
     );
+    await this.activity.record(
+      accountantId,
+      efacturaValidated(result, ValidateStandard.FACT1, invoice),
+    );
+    return result;
+  }
+
+  async validateXml(
+    accountantId: number,
+    xml: string,
+    standard: ValidateStandard = ValidateStandard.FACT1,
+  ): Promise<ValidationResult> {
+    const result = await this.validator.validate(accountantId, xml, standard);
+    await this.activity.record(
+      accountantId,
+      efacturaValidated(result, standard, null),
+    );
+    return result;
+  }
+
+  async transformXml(
+    accountantId: number,
+    xml: string,
+    standard: ValidateStandard = ValidateStandard.FACT1,
+    skipValidation = false,
+  ): Promise<EfacturaFile> {
+    const file = await this.validator.transform(
+      accountantId,
+      xml,
+      standard,
+      skipValidation,
+    );
+    await this.activity.record(accountantId, efacturaTransformed(standard));
+    return file;
   }
 
   private async certifiedCompany(

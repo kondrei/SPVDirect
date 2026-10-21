@@ -11,6 +11,8 @@ import type { Company } from '../company.entity.js';
 import type { CompaniesService } from '../services/companies.service.js';
 import { CompanyExportService } from './company-export.service.js';
 import { Currency } from '../../invoices/dto/invoice.enums.js';
+import type { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
+import { fakeActivityLogs } from '../../testing/activity-logs.js';
 
 const COMPANY = {
   id: 7,
@@ -83,6 +85,7 @@ function setup() {
       filename: 'mesaj-900.pdf',
     }),
   };
+  const activity = fakeActivityLogs();
   const service = new CompanyExportService(
     companies as unknown as CompaniesService,
     invoices as unknown as Repository<Invoice>,
@@ -90,8 +93,9 @@ function setup() {
     messages as unknown as Repository<SpvMessage>,
     delivery as unknown as InvoiceDeliveryService,
     spv as unknown as SpvArchiveService,
+    activity as unknown as ActivityLogsService,
   );
-  return { service, companies, invoices, uploads, delivery, spv };
+  return { service, companies, invoices, uploads, delivery, spv, activity };
 }
 
 async function unzip(stream: Readable): Promise<Record<string, string>> {

@@ -13,6 +13,8 @@ import { CommandBus } from '@nestjs/cqrs';
 import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { AccountantsService } from '../../accountants/services/accountants.service.js';
+import { loggedIn } from '../../api-logs/activity-entries.js';
+import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import { Accountant } from '../../accountants/accountant.entity.js';
 import { AuthService } from '../services/auth.service.js';
 import { CurrentAccountantId } from '../decorators/current-accountant.decorator.js';
@@ -30,6 +32,7 @@ export class AuthController {
     private readonly accountants: AccountantsService,
     private readonly commands: CommandBus,
     private readonly session: SessionCookieService,
+    private readonly activity: ActivityLogsService,
   ) {}
 
   @Post('register')
@@ -49,6 +52,7 @@ export class AuthController {
   ) {
     const accountant = await this.auth.validateLogin(dto);
     await this.session.issue(res, accountant.id);
+    await this.activity.record(accountant.id, loggedIn());
     return toPublic(accountant);
   }
 

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ApiLogsModule } from '../api-logs/api-logs.module.js';
 import { OpenDataModule } from '../open-data/open-data.module.js';
 import { CompaniesModule } from '../companies/companies.module.js';
 import { Accountant } from './accountant.entity.js';
@@ -8,6 +9,7 @@ import { AccountantsService } from './services/accountants.service.js';
 
 @Module({
   imports: [
+    ApiLogsModule,
     TypeOrmModule.forFeature([Accountant]),
     OpenDataModule,
     CompaniesModule,

@@ -3,7 +3,7 @@ import type {
   InvoiceLineInput,
   InvoiceTotals,
   VatBreakdownRow,
-} from '../invoice.types.js';
+} from '../dto/invoice.types.js';
 
 export function toCents(amount: number): number {
   return Math.round(amount * 100 + Math.sign(amount) * 1e-7);

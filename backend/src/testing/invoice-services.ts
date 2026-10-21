@@ -1,5 +1,6 @@
 import type { Repository } from 'typeorm';
 import { vi } from 'vitest';
+import type { ActivityLogsService } from '../api-logs/activity-logs.service.js';
 import type { AnafCompanyLookupService } from '../companies/services/anaf-company-lookup.service.js';
 import type { CompaniesService } from '../companies/services/companies.service.js';
 import type { Invoice } from '../invoices/invoice.entity.js';
@@ -10,6 +11,7 @@ import type { InvoiceMailer } from '../invoices/services/invoice-mailer.service.
 import { InvoiceNumbering } from '../invoices/services/invoice-numbering.service.js';
 import { InvoiceStornoService } from '../invoices/services/invoice-storno.service.js';
 import { InvoicesService } from '../invoices/services/invoices.service.js';
+import { fakeActivityLogs } from './activity-logs.js';
 
 export function buildInvoiceServices(deps: {
   invoices: object;
@@ -19,6 +21,7 @@ export function buildInvoiceServices(deps: {
   mailer: object;
   earlierMaximum?: number | null;
   earlierTaken?: boolean;
+  activity?: ReturnType<typeof fakeActivityLogs>;
 }) {
   const earlier = {
     withDeleted: vi.fn().mockReturnThis(),
@@ -45,12 +48,14 @@ export function buildInvoiceServices(deps: {
     },
   }) as unknown as Repository<Invoice>;
   const companies = deps.companies as unknown as CompaniesService;
+  const activity = deps.activity ?? fakeActivityLogs();
   const numbering = new InvoiceNumbering(repo);
   const delivery = new InvoiceDeliveryService(
     repo,
     companies,
     deps.store as unknown as InvoiceFileStore,
     deps.mailer as unknown as InvoiceMailer,
+    activity as unknown as ActivityLogsService,
   );
   const invoices = new InvoicesService(repo, companies, numbering, delivery);
   const buyers = new InvoiceBuyersService(
@@ -66,6 +71,7 @@ export function buildInvoiceServices(deps: {
     buyers,
     storno,
     delivery,
+    activity,
     service: {
       lookupBuyer: buyers.lookupBuyer.bind(buyers),
       findBuyer: buyers.findBuyer.bind(buyers),

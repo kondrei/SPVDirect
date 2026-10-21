@@ -4,17 +4,13 @@ import type { AnafTvaRecord } from '../../companies/helpers/anaf-company-info.js
 import type { Company } from '../../companies/company.entity.js';
 import { parseAnafAddress } from '../helpers/anaf-address.js';
 import type { InvoiceBuyerDto, InvoiceLineDto } from '../dto/invoice.dto.js';
-import type { InvoiceLineInput, InvoiceParty } from '../invoice.types.js';
+import type { InvoiceLineInput, InvoiceParty } from '../dto/invoice.types.js';
 import {
   allowedVatRates,
   DEFAULT_EXEMPTION_REASON,
 } from '../helpers/vat-rates.js';
 import { VatCategory } from '../dto/invoice.enums.js';
-
-export interface BuyerLookup extends InvoiceParty {
-  inactive: boolean | null;
-  eFactura: boolean | null;
-}
+import type { BuyerLookup } from '../dto/invoice.types.js';
 
 export function sellerFromCompany(company: Company): InvoiceParty {
   const address = blankToNull(company.address);

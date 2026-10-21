@@ -1,10 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { INVOICE_PAGE_SIZE } from '../../common/constants';
 import { api, downloadFile, fetchFile } from '../client';
-import type { EfacturaMessageList, EfacturaUpload, EfacturaUploadPage, UploadXmlInput, XmlValidation } from '../types';
+import type { EfacturaMessageList, EfacturaUpload, EfacturaUploadPage, MessagesQuery, UploadXmlInput, XmlValidation } from '../types';
 import { keys } from './queryKeys';
 import { useAccountantApiPath, requirePath } from './accountantPath';
-import { MessageFilter } from '../enums';
 
 export function useEfacturaUploads(query: {
   companyId?: number;
@@ -98,12 +97,6 @@ export function useDownloadUpload() {
   });
 }
 
-export interface MessagesQuery {
-  companyId: number | undefined;
-  filtru?: MessageFilter;
-  zile: number;
-}
-
 export function useEfacturaMessages(query: MessagesQuery) {
   const path = useAccountantApiPath('/efactura/companies');
   return useQuery({
@@ -117,6 +110,7 @@ export function useEfacturaMessages(query: MessagesQuery) {
     },
     enabled: !!path && !!query.companyId,
     retry: false,
+    refetchOnWindowFocus: false,
   });
 }
 
