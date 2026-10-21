@@ -1,3 +1,4 @@
+import { BulkCreateStatus, AnafConnectionStatus, AnafConnectionSource, ProfessionalTitle, VatCategory, Currency, PaymentMethod, BuyerSource, UploadStatus, EfacturaStandard, AnafEnvironment } from './enums';
 export interface Accountant {
   id: number;
   email: string;
@@ -33,8 +34,11 @@ export interface Company {
 }
 
 export type BulkCompanyResult =
-  | { cui: string; status: 'created'; company: Company }
-  | { cui: string; status: 'exists' | 'not_found' };
+  | { cui: string; status: BulkCreateStatus.Created; company: Company }
+  | {
+      cui: string;
+      status: BulkCreateStatus.Exists | BulkCreateStatus.NotFound;
+    };
 
 export interface AnafTvaRecord {
   date_generale: {
@@ -91,15 +95,13 @@ export interface AnafTvaRecord {
   adresa_domiciliu_fiscal: Record<string, string>;
 }
 
-export type AnafConnectionStatus = 'active' | 'expired' | 'revoked';
-
 export interface AnafConnection {
   id: number;
   accountantId: number;
   label: string;
   certSerial: string;
   roles: string[];
-  source: 'self' | 'link';
+  source: AnafConnectionSource;
   accessExpiresAt: string;
   refreshExpiresAt: string;
   lastRefreshedAt: string | null;
@@ -118,8 +120,6 @@ export interface ConnectionTestResult {
   status: number;
   body: string;
 }
-
-export type ProfessionalTitle = 'expert_contabil' | 'contabil_autorizat';
 
 export interface AccountantProfile {
   id: number;
@@ -218,7 +218,6 @@ export interface SpvRequestResult {
   title: string | null;
 }
 
-export type VatCategory = 'S' | 'Z' | 'E' | 'AE' | 'O';
 export type InvoiceUnit =
   | 'buc'
   | 'ore'
@@ -230,8 +229,6 @@ export type InvoiceUnit =
   | 'l'
   | 'set'
   | 'serviciu';
-export type InvoiceCurrency = 'RON' | 'EUR' | 'USD' | 'GBP' | 'CHF';
-export type PaymentMethod = 'transfer' | 'numerar' | 'card';
 
 export interface InvoiceParty {
   name: string;
@@ -256,7 +253,7 @@ export interface LineSuggestion {
   unitPrice: number;
   vatRate: number;
   vatCategory: VatCategory;
-  currency: InvoiceCurrency;
+  currency: Currency;
   issueDate: string;
 }
 
@@ -267,7 +264,7 @@ export interface BuyerLookup extends InvoiceParty {
 
 export interface FoundBuyer extends BuyerLookup {
   anafChecked: boolean;
-  source: 'invoice' | 'company' | 'anaf';
+  source: BuyerSource;
 }
 
 export interface InvoiceLine {
@@ -344,7 +341,7 @@ export interface InvoiceLineInput {
   unit: InvoiceUnit;
   unitPrice: number;
   vatRate: number;
-  vatCategory?: Exclude<VatCategory, 'O'>;
+  vatCategory?: Exclude<VatCategory, VatCategory.NotSubject>;
 }
 
 export interface CreateInvoiceInput {
@@ -354,7 +351,7 @@ export interface CreateInvoiceInput {
   issueDate: string;
   deliveryDate: string;
   dueDate?: string | null;
-  currency: InvoiceCurrency;
+  currency: Currency;
   exchangeRate?: number | null;
   paymentMethod: PaymentMethod;
   notes?: string | null;
@@ -388,14 +385,6 @@ export interface CreateStornoInput {
   sendToEmail?: string | null;
 }
 
-export type EfacturaStatus =
-  | 'sending'
-  | 'processing'
-  | 'ok'
-  | 'nok'
-  | 'rejected';
-export type EfacturaStandard = 'UBL' | 'CN' | 'CII' | 'RASP';
-export type MessageFilter = 'E' | 'P' | 'T' | 'R';
 
 export interface EfacturaUpload {
   id: number;
@@ -403,10 +392,10 @@ export interface EfacturaUpload {
   companyId: number;
   invoiceId: number | null;
   anafConnectionId: number | null;
-  environment: 'test' | 'prod';
+  environment: AnafEnvironment;
   standard: EfacturaStandard;
   uploadIndex: string | null;
-  status: EfacturaStatus;
+  status: UploadStatus;
   downloadId: string | null;
   errorMessage: string | null;
   checkedAt: string | null;

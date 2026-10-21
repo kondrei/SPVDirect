@@ -12,21 +12,20 @@ import {
   PendingRegistration,
   RegistrationsService,
 } from './services/registrations.service.js';
-
-type Decision = 'approve' | 'reject';
+import { RegistrationDecision } from '../dto/auth.enums.js';
 
 const INVALID = 'Cererea nu există sau a fost deja aprobată ori respinsă.';
 
 const CONFIRM: Record<
-  Decision,
+  RegistrationDecision,
   { title: string; button: string; note: string }
 > = {
-  approve: {
+  [RegistrationDecision.Approve]: {
     title: 'Aprobare cont',
     button: 'Aprobă contul',
     note: 'Utilizatorul se va putea autentifica imediat și va primi un email de confirmare.',
   },
-  reject: {
+  [RegistrationDecision.Reject]: {
     title: 'Respingere cerere',
     button: 'Respinge și blochează emailul',
     note: 'Cererea se șterge, iar adresa de email nu va mai putea fi folosită pentru înregistrare.',
@@ -43,7 +42,7 @@ export class RegistrationsController {
     @Param('token', ParseLinkTokenPipe) token: string,
     @Res() res: Response,
   ) {
-    return this.confirm(res, token, 'approve');
+    return this.confirm(res, token, RegistrationDecision.Approve);
   }
 
   @Get(':token/reject')
@@ -51,7 +50,7 @@ export class RegistrationsController {
     @Param('token', ParseLinkTokenPipe) token: string,
     @Res() res: Response,
   ) {
-    return this.confirm(res, token, 'reject');
+    return this.confirm(res, token, RegistrationDecision.Reject);
   }
 
   @Post(':token/approve')
@@ -86,7 +85,11 @@ export class RegistrationsController {
     );
   }
 
-  private async confirm(res: Response, token: string, decision: Decision) {
+  private async confirm(
+    res: Response,
+    token: string,
+    decision: RegistrationDecision,
+  ) {
     const pending = await this.registrations.findPending(token);
     if (!pending) return send(res, 404, 'Link invalid', INVALID);
     const c = CONFIRM[decision];
@@ -98,7 +101,7 @@ export class RegistrationsController {
 <p>${describe(pending)} a cerut un cont SPVDirect pe ${escapeHtml(pending.createdAt.toLocaleString('ro-RO', { timeZone: 'Europe/Bucharest' }))}.</p>
 <p class="muted">${escapeHtml(c.note)}</p>
 <form method="post" action="${escapeHtml(action)}">
-  <button type="submit" class="btn${decision === 'reject' ? ' btn-danger' : ''}">${escapeHtml(c.button)}</button>
+  <button type="submit" class="btn${decision === RegistrationDecision.Reject ? ' btn-danger' : ''}">${escapeHtml(c.button)}</button>
 </form>`,
       ),
     );

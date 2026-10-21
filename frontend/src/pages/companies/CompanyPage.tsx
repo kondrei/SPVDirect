@@ -1,10 +1,15 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { useCompany, useCreateAuthorizationLink, useDeleteCompany, useUpdateCompany } from '../../api/hooks/companies';
+import {
+  useCompany,
+  useCreateAuthorizationLink,
+  useDeleteCompany,
+  useExportCompany,
+  useUpdateCompany,
+} from '../../api/hooks/companies';
 import { useConnections, useConnectUrl } from '../../api/hooks/connections';
 import { ApiError } from '../../api/client';
 import { AnafDataCard } from '../../components/AnafDataCard';
-import { ConfirmButton } from '../../components/ConfirmButton';
 import {
   InvoiceDetailsCard,
   LogoCard,
@@ -176,6 +181,99 @@ function AuthorizationLinkCard({
   );
 }
 
+function ExportCompany({ id, cui }: { id: number; cui: string }) {
+  const exportData = useExportCompany();
+  return (
+    <div className="stack">
+      <div className="spv-row" style={{ justifyContent: 'space-between' }}>
+        <span className="muted small">
+          Arhivă ZIP cu datele firmei: facturi (PDF și XML), mesaje SPV și încărcări e-Factura.
+        </span>
+        <Button
+          size="sm"
+          icon="download"
+          loading={exportData.isPending}
+          onClick={() => exportData.mutate({ id, cui })}
+        >
+          Descarcă arhiva firmei
+        </Button>
+      </div>
+      {exportData.isError ? <Alert tone="danger" title={exportData.error.message} /> : null}
+    </div>
+  );
+}
+
+function DeleteCompany({ id, cui }: { id: number; cui: string }) {
+  const remove = useDeleteCompany();
+  const exportData = useExportCompany();
+  const navigate = useNavigate();
+  const appPath = useAppPath();
+  const [open, setOpen] = useState(false);
+
+  if (!open) {
+    return (
+      <div className="spv-row" style={{ justifyContent: 'space-between' }}>
+        <span className="muted small">
+          Ștergerea scoate firma și datele ei din SPVDirect; datele din SPV rămân la ANAF.
+        </span>
+        <Button size="sm" variant="ghost" icon="trash" onClick={() => setOpen(true)}>
+          Șterge firma
+        </Button>
+      </div>
+    );
+  }
+
+  const exported = exportData.isSuccess;
+  const cancel = () => {
+    setOpen(false);
+    exportData.reset();
+    remove.reset();
+  };
+  const confirm = () =>
+    remove.mutate(id, {
+      onSuccess: () => navigate(appPath('/companies'), { replace: true }),
+    });
+
+  return (
+    <div className="stack">
+      <Alert tone="warning" title="Exportați datele firmei înainte de ștergere?">
+        Ștergerea elimină firma și toate datele ei din SPVDirect: facturile, mesajele SPV și
+        încărcările e-Factura. Datele se șterg definitiv după 30 de zile, iar apoi SPVDirect nu mai
+        păstrează nicio copie. Facturile trebuie păstrate 10 ani (Legea contabilității, art. 25),
+        așa că vă recomandăm să descărcați mai întâi arhiva ZIP.
+      </Alert>
+      {exportData.isError ? <Alert tone="danger" title={exportData.error.message} /> : null}
+      {exported ? <Alert tone="success" title="Arhiva cu datele firmei a fost descărcată." /> : null}
+      {remove.isError ? <Alert tone="danger" title={remove.error.message} /> : null}
+      <div className="spv-row">
+        <Button
+          size="sm"
+          variant={exported ? 'secondary' : 'primary'}
+          icon="download"
+          loading={exportData.isPending}
+          disabled={remove.isPending}
+          onClick={() => exportData.mutate({ id, cui })}
+        >
+          {exported ? 'Exportă din nou' : 'Exportă datele (ZIP)'}
+        </Button>
+        <Button
+          size="sm"
+          variant="danger"
+          icon="trash"
+          loading={remove.isPending}
+          disabled={exportData.isPending}
+          onClick={confirm}
+        >
+          {exported ? 'Șterge firma' : 'Șterge fără export'}
+        </Button>
+        <Button size="sm" variant="ghost" disabled={remove.isPending} onClick={cancel}>
+          Renunță
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function DetailsCard({
   id,
   name,
@@ -188,9 +286,6 @@ function DetailsCard({
   createdAt: string;
 }) {
   const update = useUpdateCompany(id);
-  const remove = useDeleteCompany();
-  const navigate = useNavigate();
-  const appPath = useAppPath();
   const [value, setValue] = useState(name);
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -209,9 +304,6 @@ function DetailsCard({
         {update.isError ? (
           <Alert tone="danger" title={update.error.message} />
         ) : null}
-        {remove.isError ? (
-          <Alert tone="danger" title={remove.error.message} />
-        ) : null}
         <div className="form-row">
           <TextField
             label="Denumire"
@@ -228,21 +320,8 @@ function DetailsCard({
             Redenumește
           </Button>
         </div>
-        <div className="spv-row" style={{ justifyContent: 'space-between' }}>
-          <span className="muted small">
-            Ștergerea scoate firma din SPVDirect; datele din SPV rămân la ANAF.
-          </span>
-          <ConfirmButton
-            label="Șterge firma"
-            confirmLabel="Confirmă ștergerea"
-            loading={remove.isPending}
-            onConfirm={() =>
-              remove.mutate(id, {
-                onSuccess: () => navigate(appPath('/companies'), { replace: true }),
-              })
-            }
-          />
-        </div>
+        <ExportCompany id={id} cui={cui} />
+        <DeleteCompany id={id} cui={cui} />
       </form>
     </Card>
   );

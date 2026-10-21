@@ -8,6 +8,11 @@ import type {
   AuthorizationOutcome,
 } from '../services/anaf-authorization.service.js';
 import { OAUTH_STATE_AUDIENCE, OAUTH_STATE_COOKIE } from '../oauth-state.js';
+import {
+  AnafConnectionSource,
+  AuthorizationOutcomeKind,
+  LinkFailure,
+} from '../dto/anaf.enums.js';
 
 const jwt = new JwtService({ secret: 'x'.repeat(32) });
 
@@ -16,8 +21,8 @@ async function callback({
   linkId = 3,
   error,
   state = 's',
-  mode = 'self',
-  outcome = { kind: 'self', accountantId: 5 },
+  mode = AnafConnectionSource.Self,
+  outcome = { kind: AuthorizationOutcomeKind.Self, accountantId: 5 },
 }: {
   accountantId?: unknown;
   linkId?: unknown;
@@ -65,7 +70,10 @@ describe('AnafOAuthController.callback (self)', () => {
   it('completes the authorization and returns to the accountant’s connections page', async () => {
     const { authorization, res } = await callback();
     expect(authorization.complete).toHaveBeenCalledWith(
-      expect.objectContaining({ mode: 'self', accountantId: 5 }),
+      expect.objectContaining({
+        mode: AnafConnectionSource.Self,
+        accountantId: 5,
+      }),
       'code',
     );
     expect(res.redirect).toHaveBeenCalledWith(
@@ -99,8 +107,11 @@ describe('AnafOAuthController.callback (self)', () => {
 describe('AnafOAuthController.callback (link)', () => {
   it('answers 409 when the link was already used', async () => {
     const { res } = await callback({
-      mode: 'link',
-      outcome: { kind: 'link-invalid', reason: 'used' },
+      mode: AnafConnectionSource.Link,
+      outcome: {
+        kind: AuthorizationOutcomeKind.LinkInvalid,
+        reason: LinkFailure.Used,
+      },
     });
     expect(res.status).toHaveBeenCalledWith(409);
     expect(res.send.mock.calls[0][0]).toContain('deja folosit');
@@ -108,8 +119,11 @@ describe('AnafOAuthController.callback (link)', () => {
 
   it('shows the company name, escaped, on success', async () => {
     const { res } = await callback({
-      mode: 'link',
-      outcome: { kind: 'link', companyName: '<b>Firma</b>' },
+      mode: AnafConnectionSource.Link,
+      outcome: {
+        kind: AuthorizationOutcomeKind.Link,
+        companyName: '<b>Firma</b>',
+      },
     });
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.send.mock.calls[0][0]).toContain('&lt;b&gt;Firma&lt;/b&gt;');
@@ -131,7 +145,7 @@ describe('AnafOAuthController.callback with a state cookie from before integer i
 describe('AnafOAuthController.callback with a link state cookie from before integer link ids', () => {
   it('treats it as expired instead of claiming the link', async () => {
     const { authorization, res } = await callback({
-      mode: 'link',
+      mode: AnafConnectionSource.Link,
       linkId: '0f8fad5b-d9cb-469f-a165-70867728950e',
     });
     expect(authorization.complete).not.toHaveBeenCalled();

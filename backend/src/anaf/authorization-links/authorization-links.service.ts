@@ -6,12 +6,13 @@ import { IsNull, Repository } from 'typeorm';
 import { CompaniesService } from '../../companies/services/companies.service.js';
 import { Company } from '../../companies/company.entity.js';
 import { AuthorizationLink } from './authorization-link.entity.js';
+import { LinkFailure } from '../dto/anaf.enums.js';
 
 export const LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type LinkLookup =
   | { ok: true; link: AuthorizationLink; company: Company }
-  | { ok: false; reason: 'not_found' | 'used' | 'expired' };
+  | { ok: false; reason: LinkFailure };
 
 export function hashLinkToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
@@ -75,10 +76,10 @@ export class AuthorizationLinksService {
   }
 
   private async check(link: AuthorizationLink | null): Promise<LinkLookup> {
-    if (!link) return { ok: false, reason: 'not_found' };
-    if (link.usedAt) return { ok: false, reason: 'used' };
+    if (!link) return { ok: false, reason: LinkFailure.NotFound };
+    if (link.usedAt) return { ok: false, reason: LinkFailure.Used };
     if (link.expiresAt.getTime() <= Date.now()) {
-      return { ok: false, reason: 'expired' };
+      return { ok: false, reason: LinkFailure.Expired };
     }
     const company = await this.companies.get(link.accountantId, link.companyId);
     return { ok: true, link, company };

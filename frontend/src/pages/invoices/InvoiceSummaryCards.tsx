@@ -1,5 +1,4 @@
 import { Fragment, type Dispatch } from 'react';
-import type { InvoiceCurrency } from '../../api/types';
 import { Card, TextAreaField, TextField } from '../../components/ui';
 import { formatAmount } from '../../lib/format';
 import type { Totals } from '../../lib/invoice';
@@ -8,6 +7,7 @@ import {
   type InvoiceFormAction,
   type InvoiceFormState,
 } from './invoiceForm';
+import { Currency } from '../../api/enums';
 
 export function InvoiceOptionsCard({
   state,
@@ -70,7 +70,7 @@ export function InvoiceTotalsCard({
   vatPayer,
 }: {
   totals: Totals;
-  currency: InvoiceCurrency;
+  currency: Currency;
   vatPayer: boolean;
 }) {
   return (
@@ -90,7 +90,7 @@ export function InvoiceTotalsCard({
         <dd className="mono strong">
           {formatAmount(totals.gross)} {currency}
         </dd>
-        {currency !== 'RON' ? (
+        {currency !== Currency.RON ? (
           <>
             <dt>TVA în RON</dt>
             <dd className="mono">{formatAmount(totals.vatRon)}</dd>

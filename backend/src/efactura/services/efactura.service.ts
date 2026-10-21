@@ -7,22 +7,17 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import type { AnafEnvironment } from '../../anaf/anaf-environment.js';
+
 import { AnafApiService } from '../../anaf/services/anaf-api.service.js';
 import { isUniqueViolation } from '../../common/db-errors.js';
+import { lockLiveCompany } from '../../companies/company-lock.js';
 import type { Company } from '../../companies/company.entity.js';
 import { CompaniesService } from '../../companies/services/companies.service.js';
+import { Invoice } from '../../invoices/invoice.entity.js';
+import { INVOICE_NOT_FOUND } from '../../invoices/services/invoice-lookup.js';
 import { InvoicesService } from '../../invoices/services/invoices.service.js';
-import {
-  assertXmlPayload,
-  type MessageFilter,
-  type UploadStandard,
-} from '../dto/efactura.dto.js';
-import {
-  ACTIVE_UPLOAD_STATUSES,
-  EfacturaUpload,
-  type UploadStatus,
-} from '../efactura-upload.entity.js';
+import { assertXmlPayload } from '../dto/efactura.dto.js';
+import { EfacturaUpload } from '../efactura-upload.entity.js';
 import {
   bodyJson,
   bodyText,
@@ -35,13 +30,23 @@ import {
   parseUploadResponse,
 } from '../helpers/efactura-xml.js';
 import {
-  EFACTURA_SERVICE,
   EfacturaValidator,
   type EfacturaFile,
   type ValidationResult,
 } from './efactura-validator.service.js';
+import { AnafEnvironment } from '../../anaf/dto/anaf.enums.js';
+import {
+  ApiLogService,
+  ApiLogMethod,
+} from '../../api-logs/dto/api-log.enums.js';
+import {
+  UploadStatus,
+  ACTIVE_UPLOAD_STATUSES,
+  EfacturaStandard,
+  ValidateStandard,
+  MessageFilter,
+} from '../dto/efactura.enums.js';
 
-export { EFACTURA_SERVICE };
 export const NO_CERTIFICATE =
   'Firma nu are un certificat ANAF asociat. Legați un certificat din pagina firmei.';
 export const STALE_SENDING_MS = 5 * 60 * 1000;
@@ -51,7 +56,7 @@ const ZIP_MAGIC = [0x50, 0x4b];
 export interface UploadInput {
   companyId: number;
   xml: string;
-  standard: UploadStandard;
+  standard: EfacturaStandard;
   extern?: boolean;
   autofactura?: boolean;
   executare?: boolean;
@@ -130,7 +135,7 @@ function certified(company: Company): CertifiedCompany {
 
 function alreadySent(active: EfacturaUpload | null): ConflictException {
   return new ConflictException(
-    active?.status === 'ok'
+    active?.status === UploadStatus.Ok
       ? 'Factura a fost deja trimisă și validată de ANAF'
       : 'Factura este deja în curs de trimitere sau procesare la ANAF',
   );
@@ -179,7 +184,7 @@ export class EfacturaService {
       const check = await this.validator.validateIfAvailable(
         accountantId,
         xml,
-        'FACT1',
+        ValidateStandard.FACT1,
       );
       if (check && !check.valid) {
         throw new BadRequestException({
@@ -190,11 +195,11 @@ export class EfacturaService {
       outcome = await this.send(accountantId, company, {
         companyId: company.id,
         xml,
-        standard: 'UBL',
+        standard: EfacturaStandard.UBL,
         extern: options.extern,
       });
     } catch (err) {
-      await this.uploads.delete({ id: claim.id, status: 'sending' });
+      await this.uploads.delete({ id: claim.id, status: UploadStatus.Sending });
       throw err;
     }
     return this.uploads.save(Object.assign(claim, outcome));
@@ -248,7 +253,7 @@ export class EfacturaService {
 
   async refresh(accountantId: number, id: number): Promise<EfacturaUpload> {
     const upload = await this.get(accountantId, id);
-    if (upload.status !== 'processing') return upload;
+    if (upload.status !== UploadStatus.Processing) return upload;
     if (!upload.uploadIndex || !upload.anafConnectionId) {
       throw new ConflictException(
         'Încărcarea nu are index ANAF sau certificatul a fost șters',
@@ -258,7 +263,7 @@ export class EfacturaService {
       accountantId,
       connectionId: upload.anafConnectionId,
       companyId: upload.companyId,
-      service: EFACTURA_SERVICE,
+      service: ApiLogService.Efactura,
       path: this.api.envPath('/FCTEL/rest/stareMesaj', upload.environment),
       params: { id_incarcare: upload.uploadIndex },
       responseType: 'text',
@@ -334,7 +339,7 @@ export class EfacturaService {
       accountantId,
       connectionId: company.connectionId,
       companyId,
-      service: EFACTURA_SERVICE,
+      service: ApiLogService.Efactura,
       path: this.api.envPath(
         `/FCTEL/rest/${paged ? 'listaMesajePaginatieFactura' : 'listaMesajeFactura'}`,
       ),
@@ -385,7 +390,7 @@ export class EfacturaService {
     return this.validator.validate(
       accountantId,
       await this.invoices.xml(accountantId, invoiceId),
-      'FACT1',
+      ValidateStandard.FACT1,
     );
   }
 
@@ -400,7 +405,7 @@ export class EfacturaService {
     accountantId: number,
     company: CertifiedCompany,
     invoiceId: number | null,
-    standard: UploadStandard,
+    standard: EfacturaStandard,
   ): Partial<EfacturaUpload> {
     return {
       accountantId,
@@ -410,7 +415,7 @@ export class EfacturaService {
       environment: this.api.environment(),
       standard,
       uploadIndex: null,
-      status: 'sending',
+      status: UploadStatus.Sending,
       downloadId: null,
       errorMessage: null,
       checkedAt: null,
@@ -423,11 +428,25 @@ export class EfacturaService {
     invoiceId: number,
   ): Promise<EfacturaUpload> {
     const insert = () =>
-      this.uploads.save(
-        this.uploads.create(
-          this.newUpload(accountantId, company, invoiceId, 'UBL'),
-        ),
-      );
+      this.uploads.manager.transaction(async (manager) => {
+        await lockLiveCompany(manager, accountantId, company.id);
+        if (
+          !(await manager.existsBy(Invoice, { id: invoiceId, accountantId }))
+        ) {
+          throw new NotFoundException(INVOICE_NOT_FOUND);
+        }
+        const uploads = manager.getRepository(EfacturaUpload);
+        return uploads.save(
+          uploads.create(
+            this.newUpload(
+              accountantId,
+              company,
+              invoiceId,
+              EfacturaStandard.UBL,
+            ),
+          ),
+        );
+      });
     try {
       return await insert();
     } catch (err) {
@@ -441,14 +460,14 @@ export class EfacturaService {
       },
     });
     if (
-      active?.status !== 'sending' ||
+      active?.status !== UploadStatus.Sending ||
       Date.now() - active.createdAt.getTime() < STALE_SENDING_MS
     ) {
       throw alreadySent(active);
     }
     await this.uploads.update(
-      { id: active.id, status: 'sending' },
-      { status: 'rejected', errorMessage: INTERRUPTED },
+      { id: active.id, status: UploadStatus.Sending },
+      { status: UploadStatus.Rejected, errorMessage: INTERRUPTED },
     );
     try {
       return await insert();
@@ -475,8 +494,8 @@ export class EfacturaService {
       accountantId,
       connectionId: company.connectionId,
       companyId: company.id,
-      service: EFACTURA_SERVICE,
-      method: 'POST',
+      service: ApiLogService.Efactura,
+      method: ApiLogMethod.Post,
       path: this.api.envPath(
         `/FCTEL/rest/${input.b2c ? 'uploadb2c' : 'upload'}`,
       ),
@@ -490,7 +509,7 @@ export class EfacturaService {
     if (res.status === 400) {
       return {
         uploadIndex: null,
-        status: 'rejected',
+        status: UploadStatus.Rejected,
         errorMessage:
           bodyJson<AnafErrorBody>(res.data)?.message ??
           'ANAF a refuzat cererea',
@@ -500,12 +519,12 @@ export class EfacturaService {
     return parsed.accepted
       ? {
           uploadIndex: parsed.uploadIndex,
-          status: 'processing',
+          status: UploadStatus.Processing,
           errorMessage: null,
         }
       : {
           uploadIndex: null,
-          status: 'rejected',
+          status: UploadStatus.Rejected,
           errorMessage: parsed.error ?? 'ANAF nu a acceptat fișierul',
         };
   }
@@ -517,7 +536,7 @@ export class EfacturaService {
   ): Promise<EfacturaFile> {
     const res = await this.api.request<ArrayBuffer>({
       ...target,
-      service: EFACTURA_SERVICE,
+      service: ApiLogService.Efactura,
       path: this.api.envPath('/FCTEL/rest/descarcare', environment),
       params: { id },
       responseType: 'arraybuffer',

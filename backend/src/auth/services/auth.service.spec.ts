@@ -44,6 +44,13 @@ describe('AuthService', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
+  it('refuses a deleted account like an unknown email, even with the right password', async () => {
+    const service = await setup({ id: 1, status: 'deleted' });
+    await expect(
+      service.validateLogin({ email: 'a@example.com', password }),
+    ).rejects.toThrow(new UnauthorizedException('Email sau parolă incorectă'));
+  });
+
   it('rejects an unknown email with 401', async () => {
     const service = await setup(null);
     await expect(
@@ -97,6 +104,15 @@ describe('AuthService.isSessionValid', () => {
 
   it('rejects a deleted accountant', async () => {
     await expect(withState(null).isSessionValid(1, 123)).resolves.toBe(false);
+  });
+
+  it('rejects an account marked deleted even if the row is still read', async () => {
+    await expect(
+      withState({ status: 'deleted', passwordChangedAt: null }).isSessionValid(
+        1,
+        123,
+      ),
+    ).resolves.toBe(false);
   });
 
   it('rejects a pending accountant', async () => {

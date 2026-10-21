@@ -14,6 +14,7 @@ import {
   SESSION_TTL_SECONDS,
   SessionPayload,
 } from '../session.js';
+import { AccountStatus } from '../../accountants/dto/accountant.enums.js';
 
 export const ACCOUNT_PENDING =
   'Contul dvs. așteaptă aprobarea administratorului.';
@@ -40,10 +41,14 @@ export class AuthService {
       dto.password,
       accountant?.passwordHash ?? (await unknownAccountHash()),
     );
-    if (!accountant || !passwordOk) {
+    if (
+      !accountant ||
+      !passwordOk ||
+      accountant.status === AccountStatus.Deleted
+    ) {
       throw new UnauthorizedException('Email sau parolă incorectă');
     }
-    if (accountant.status !== 'active') {
+    if (accountant.status !== AccountStatus.Active) {
       throw new ForbiddenException(ACCOUNT_PENDING);
     }
     return accountant;
@@ -62,7 +67,7 @@ export class AuthService {
     issuedAt: number | undefined,
   ): Promise<boolean> {
     const state = await this.accountants.findSessionState(accountantId);
-    if (state?.status !== 'active') return false;
+    if (state?.status !== AccountStatus.Active) return false;
     if (!state.passwordChangedAt) return true;
     const changedAt = Math.floor(state.passwordChangedAt.getTime() / 1000);
     return issuedAt !== undefined && issuedAt >= changedAt;

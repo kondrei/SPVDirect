@@ -13,6 +13,7 @@ import { bucharestToday } from '../helpers/invoice-format.js';
 import type { Invoice } from '../invoice.entity.js';
 import { buildInvoiceServices } from '../../testing/invoice-services.js';
 import { STORAGE_NOT_CONFIGURED } from './invoice-delivery.service.js';
+import { Currency, PaymentMethod } from '../dto/invoice.enums.js';
 
 const COMPANY = {
   id: 7,
@@ -33,8 +34,8 @@ function dto(overrides: Partial<CreateInvoiceDto> = {}): CreateInvoiceDto {
     series: 'FCT',
     issueDate: '2026-10-04',
     deliveryDate: '2026-10-01',
-    currency: 'RON',
-    paymentMethod: 'transfer',
+    currency: Currency.RON,
+    paymentMethod: PaymentMethod.Transfer,
     buyer: { name: 'CLIENT SRL', cui: '87654321', address: 'Str. B' },
     lines: [
       {
@@ -61,9 +62,13 @@ function setup({
   save,
   stored,
   storeConfigured = true,
+  earlierMaximum,
+  earlierTaken,
 }: {
   company?: Company;
   maximum?: number | null;
+  earlierMaximum?: number | null;
+  earlierTaken?: boolean;
   save?: (invoice: Invoice) => Promise<Invoice>;
   stored?: Invoice | null;
   storeConfigured?: boolean;
@@ -94,14 +99,25 @@ function setup({
     get: vi.fn(),
   };
   const mailer = { send: vi.fn().mockResolvedValue(undefined) };
-  const { service } = buildInvoiceServices({
+  const { service, earlier, lockedCompanies } = buildInvoiceServices({
     invoices,
     companies,
     anaf,
     store,
     mailer,
+    earlierMaximum,
+    earlierTaken,
   });
-  return { service, invoices, companies, anaf, store, mailer };
+  return {
+    service,
+    invoices,
+    earlier,
+    lockedCompanies,
+    companies,
+    anaf,
+    store,
+    mailer,
+  };
 }
 
 describe('InvoiceBuyersService.lookupBuyer', () => {
@@ -277,7 +293,7 @@ describe('InvoiceBuyersService.lineSuggestions', () => {
     expect(result[0]).toMatchObject({
       description: invoice.lines[0].description,
       unitPrice: invoice.lines[0].unitPrice,
-      currency: 'RON',
+      currency: Currency.RON,
       issueDate: '2026-10-04',
     });
   });
@@ -303,7 +319,7 @@ describe('InvoicesService.stats', () => {
     invoices.find.mockResolvedValue([
       {
         issueDate: bucharestToday(),
-        currency: 'RON',
+        currency: Currency.RON,
         exchangeRate: null,
         totalNet: 100,
         totalVatRon: 21,
@@ -352,6 +368,52 @@ describe('InvoicesService.create', () => {
     expect(invoice.number).toBe(12);
   });
 
+  it('continues the series of a deleted company with the same CUI', async () => {
+    const { service, earlier } = setup({ maximum: null, earlierMaximum: 41 });
+    expect((await service.create(1, dto())).invoice.number).toBe(42);
+    expect(earlier.withDeleted).toHaveBeenCalled();
+    expect(earlier.where).toHaveBeenCalledWith('i.series = :series', {
+      series: 'FCT',
+    });
+  });
+
+  it('keeps its own numbering when it is ahead of a deleted company', async () => {
+    const { service } = setup({ maximum: 11, earlierMaximum: 5 });
+    expect((await service.create(1, dto())).invoice.number).toBe(12);
+  });
+
+  it('answers 409 when a deleted company with the same CUI used the requested number', async () => {
+    const { service, invoices } = setup({ earlierTaken: true });
+    await expect(service.create(1, dto({ number: 5 }))).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(invoices.save).not.toHaveBeenCalled();
+  });
+
+  it('locks the live company row before numbering', async () => {
+    const { service, lockedCompanies, invoices } = setup();
+    await service.create(1, dto());
+    expect(lockedCompanies).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        where: { accountantId: 1, id: 7 },
+        lock: { mode: 'pessimistic_write' },
+      }),
+    );
+    expect(lockedCompanies.mock.invocationCallOrder[0]).toBeLessThan(
+      invoices.maximum.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('answers 404 when the company was deleted while the invoice was being issued', async () => {
+    const { service, lockedCompanies, invoices } = setup();
+    lockedCompanies.mockResolvedValueOnce([]);
+    await expect(service.create(1, dto())).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(invoices.save).not.toHaveBeenCalled();
+  });
+
   it('starts a new series at 1', async () => {
     const { service } = setup({ maximum: null });
     expect((await service.create(1, dto())).invoice.number).toBe(1);
@@ -388,9 +450,9 @@ describe('InvoicesService.create', () => {
 
   it('requires the exchange rate for foreign currency invoices', async () => {
     const { service } = setup();
-    await expect(service.create(1, dto({ currency: 'EUR' }))).rejects.toThrow(
-      'cursul de schimb',
-    );
+    await expect(
+      service.create(1, dto({ currency: Currency.EUR })),
+    ).rejects.toThrow('cursul de schimb');
   });
 
   it('drops the exchange rate of RON invoices', async () => {

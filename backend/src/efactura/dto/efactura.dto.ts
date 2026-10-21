@@ -8,22 +8,20 @@ import {
   ArrayMaxSize,
   IsArray,
   IsBoolean,
-  IsIn,
+  IsEnum,
   IsInt,
   IsOptional,
   Max,
   Min,
 } from 'class-validator';
+import {
+  EfacturaStandard,
+  MessageFilter,
+  ValidateStandard,
+} from './efactura.enums.js';
 
-export const UPLOAD_STANDARDS = ['UBL', 'CN', 'CII', 'RASP'] as const;
-export const VALIDATE_STANDARDS = ['FACT1', 'FCN'] as const;
-export const MESSAGE_FILTERS = ['E', 'P', 'T', 'R'] as const;
 export const MAX_MESSAGE_DAYS = 60;
 export const MAX_XML_BYTES = 10 * 1024 * 1024;
-
-export type UploadStandard = (typeof UPLOAD_STANDARDS)[number];
-export type ValidateStandard = (typeof VALIDATE_STANDARDS)[number];
-export type MessageFilter = (typeof MESSAGE_FILTERS)[number];
 
 export function assertXmlPayload(xml: string): void {
   if (!xml.trim()) throw new BadRequestException('Fișierul XML este gol');
@@ -64,10 +62,10 @@ export class UploadXmlDto {
   @Min(1)
   companyId: number;
 
-  @IsIn(UPLOAD_STANDARDS, {
-    message: `Standardul trebuie să fie ${UPLOAD_STANDARDS.join(', ')}`,
+  @IsEnum(EfacturaStandard, {
+    message: `Standardul trebuie să fie ${Object.values(EfacturaStandard).join(', ')}`,
   })
-  standard: UploadStandard;
+  standard: EfacturaStandard;
 
   @IsOptional()
   @Transform(toBoolean)
@@ -92,8 +90,8 @@ export class UploadXmlDto {
 
 export class ValidateXmlDto {
   @IsOptional()
-  @IsIn(VALIDATE_STANDARDS, {
-    message: `Standardul trebuie să fie ${VALIDATE_STANDARDS.join(' sau ')}`,
+  @IsEnum(ValidateStandard, {
+    message: `Standardul trebuie să fie ${Object.values(ValidateStandard).join(' sau ')}`,
   })
   standard?: ValidateStandard;
 }
@@ -159,8 +157,8 @@ export class ListMessagesQuery {
   zile?: number;
 
   @IsOptional()
-  @IsIn(MESSAGE_FILTERS, {
-    message: `Filtrul trebuie să fie ${MESSAGE_FILTERS.join(', ')}`,
+  @IsEnum(MessageFilter, {
+    message: `Filtrul trebuie să fie ${Object.values(MessageFilter).join(', ')}`,
   })
   filtru?: MessageFilter;
 

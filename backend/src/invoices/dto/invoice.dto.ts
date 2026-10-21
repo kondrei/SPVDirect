@@ -7,6 +7,7 @@ import {
   IsArray,
   IsBoolean,
   IsEmail,
+  IsEnum,
   IsIn,
   IsInt,
   IsNumber,
@@ -26,16 +27,13 @@ import {
   normalizeCui,
   normalizeIban,
 } from '../../companies/dto/company.dto.js';
-import {
-  CURRENCIES,
-  PAYMENT_METHODS,
-  UNIT_NAMES,
-  VAT_CATEGORIES,
-  type Currency,
-  type PaymentMethod,
-  type Unit,
-  type VatCategory,
-} from '../invoice.types.js';
+import { UNIT_NAMES, type Unit } from '../invoice.types.js';
+import { Currency, PaymentMethod, VatCategory } from './invoice.enums.js';
+
+export type LineVatCategory = Exclude<VatCategory, VatCategory.NotSubject>;
+export const LINE_VAT_CATEGORIES = Object.values(VatCategory).filter(
+  (c): c is LineVatCategory => c !== VatCategory.NotSubject,
+);
 
 export const MAX_INVOICE_LINES = 100;
 export const MAX_INVOICE_PAGE_SIZE = 100;
@@ -178,10 +176,8 @@ export class InvoiceLineDto {
   vatRate: number;
 
   @IsOptional()
-  @IsIn(VAT_CATEGORIES.filter((c) => c !== 'O'), {
-    message: 'Categorie TVA invalidă',
-  })
-  vatCategory?: Exclude<VatCategory, 'O'>;
+  @IsIn(LINE_VAT_CATEGORIES, { message: 'Categorie TVA invalidă' })
+  vatCategory?: LineVatCategory;
 
   @IsOptional()
   @Transform(({ value }) => blankToNull(value))
@@ -217,7 +213,7 @@ export class CreateInvoiceDto {
   @Matches(ISO_DATE, { message: DATE_MESSAGE })
   dueDate?: string | null;
 
-  @IsIn(CURRENCIES, { message: 'Monedă neacceptată' })
+  @IsEnum(Currency, { message: 'Monedă neacceptată' })
   currency: Currency;
 
   @IsOptional()
@@ -227,7 +223,7 @@ export class CreateInvoiceDto {
   @Max(1_000_000)
   exchangeRate?: number | null;
 
-  @IsIn(PAYMENT_METHODS, { message: 'Mod de plată invalid' })
+  @IsEnum(PaymentMethod, { message: 'Mod de plată invalid' })
   paymentMethod: PaymentMethod;
 
   @IsOptional()

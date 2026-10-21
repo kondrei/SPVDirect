@@ -10,6 +10,7 @@ import {
   validateInvoiceDates,
 } from './invoice-builder.js';
 import { allowedVatRates } from '../helpers/vat-rates.js';
+import { VatCategory } from '../dto/invoice.enums.js';
 
 function lineDto(overrides: Partial<InvoiceLineDto> = {}): InvoiceLineDto {
   return {
@@ -146,7 +147,7 @@ describe('normalizeLines', () => {
     const [result] = normalizeLines([lineDto()], true, '2026-10-01');
     expect(result).toMatchObject({
       vatRate: 21,
-      vatCategory: 'S',
+      vatCategory: VatCategory.Standard,
       vatExemptionReason: null,
     });
   });
@@ -168,7 +169,7 @@ describe('normalizeLines', () => {
 
   it('fills the default legal text for an exempt line', () => {
     const [result] = normalizeLines(
-      [lineDto({ vatRate: 0, vatCategory: 'AE' })],
+      [lineDto({ vatRate: 0, vatCategory: VatCategory.ReverseCharge })],
       true,
       '2026-10-01',
     );
@@ -180,7 +181,7 @@ describe('normalizeLines', () => {
       [
         lineDto({
           vatRate: 0,
-          vatCategory: 'E',
+          vatCategory: VatCategory.Exempt,
           vatExemptionReason: 'Art. 293',
         }),
       ],
@@ -193,7 +194,7 @@ describe('normalizeLines', () => {
   it('rejects an exemption on a taxed line', () => {
     expect(() =>
       normalizeLines(
-        [lineDto({ vatRate: 21, vatCategory: 'E' })],
+        [lineDto({ vatRate: 21, vatCategory: VatCategory.Exempt })],
         true,
         '2026-10-01',
       ),
@@ -206,7 +207,10 @@ describe('normalizeLines', () => {
       false,
       '2026-10-01',
     );
-    expect(result).toMatchObject({ vatRate: 0, vatCategory: 'O' });
+    expect(result).toMatchObject({
+      vatRate: 0,
+      vatCategory: VatCategory.NotSubject,
+    });
     expect(result.vatExemptionReason).toContain('neînregistrat');
   });
 });

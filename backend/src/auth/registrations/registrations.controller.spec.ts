@@ -21,7 +21,7 @@ function setup(found: PendingRegistration | null = pending) {
   const res = {
     status: vi.fn(() => res),
     type: vi.fn(() => res),
-    send: vi.fn(() => res),
+    send: vi.fn((_body?: unknown) => res),
   };
   const controller = new RegistrationsController(
     registrations as unknown as RegistrationsService,

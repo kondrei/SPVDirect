@@ -48,6 +48,12 @@ import { AuthorizationLinksService } from './authorization-links/authorization-l
     SpvArchiveService,
     SpvFileStore,
   ],
-  exports: [AnafGatewayModule, SpvService],
+  exports: [
+    AnafGatewayModule,
+    AnafConnectionsService,
+    SpvService,
+    SpvArchiveService,
+    SpvFileStore,
+  ],
 })
 export class AnafModule {}

@@ -5,10 +5,9 @@ import { IsNull, Repository } from 'typeorm';
 import { Accountant } from '../../accountants/accountant.entity.js';
 import { RegistrationMailer } from './services/registration-mailer.service.js';
 import { hashApprovalToken } from './services/registrations.service.js';
-import {
-  ResendAdminApprovalCommand,
-  type ResendResult,
-} from './resend-admin-approval.command.js';
+import { ResendAdminApprovalCommand } from './resend-admin-approval.command.js';
+import { AccountStatus } from '../../accountants/dto/accountant.enums.js';
+import { ResendResult } from '../dto/auth.enums.js';
 
 @CommandHandler(ResendAdminApprovalCommand)
 export class ResendAdminApprovalHandler implements ICommandHandler<ResendAdminApprovalCommand> {
@@ -23,21 +22,21 @@ export class ResendAdminApprovalHandler implements ICommandHandler<ResendAdminAp
   }: ResendAdminApprovalCommand): Promise<ResendResult> {
     const unnotified = {
       id: accountantId,
-      status: 'pending' as const,
+      status: AccountStatus.Pending,
       adminNotifiedAt: IsNull(),
     };
     const pending = await this.accountants.findOne({
       select: { id: true, email: true, name: true, approvalTokenHash: true },
       where: unnotified,
     });
-    if (!pending?.approvalTokenHash) return 'skipped';
+    if (!pending?.approvalTokenHash) return ResendResult.Skipped;
 
     const token = randomBytes(32).toString('base64url');
     const claimed = await this.accountants.update(
       { ...unnotified, approvalTokenHash: pending.approvalTokenHash },
       { approvalTokenHash: hashApprovalToken(token) },
     );
-    if (!claimed.affected) return 'skipped';
+    if (!claimed.affected) return ResendResult.Skipped;
 
     const sent = await this.mailer.notifyAdmin({
       accountantId: pending.id,
@@ -45,6 +44,6 @@ export class ResendAdminApprovalHandler implements ICommandHandler<ResendAdminAp
       name: pending.name,
       approvalToken: token,
     });
-    return sent ? 'sent' : 'failed';
+    return sent ? ResendResult.Sent : ResendResult.Failed;
   }
 }

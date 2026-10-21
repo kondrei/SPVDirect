@@ -1,15 +1,17 @@
 import {
   Column,
   CreateDateColumn,
+  DeleteDateColumn,
   Entity,
+  Index,
   PrimaryGeneratedColumn,
-  Unique,
   UpdateDateColumn,
 } from 'typeorm';
 import type { AnafTvaRecord } from './helpers/anaf-company-info.js';
 
 @Entity('companies')
-@Unique('uq_companies_accountant_cui', ['accountantId', 'cui'])
+@Index('uq_companies_accountant_cui', { synchronize: false })
+@Index('idx_companies_deleted_at', { synchronize: false })
 export class Company {
   @PrimaryGeneratedColumn('identity', {
     type: 'integer',
@@ -91,4 +93,7 @@ export class Company {
 
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
+
+  @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz', nullable: true })
+  deletedAt: Date | null;
 }

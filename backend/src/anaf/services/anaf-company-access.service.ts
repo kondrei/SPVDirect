@@ -8,6 +8,7 @@ import {
 import type { AxiosResponse } from 'axios';
 import { bodyJson } from '../../efactura/helpers/anaf-body.js';
 import { AnafApiService } from './anaf-api.service.js';
+import { ApiLogService } from '../../api-logs/dto/api-log.enums.js';
 
 interface MessageListBody {
   mesaje?: unknown[];
@@ -34,7 +35,7 @@ export class AnafCompanyAccessService {
         accountantId,
         connectionId,
         companyId,
-        service: 'EFACTURA',
+        service: ApiLogService.Efactura,
         path: this.api.envPath('/FCTEL/rest/listaMesajeFactura'),
         params: { zile: 1, cif: cui },
         responseType: 'text',

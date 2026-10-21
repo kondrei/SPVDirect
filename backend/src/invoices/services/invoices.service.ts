@@ -25,6 +25,7 @@ import {
 } from './invoice-delivery.service.js';
 import { findOwnedInvoice } from './invoice-lookup.js';
 import { InvoiceNumbering } from './invoice-numbering.service.js';
+import { Currency } from '../dto/invoice.enums.js';
 
 export interface InvoiceSummary {
   id: number;
@@ -179,7 +180,7 @@ export class InvoicesService {
   ): Promise<CreatedInvoice> {
     const company = await this.companies.get(accountantId, dto.companyId);
     validateInvoiceDates(dto);
-    if (dto.currency !== 'RON' && !dto.exchangeRate) {
+    if (dto.currency !== Currency.RON && !dto.exchangeRate) {
       throw new BadRequestException(
         'Introduceți cursul de schimb BNR pentru a calcula TVA în RON',
       );
@@ -189,7 +190,7 @@ export class InvoicesService {
     const seller = sellerFromCompany(company);
     const lines = normalizeLines(dto.lines, seller.vatPayer, dto.deliveryDate);
     const exchangeRate =
-      dto.currency === 'RON' ? null : (dto.exchangeRate ?? null);
+      dto.currency === Currency.RON ? null : (dto.exchangeRate ?? null);
     const computed = computeInvoice(lines, exchangeRate);
 
     const invoice = await this.numbering.insert(

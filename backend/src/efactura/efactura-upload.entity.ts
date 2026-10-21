@@ -1,22 +1,17 @@
 import {
   Column,
   CreateDateColumn,
+  DeleteDateColumn,
   Entity,
   Index,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import type { AnafEnvironment } from '../anaf/anaf-environment.js';
-
-export type UploadStatus = 'sending' | 'processing' | 'ok' | 'nok' | 'rejected';
-export const ACTIVE_UPLOAD_STATUSES: readonly UploadStatus[] = [
-  'sending',
-  'processing',
-  'ok',
-];
-export type EfacturaStandard = 'UBL' | 'CN' | 'CII' | 'RASP';
+import { AnafEnvironment } from '../anaf/dto/anaf.enums.js';
+import { UploadStatus, EfacturaStandard } from './dto/efactura.enums.js';
 
 @Entity('efactura_uploads')
 @Index('idx_efactura_uploads_accountant', ['accountantId', 'id'])
+@Index('idx_efactura_uploads_company', ['companyId'])
 @Index('uq_efactura_uploads_invoice_active', { synchronize: false })
 export class EfacturaUpload {
   @PrimaryGeneratedColumn('identity', {
@@ -61,4 +56,7 @@ export class EfacturaUpload {
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
+
+  @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz', nullable: true })
+  deletedAt: Date | null;
 }

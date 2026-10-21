@@ -1,19 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { CompaniesService } from '../../companies/services/companies.service.js';
-import {
-  AuthorizationLinksService,
-  type LinkLookup,
-} from '../authorization-links/authorization-links.service.js';
+import { AuthorizationLinksService } from '../authorization-links/authorization-links.service.js';
 import type { OAuthStatePayload } from '../oauth-state.js';
 import { AnafOAuthService } from './anaf-oauth.service.js';
 import { AnafTokenClient } from './anaf-token-client.service.js';
-
-export type LinkFailure = Exclude<LinkLookup, { ok: true }>['reason'];
+import {
+  AnafConnectionSource,
+  LinkFailure,
+  AuthorizationOutcomeKind,
+} from '../dto/anaf.enums.js';
 
 export type AuthorizationOutcome =
-  | { kind: 'self'; accountantId: number }
-  | { kind: 'link'; companyName: string }
-  | { kind: 'link-invalid'; reason: LinkFailure };
+  | { kind: AuthorizationOutcomeKind.Self; accountantId: number }
+  | { kind: AuthorizationOutcomeKind.Link; companyName: string }
+  | { kind: AuthorizationOutcomeKind.LinkInvalid; reason: LinkFailure };
 
 @Injectable()
 export class AnafAuthorizationService {
@@ -35,15 +35,29 @@ export class AnafAuthorizationService {
     code: string,
   ): Promise<AuthorizationOutcome> {
     const tokens = await this.tokens.exchangeCode(code);
-    if (payload.mode === 'self') {
-      await this.oauth.saveConnection(payload.accountantId, tokens, 'self');
-      return { kind: 'self', accountantId: payload.accountantId };
+    if (payload.mode === AnafConnectionSource.Self) {
+      await this.oauth.saveConnection(
+        payload.accountantId,
+        tokens,
+        AnafConnectionSource.Self,
+      );
+      return {
+        kind: AuthorizationOutcomeKind.Self,
+        accountantId: payload.accountantId,
+      };
     }
 
     const lookup = await this.links.findById(payload.linkId);
-    if (!lookup.ok) return { kind: 'link-invalid', reason: lookup.reason };
+    if (!lookup.ok)
+      return {
+        kind: AuthorizationOutcomeKind.LinkInvalid,
+        reason: lookup.reason,
+      };
     if (!(await this.links.claim(lookup.link.id))) {
-      return { kind: 'link-invalid', reason: 'used' };
+      return {
+        kind: AuthorizationOutcomeKind.LinkInvalid,
+        reason: LinkFailure.Used,
+      };
     }
     let connectionId: number;
     try {
@@ -51,7 +65,7 @@ export class AnafAuthorizationService {
         await this.oauth.saveConnection(
           lookup.link.accountantId,
           tokens,
-          'link',
+          AnafConnectionSource.Link,
         )
       ).id;
     } catch (err) {
@@ -63,6 +77,9 @@ export class AnafAuthorizationService {
     this.logger.log(
       `Authorization link ${lookup.link.id} completed for company ${lookup.company.id}`,
     );
-    return { kind: 'link', companyName: lookup.company.name };
+    return {
+      kind: AuthorizationOutcomeKind.Link,
+      companyName: lookup.company.name,
+    };
   }
 }

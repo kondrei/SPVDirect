@@ -1,16 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { INVOICE_PAGE_SIZE } from '../../common/constants';
 import { api, downloadFile, fetchFile } from '../client';
-import type {
-  EfacturaMessageList,
-  EfacturaUpload,
-  EfacturaUploadPage,
-  MessageFilter,
-  UploadXmlInput,
-  XmlValidation,
-} from '../types';
+import type { EfacturaMessageList, EfacturaUpload, EfacturaUploadPage, UploadXmlInput, XmlValidation } from '../types';
 import { keys } from './queryKeys';
 import { useAccountantApiPath, requirePath } from './accountantPath';
+import { MessageFilter } from '../enums';
 
 export function useEfacturaUploads(query: {
   companyId?: number;

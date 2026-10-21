@@ -1,6 +1,7 @@
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { ChangePasswordDto, UpdateProfileDto } from './profile.dto.js';
+import { ProfessionalTitle } from './accountant.enums.js';
 
 async function check<T extends object>(
   cls: new () => T,
@@ -20,7 +21,7 @@ describe('UpdateProfileDto', () => {
       name: '  Ana Pop ',
       phone: '+40 722 000 000',
       ceccarMember: true,
-      professionalTitle: 'expert_contabil',
+      professionalTitle: ProfessionalTitle.ExpertContabil,
       ceccarNumber: '12345/2010',
       ceccarBranch: 'București',
       ccfNumber: '321',

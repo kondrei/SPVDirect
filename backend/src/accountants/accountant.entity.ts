@@ -1,23 +1,17 @@
 import {
   Column,
   CreateDateColumn,
+  DeleteDateColumn,
   Entity,
+  Index,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-
-export const PROFESSIONAL_TITLES = [
-  'expert_contabil',
-  'contabil_autorizat',
-] as const;
-
-export type ProfessionalTitle = (typeof PROFESSIONAL_TITLES)[number];
-
-export const ACCOUNT_STATUSES = ['pending', 'active'] as const;
-
-export type AccountStatus = (typeof ACCOUNT_STATUSES)[number];
+import { AccountStatus, ProfessionalTitle } from './dto/accountant.enums.js';
 
 @Entity('accountants')
+@Index('accountants_email_key', { synchronize: false })
+@Index('idx_accountants_deleted_at', { synchronize: false })
 export class Accountant {
   @PrimaryGeneratedColumn('identity', {
     type: 'integer',
@@ -26,7 +20,7 @@ export class Accountant {
   })
   id: number;
 
-  @Column({ type: 'citext', unique: true })
+  @Column({ type: 'citext' })
   email: string;
 
   @Column({ name: 'password_hash', type: 'text', select: false })
@@ -35,7 +29,7 @@ export class Accountant {
   @Column({ type: 'text', nullable: true })
   name: string | null;
 
-  @Column({ type: 'text', default: 'pending' })
+  @Column({ type: 'text', default: AccountStatus.Pending })
   status: AccountStatus;
 
   @Column({
@@ -95,4 +89,7 @@ export class Accountant {
 
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
+
+  @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz', nullable: true })
+  deletedAt: Date | null;
 }

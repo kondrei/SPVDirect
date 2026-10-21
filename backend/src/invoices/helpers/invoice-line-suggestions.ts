@@ -1,5 +1,6 @@
 import type { Invoice } from '../invoice.entity.js';
-import type { Currency, Unit, VatCategory } from '../invoice.types.js';
+import type { Unit } from '../invoice.types.js';
+import { VatCategory, Currency } from '../dto/invoice.enums.js';
 
 export const SUGGESTION_INVOICE_LIMIT = 50;
 export const MAX_LINE_SUGGESTIONS = 50;

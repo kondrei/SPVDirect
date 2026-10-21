@@ -1,4 +1,4 @@
-import type { VatCategory } from '../invoice.types.js';
+import { VatCategory } from '../dto/invoice.enums.js';
 
 export const VAT_RATE_CHANGE_DATE = '2025-08-01';
 
@@ -7,11 +7,12 @@ export function allowedVatRates(deliveryDate: string): number[] {
 }
 
 export const DEFAULT_EXEMPTION_REASON: Record<
-  Exclude<VatCategory, 'S'>,
+  Exclude<VatCategory, VatCategory.Standard>,
   string
 > = {
-  Z: 'Operațiune cu cotă zero de TVA',
-  E: 'Scutit de TVA conform art. 292 din Codul fiscal',
-  AE: 'Taxare inversă conform art. 331 din Codul fiscal',
-  O: 'Furnizor neînregistrat în scopuri de TVA',
+  [VatCategory.ZeroRated]: 'Operațiune cu cotă zero de TVA',
+  [VatCategory.Exempt]: 'Scutit de TVA conform art. 292 din Codul fiscal',
+  [VatCategory.ReverseCharge]:
+    'Taxare inversă conform art. 331 din Codul fiscal',
+  [VatCategory.NotSubject]: 'Furnizor neînregistrat în scopuri de TVA',
 };

@@ -5,6 +5,7 @@ import {
   distinctLineSuggestions,
   MAX_LINE_SUGGESTIONS,
 } from './invoice-line-suggestions.js';
+import { VatCategory, Currency } from '../dto/invoice.enums.js';
 
 function invoiceLine(overrides: Partial<InvoiceLine> = {}): InvoiceLine {
   return {
@@ -13,7 +14,7 @@ function invoiceLine(overrides: Partial<InvoiceLine> = {}): InvoiceLine {
     unit: 'serviciu',
     unitPrice: 1000,
     vatRate: 21,
-    vatCategory: 'S',
+    vatCategory: VatCategory.Standard,
     vatExemptionReason: null,
     netAmount: 1000,
     ...overrides,
@@ -24,7 +25,12 @@ function row(
   lines: InvoiceLine[],
   overrides: Partial<Pick<Invoice, 'currency' | 'issueDate'>> = {},
 ): Pick<Invoice, 'lines' | 'currency' | 'issueDate'> {
-  return { lines, currency: 'RON', issueDate: '2026-10-01', ...overrides };
+  return {
+    lines,
+    currency: Currency.RON,
+    issueDate: '2026-10-01',
+    ...overrides,
+  };
 }
 
 describe('distinctLineSuggestions', () => {
@@ -39,7 +45,7 @@ describe('distinctLineSuggestions', () => {
             unit: 'luni',
             unitPrice: 500,
             vatRate: 0,
-            vatCategory: 'E',
+            vatCategory: VatCategory.Exempt,
           }),
         ]),
       ]),
@@ -50,8 +56,8 @@ describe('distinctLineSuggestions', () => {
         unit: 'serviciu',
         unitPrice: 1000,
         vatRate: 21,
-        vatCategory: 'S',
-        currency: 'RON',
+        vatCategory: VatCategory.Standard,
+        currency: Currency.RON,
         issueDate: '2026-10-01',
       },
       {
@@ -60,8 +66,8 @@ describe('distinctLineSuggestions', () => {
         unit: 'luni',
         unitPrice: 500,
         vatRate: 0,
-        vatCategory: 'E',
-        currency: 'RON',
+        vatCategory: VatCategory.Exempt,
+        currency: Currency.RON,
         issueDate: '2026-10-01',
       },
     ]);
@@ -92,7 +98,7 @@ describe('distinctLineSuggestions', () => {
   it('keeps the same description once per currency', () => {
     const result = distinctLineSuggestions([
       row([invoiceLine()]),
-      row([invoiceLine({ unitPrice: 200 })], { currency: 'EUR' }),
+      row([invoiceLine({ unitPrice: 200 })], { currency: Currency.EUR }),
     ]);
     expect(result.map((s) => s.currency)).toEqual(['RON', 'EUR']);
   });

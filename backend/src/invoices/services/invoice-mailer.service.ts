@@ -15,8 +15,11 @@ import {
   stornoReference,
   invoiceNumber,
 } from '../helpers/invoice-format.js';
+import {
+  ApiLogService,
+  ApiLogMethod,
+} from '../../api-logs/dto/api-log.enums.js';
 
-export const INVOICE_MAIL_LOG_SERVICE = 'SMTP';
 export const INVOICE_MAIL_LOG_ENDPOINT = 'invoice';
 
 @Injectable()
@@ -35,8 +38,8 @@ export class InvoiceMailer {
         accountantId: invoice.accountantId,
         anafConnectionId: null,
         companyId: invoice.companyId,
-        service: INVOICE_MAIL_LOG_SERVICE,
-        method: 'SEND',
+        service: ApiLogService.Smtp,
+        method: ApiLogMethod.Send,
         endpoint: INVOICE_MAIL_LOG_ENDPOINT,
       },
       async (outcome) => {

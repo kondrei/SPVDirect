@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { useCompanies } from '../../api/hooks/companies';
 import { useDownloadUpload, useEfacturaUploads, useRefreshUpload, useUploadXml } from '../../api/hooks/efactura';
-import type { EfacturaStandard, EfacturaUpload } from '../../api/types';
+import type { EfacturaUpload } from '../../api/types';
 import { INVOICE_PAGE_SIZE } from '../../common/constants';
 import { EfacturaStatusBadge } from '../../components/efactura/EfacturaStatusBadge';
 import { EmptyState } from '../../components/EmptyState';
@@ -19,19 +19,20 @@ import {
 } from '../../components/ui';
 import { useAppPath } from '../../hooks/useAppPath';
 import { formatDateTime } from '../../lib/format';
+import { EfacturaStandard, UploadStatus } from '../../api/enums';
 
 const STANDARDS: { value: EfacturaStandard; label: string }[] = [
-  { value: 'UBL', label: 'UBL, factură' },
-  { value: 'CN', label: 'CN, notă de credit' },
-  { value: 'CII', label: 'CII, factură' },
-  { value: 'RASP', label: 'RASP, răspuns la factură' },
+  { value: EfacturaStandard.UBL, label: 'UBL, factură' },
+  { value: EfacturaStandard.CN, label: 'CN, notă de credit' },
+  { value: EfacturaStandard.CII, label: 'CII, factură' },
+  { value: EfacturaStandard.RASP, label: 'RASP, răspuns la factură' },
 ];
 
 function UploadForm() {
   const companies = useCompanies();
   const upload = useUploadXml();
   const [companyId, setCompanyId] = useState('');
-  const [standard, setStandard] = useState<EfacturaStandard>('UBL');
+  const [standard, setStandard] = useState<EfacturaStandard>(EfacturaStandard.UBL);
   const [file, setFile] = useState<File | null>(null);
   const [extern, setExtern] = useState(false);
   const [autofactura, setAutofactura] = useState(false);
@@ -143,7 +144,7 @@ function UploadForm() {
           </Alert>
         ) : null}
         {upload.isSuccess ? (
-          upload.data.status === 'rejected' ? (
+          upload.data.status === UploadStatus.Rejected ? (
             <Alert tone="danger" title="ANAF a refuzat fișierul.">
               {upload.data.errorMessage}
             </Alert>
@@ -241,7 +242,7 @@ export function EfacturaPage() {
       header: <span className="spv-sr-only">Acțiuni</span>,
       render: (u) => (
         <span className="spv-row">
-          {u.status === 'processing' ? (
+          {u.status === UploadStatus.Processing ? (
             <Button
               size="sm"
               aria-label={`Verifică starea ${u.uploadIndex}`}

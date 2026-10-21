@@ -36,6 +36,7 @@ import {
   plural,
   pluralFirme,
 } from '../../lib/format';
+import { BulkCreateStatus } from '../../api/enums';
 
 const RESULT_STATUS: Record<BulkCompanyResult['status'], Status> = {
   created: 'added',
@@ -68,9 +69,9 @@ function BulkResults({
   const appPath = useAppPath();
   const count = (s: BulkCompanyResult['status']) =>
     results.filter((r) => r.status === s).length;
-  const created = count('created');
-  const exists = count('exists');
-  const notFound = count('not_found');
+  const created = count(BulkCreateStatus.Created);
+  const exists = count(BulkCreateStatus.Exists);
+  const notFound = count(BulkCreateStatus.NotFound);
   return (
     <Card title="Rezultatul adăugării">
       <div className="stack">
@@ -96,7 +97,7 @@ function BulkResults({
               key: 'name',
               header: 'Firmă',
               render: (r) =>
-                r.status === 'created' ? (
+                r.status === BulkCreateStatus.Created ? (
                   <Link
                     className="row-link"
                     to={appPath(`/companies/${r.company.id}`)}

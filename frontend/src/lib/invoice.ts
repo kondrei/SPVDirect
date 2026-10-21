@@ -1,3 +1,4 @@
+import { Currency, PaymentMethod, VatCategory } from '../api/enums';
 import type { InvoiceLineInput, InvoiceUnit } from '../api/types';
 
 export const VAT_RATE_CHANGE_DATE = '2025-08-01';
@@ -15,19 +16,24 @@ export const INVOICE_UNITS: InvoiceUnit[] = [
   'serviciu',
 ];
 
-export const CURRENCIES = ['RON', 'EUR', 'USD', 'GBP', 'CHF'] as const;
+export const CURRENCIES = Object.values(Currency);
 
-export const PAYMENT_LABELS = {
-  transfer: 'Transfer bancar',
-  numerar: 'Numerar',
-  card: 'Card',
-} as const;
+export const PAYMENT_LABELS: Record<PaymentMethod, string> = {
+  [PaymentMethod.Transfer]: 'Transfer bancar',
+  [PaymentMethod.Numerar]: 'Numerar',
+  [PaymentMethod.Card]: 'Card',
+};
 
-export const ZERO_VAT_REASONS = {
-  E: 'Scutit de TVA (art. 292)',
-  Z: 'Cotă zero de TVA',
-  AE: 'Taxare inversă (art. 331)',
-} as const;
+export type ZeroVatCategory =
+  | VatCategory.Exempt
+  | VatCategory.ZeroRated
+  | VatCategory.ReverseCharge;
+
+export const ZERO_VAT_REASONS: Record<ZeroVatCategory, string> = {
+  [VatCategory.Exempt]: 'Scutit de TVA (art. 292)',
+  [VatCategory.ZeroRated]: 'Cotă zero de TVA',
+  [VatCategory.ReverseCharge]: 'Taxare inversă (art. 331)',
+};
 
 export function allowedVatRates(deliveryDate: string): number[] {
   return deliveryDate >= VAT_RATE_CHANGE_DATE ? [21, 11, 0] : [19, 9, 5, 0];

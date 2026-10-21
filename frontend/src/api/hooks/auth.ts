@@ -3,6 +3,7 @@ import { recaptchaToken } from '../../lib/recaptcha';
 import { api, ApiError } from '../client';
 import type { Accountant } from '../types';
 import { keys, removeAccountData } from './queryKeys';
+import { AccountStatus } from '../enums';
 
 export function useMe() {
   return useQuery({
@@ -42,7 +43,7 @@ export function useRegister() {
       password: string;
       name?: string;
     }) =>
-      api<{ status: 'pending' }>('/auth/register', {
+      api<{ status: AccountStatus.Pending }>('/auth/register', {
         method: 'POST',
         json: { ...dto, captchaToken: await recaptchaToken('register') },
       }),

@@ -10,6 +10,7 @@ import { RecaptchaService } from '../services/recaptcha.service.js';
 import { RegisterAccountantCommand } from './register-accountant.command.js';
 import { AccountantRegisteredEvent } from './registration.events.js';
 import { hashApprovalToken } from './services/registrations.service.js';
+import { AccountStatus } from '../../accountants/dto/accountant.enums.js';
 
 export const REGISTER_ACTION = 'register';
 export const EMAIL_TAKEN = 'Există deja un cont sau o cerere cu acest email';
@@ -43,7 +44,7 @@ export class RegisterAccountantHandler implements ICommandHandler<RegisterAccoun
             email: dto.email,
             passwordHash,
             name: dto.name ?? null,
-            status: 'pending',
+            status: AccountStatus.Pending,
             approvalTokenHash: hashApprovalToken(token),
           }),
         );

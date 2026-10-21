@@ -6,9 +6,10 @@ import {
   Unique,
   UpdateDateColumn,
 } from 'typeorm';
-
-export type AnafConnectionStatus = 'active' | 'expired' | 'revoked';
-export type AnafConnectionSource = 'self' | 'link';
+import {
+  AnafConnectionStatus,
+  AnafConnectionSource,
+} from './dto/anaf.enums.js';
 
 @Entity('anaf_connections')
 @Unique('uq_anaf_connections_accountant_serial', ['accountantId', 'certSerial'])
@@ -63,7 +64,7 @@ export class AnafConnection {
   })
   deniedWithFreshTokenAt: Date | null;
 
-  @Column({ type: 'text', default: 'active' })
+  @Column({ type: 'text', default: AnafConnectionStatus.Active })
   status: AnafConnectionStatus;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })

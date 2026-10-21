@@ -1,6 +1,15 @@
 import { useState, type FormEvent } from 'react';
-import { useCaen, useChangePassword, useFirmLookup, useProfile, useUpdateProfile } from '../api/hooks/profile';
-import type { AccountantProfile, ProfessionalTitle } from '../api/types';
+import { useNavigate } from 'react-router';
+import {
+  useCaen,
+  useChangePassword,
+  useDeleteAccount,
+  useExportAccount,
+  useFirmLookup,
+  useProfile,
+  useUpdateProfile,
+} from '../api/hooks/profile';
+import type { AccountantProfile } from '../api/types';
 import { CaenName } from '../components/CaenName';
 import { PageHead } from '../components/PageHead';
 import { QueryError } from '../components/QueryError';
@@ -8,6 +17,7 @@ import { Alert, Button, Card, TextField } from '../components/ui';
 import { formatDate, isValidCui, normalizeCui } from '../lib/format';
 import { MIN_PASSWORD } from '../common/constants';
 import { SelectField } from '../components/SelectField';
+import { ProfessionalTitle } from '../api/enums';
 
 const PROFESSIONAL_TITLES: Record<ProfessionalTitle, string> = {
   expert_contabil: 'Expert contabil',
@@ -408,6 +418,102 @@ function PasswordCard() {
   );
 }
 
+function AccountDataCard() {
+  const exportData = useExportAccount();
+  const remove = useDeleteAccount();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState('');
+  const [touched, setTouched] = useState(false);
+  const exported = exportData.isSuccess;
+
+  const cancel = () => {
+    setOpen(false);
+    setPassword('');
+    setTouched(false);
+    remove.reset();
+  };
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    setTouched(true);
+    if (!password) return;
+    remove.mutate(password, {
+      onSuccess: () => navigate('/', { replace: true }),
+    });
+  };
+
+  return (
+    <Card title="Datele contului">
+      <div className="stack">
+        <div className="spv-row" style={{ justifyContent: 'space-between' }}>
+          <span className="muted small">
+            Arhivă ZIP cu tot contul: profilul, certificatele ANAF (fără tokenuri) și, pentru
+            fiecare firmă, facturile (PDF și XML), mesajele SPV și încărcările e-Factura.
+          </span>
+          <Button
+            size="sm"
+            icon="download"
+            loading={exportData.isPending}
+            onClick={() => exportData.mutate()}
+          >
+            Descarcă toate datele
+          </Button>
+        </div>
+        {exportData.isError ? <Alert tone="danger" title={exportData.error.message} /> : null}
+        {exported ? <Alert tone="success" title="Arhiva contului a fost descărcată." /> : null}
+
+        {open ? (
+          <form onSubmit={submit} noValidate className="stack">
+            <Alert tone="warning" title="Ștergeți contul SPVDirect?">
+              Contul, firmele și toate datele lor (facturi, mesaje SPV, încărcări e-Factura) dispar
+              imediat, iar certificatele ANAF sunt revocate. Datele se șterg definitiv după 30 de
+              zile, iar apoi SPVDirect nu mai păstrează nicio copie. Facturile trebuie păstrate 10
+              ani (Legea contabilității, art. 25), așa că descărcați mai întâi arhiva.
+            </Alert>
+            {remove.isError ? <Alert tone="danger" title={remove.error.message} /> : null}
+            <TextField
+              label="Parola, pentru confirmare"
+              type="password"
+              autoComplete="current-password"
+              maxLength={200}
+              value={password}
+              onChange={(e) => {
+                remove.reset();
+                setPassword(e.target.value);
+              }}
+              error={touched && !password ? 'Introduceți parola.' : undefined}
+            />
+            <div className="spv-row">
+              <Button
+                type="submit"
+                size="sm"
+                variant="danger"
+                icon="trash"
+                loading={remove.isPending}
+                disabled={exportData.isPending}
+              >
+                {exported ? 'Șterge contul' : 'Șterge contul fără export'}
+              </Button>
+              <Button size="sm" variant="ghost" disabled={remove.isPending} onClick={cancel}>
+                Renunță
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <div className="spv-row" style={{ justifyContent: 'space-between' }}>
+            <span className="muted small">
+              Ștergerea contului elimină toate datele din SPVDirect; datele din SPV rămân la ANAF.
+            </span>
+            <Button size="sm" variant="ghost" icon="trash" onClick={() => setOpen(true)}>
+              Șterge contul
+            </Button>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 export function ProfilePage() {
   const profile = useProfile();
 
@@ -424,6 +530,7 @@ export function ProfilePage() {
       <div className="grid-1-1">
         <ProfileForm profile={profile.data} />
         <PasswordCard />
+        <AccountDataCard />
       </div>
     </>
   );

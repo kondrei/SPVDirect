@@ -8,6 +8,10 @@ import type {
   AnafTvaRecord,
   AnafTvaResponse,
 } from '../helpers/anaf-company-info.js';
+import {
+  ApiLogService,
+  ApiLogMethod,
+} from '../../api-logs/dto/api-log.enums.js';
 
 export const MIN_INTERVAL_MS = 1_000;
 export const MAX_CUIS_PER_REQUEST = 100;
@@ -64,8 +68,8 @@ export class AnafCompanyLookupService {
         accountantId,
         anafConnectionId: null,
         companyId,
-        service: 'PlatitorTva',
-        method: 'POST',
+        service: ApiLogService.PlatitorTva,
+        method: ApiLogMethod.Post,
         endpoint: new URL(endpoint).pathname,
       },
       async (outcome) => {

@@ -6,9 +6,8 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { AnafApiService } from '../../services/anaf-api.service.js';
 import type { DownloadFile } from '../../../common/download-file.js';
-import type { CreateSpvRequestDto } from '../spv.dto.js';
-
-export const SPV_SERVICE = 'SPV';
+import type { CreateSpvRequestDto } from '../dto/spv.dto.js';
+import { ApiLogService } from '../../../api-logs/dto/api-log.enums.js';
 
 export interface RawSpvMessage {
   id?: string | number;
@@ -105,7 +104,7 @@ export class SpvService {
     const res = await this.api.request<RawSpvList>({
       accountantId,
       connectionId,
-      service: SPV_SERVICE,
+      service: ApiLogService.Spv,
       baseUrl: this.baseUrl(),
       path: '/listaMesaje',
       params,
@@ -130,7 +129,7 @@ export class SpvService {
     const res = await this.api.request<ArrayBuffer>({
       accountantId,
       connectionId,
-      service: SPV_SERVICE,
+      service: ApiLogService.Spv,
       baseUrl: this.baseUrl(),
       path: '/descarcare',
       params: { id: messageId },
@@ -182,7 +181,7 @@ export class SpvService {
     const res = await this.api.request<RawSpvRequestResult>({
       accountantId,
       connectionId,
-      service: SPV_SERVICE,
+      service: ApiLogService.Spv,
       baseUrl: this.baseUrl(),
       path: '/cerere',
       params,

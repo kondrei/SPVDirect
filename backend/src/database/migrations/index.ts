@@ -16,6 +16,9 @@ import { InvoiceAccountantBuyerIndex1791600000000 } from './1791600000000-Invoic
 import { EfacturaUploadClaim1791700000000 } from './1791700000000-EfacturaUploadClaim.js';
 import { AnafConnectionTokenState1791800000000 } from './1791800000000-AnafConnectionTokenState.js';
 import { IntegerUuidIds1791900000000 } from './1791900000000-IntegerUuidIds.js';
+import { CompanySoftDelete1792000000000 } from './1792000000000-CompanySoftDelete.js';
+import { AccountantSoftDelete1792100000000 } from './1792100000000-AccountantSoftDelete.js';
+import { AccountantDeletedStatus1792200000000 } from './1792200000000-AccountantDeletedStatus.js';
 
 export const migrations = [
   InitialSchema1790200000000,
@@ -36,4 +39,7 @@ export const migrations = [
   EfacturaUploadClaim1791700000000,
   AnafConnectionTokenState1791800000000,
   IntegerUuidIds1791900000000,
+  CompanySoftDelete1792000000000,
+  AccountantSoftDelete1792100000000,
+  AccountantDeletedStatus1792200000000,
 ];

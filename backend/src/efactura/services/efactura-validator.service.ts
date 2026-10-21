@@ -10,18 +10,19 @@ import type { AxiosResponse } from 'axios';
 import { ApiLogsService } from '../../api-logs/api-logs.service.js';
 import { trackApiCall } from '../../api-logs/track-api-call.js';
 import type { DownloadFile } from '../../common/download-file.js';
-import {
-  assertXmlPayload,
-  type ValidateStandard,
-} from '../dto/efactura.dto.js';
+import { assertXmlPayload } from '../dto/efactura.dto.js';
 import {
   bodyJson,
   orNull,
   validationMessages,
   type AnafErrorBody,
 } from '../helpers/anaf-body.js';
+import {
+  ApiLogService,
+  ApiLogMethod,
+} from '../../api-logs/dto/api-log.enums.js';
+import { ValidateStandard, AnafUploadState } from '../dto/efactura.enums.js';
 
-export const EFACTURA_SERVICE = 'EFACTURA';
 const PDF_MAGIC = '%PDF';
 
 export interface ValidationResult {
@@ -45,7 +46,7 @@ export class EfacturaValidator {
   async validate(
     accountantId: number,
     xml: string,
-    standard: ValidateStandard = 'FACT1',
+    standard: ValidateStandard = ValidateStandard.FACT1,
   ): Promise<ValidationResult> {
     const res = await this.post(
       accountantId,
@@ -63,7 +64,7 @@ export class EfacturaValidator {
       );
     }
     return {
-      valid: body.stare === 'ok',
+      valid: body.stare === AnafUploadState.Ok,
       messages: validationMessages(body),
       traceId: orNull(body.trace_id),
     };
@@ -88,7 +89,7 @@ export class EfacturaValidator {
   async transform(
     accountantId: number,
     xml: string,
-    standard: ValidateStandard = 'FACT1',
+    standard: ValidateStandard = ValidateStandard.FACT1,
     skipValidation = false,
   ): Promise<EfacturaFile> {
     const res = await this.post(
@@ -131,8 +132,8 @@ export class EfacturaValidator {
         accountantId,
         anafConnectionId: null,
         companyId: null,
-        service: EFACTURA_SERVICE,
-        method: 'POST',
+        service: ApiLogService.Efactura,
+        method: ApiLogMethod.Post,
         endpoint: path.replace(/^(\/[a-z]+\/[A-Z0-9]+).*/, '$1'),
       },
       async (outcome) => {

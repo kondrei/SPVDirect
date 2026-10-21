@@ -1,6 +1,7 @@
 import type { Status } from '../components/ui';
 import type { AnafConnection } from '../api/types';
 import { DAY_MS, EXPIRING_DAYS } from '../common/constants';
+import { AnafConnectionStatus } from '../api/enums';
 
 export function normalizeCui(value: string): string {
   return value.replace(/\s+/g, '').replace(/^RO/i, '');
@@ -67,10 +68,10 @@ export function connectionStatus(
   c: Pick<AnafConnection, 'status' | 'refreshExpiresAt'>,
   now: Date = new Date(),
 ): Extract<Status, 'active' | 'expiring' | 'expired' | 'revoked'> {
-  if (c.status === 'revoked') return 'revoked';
+  if (c.status === AnafConnectionStatus.Revoked) return 'revoked';
   const days = daysUntil(c.refreshExpiresAt, now);
   if (
-    c.status === 'expired' ||
+    c.status === AnafConnectionStatus.Expired ||
     new Date(c.refreshExpiresAt).getTime() <= now.getTime()
   )
     return 'expired';

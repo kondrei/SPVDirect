@@ -13,6 +13,7 @@ import {
   pluralZile,
 } from './format';
 import { safeNext } from './safeNext';
+import { AnafConnectionStatus } from '../api/enums';
 
 const NOW = new Date('2026-09-23T12:00:00Z');
 const inDays = (d: number) =>
@@ -40,34 +41,34 @@ describe('connectionStatus', () => {
   it('keeps revoked regardless of dates', () => {
     expect(
       connectionStatus(
-        { status: 'revoked', refreshExpiresAt: inDays(300) },
+        { status: AnafConnectionStatus.Revoked, refreshExpiresAt: inDays(300) },
         NOW,
       ),
     ).toBe('revoked');
   });
   it('is active with more than 30 days left', () => {
     expect(
-      connectionStatus({ status: 'active', refreshExpiresAt: inDays(31) }, NOW),
+      connectionStatus({ status: AnafConnectionStatus.Active, refreshExpiresAt: inDays(31) }, NOW),
     ).toBe('active');
   });
   it('is expiring under 30 days', () => {
     expect(
-      connectionStatus({ status: 'active', refreshExpiresAt: inDays(29) }, NOW),
+      connectionStatus({ status: AnafConnectionStatus.Active, refreshExpiresAt: inDays(29) }, NOW),
     ).toBe('expiring');
     expect(
       connectionStatus(
-        { status: 'active', refreshExpiresAt: inDays(0.5) },
+        { status: AnafConnectionStatus.Active, refreshExpiresAt: inDays(0.5) },
         NOW,
       ),
     ).toBe('expiring');
   });
   it('is expired when the refresh token ended, even if the row still says active', () => {
     expect(
-      connectionStatus({ status: 'active', refreshExpiresAt: inDays(-1) }, NOW),
+      connectionStatus({ status: AnafConnectionStatus.Active, refreshExpiresAt: inDays(-1) }, NOW),
     ).toBe('expired');
     expect(
       connectionStatus(
-        { status: 'expired', refreshExpiresAt: inDays(100) },
+        { status: AnafConnectionStatus.Expired, refreshExpiresAt: inDays(100) },
         NOW,
       ),
     ).toBe('expired');

@@ -1,4 +1,5 @@
 import type { Repository } from 'typeorm';
+import { vi } from 'vitest';
 import type { AnafCompanyLookupService } from '../companies/services/anaf-company-lookup.service.js';
 import type { CompaniesService } from '../companies/services/companies.service.js';
 import type { Invoice } from '../invoices/invoice.entity.js';
@@ -16,11 +17,31 @@ export function buildInvoiceServices(deps: {
   anaf?: object;
   store: object;
   mailer: object;
+  earlierMaximum?: number | null;
+  earlierTaken?: boolean;
 }) {
+  const earlier = {
+    withDeleted: vi.fn().mockReturnThis(),
+    innerJoin: vi.fn().mockReturnThis(),
+    where: vi.fn().mockReturnThis(),
+    andWhere: vi.fn().mockReturnThis(),
+    select: vi.fn().mockReturnThis(),
+    getRawOne: vi.fn().mockResolvedValue({ max: deps.earlierMaximum ?? null }),
+    getExists: vi.fn().mockResolvedValue(deps.earlierTaken ?? false),
+  };
+  const lockedCompanies = vi.fn(
+    (_entity: unknown, options: { where: { id?: number } }) =>
+      Promise.resolve([{ id: options.where.id }]),
+  );
   const repo = Object.assign(deps.invoices, {
     manager: {
       transaction: (run: (manager: unknown) => unknown) =>
-        run({ getRepository: () => deps.invoices }),
+        run({
+          getRepository: () => deps.invoices,
+          find: lockedCompanies,
+        }),
+      createQueryBuilder: vi.fn(() => earlier),
+      find: lockedCompanies,
     },
   }) as unknown as Repository<Invoice>;
   const companies = deps.companies as unknown as CompaniesService;
@@ -40,6 +61,8 @@ export function buildInvoiceServices(deps: {
   const storno = new InvoiceStornoService(numbering, delivery);
   return {
     invoices,
+    earlier,
+    lockedCompanies,
     buyers,
     storno,
     delivery,

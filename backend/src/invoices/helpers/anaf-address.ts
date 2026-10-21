@@ -1,4 +1,5 @@
 import type { AnafTvaRecord } from '../../companies/helpers/anaf-company-info.js';
+const BUCHAREST_COUNTY_CODE = 'B';
 
 export interface ParsedAddress {
   street: string | null;
@@ -40,7 +41,7 @@ export function parseAnafAddress(
     .filter(Boolean)
     .join(', ');
   const city =
-    countyCode === 'B' && locality
+    countyCode === BUCHAREST_COUNTY_CODE && locality
       ? (bucharestSector(locality) ?? locality)
       : locality;
   return {

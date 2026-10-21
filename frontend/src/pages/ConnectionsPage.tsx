@@ -25,17 +25,20 @@ import {
   pluralFirme,
   pluralZile,
 } from '../lib/format';
+import { ConnectCallbackStatus, AnafConnectionSource } from '../api/enums';
 
 function CallbackBanner() {
   const [params, setParams] = useSearchParams();
   const status = params.get('status');
-  if (status !== 'ok' && status !== 'error') return null;
+  if (status !== ConnectCallbackStatus.Ok && status !== ConnectCallbackStatus.Error) {
+    return null;
+  }
   const dismiss = (
     <Button size="sm" onClick={() => setParams({}, { replace: true })}>
       Închide
     </Button>
   );
-  return status === 'ok' ? (
+  return status === ConnectCallbackStatus.Ok ? (
     <Alert
       tone="success"
       title="Certificatul a fost conectat."
@@ -113,7 +116,7 @@ function ConnectionCard({
       subtitle={
         <>
           Serie <span className="mono">{groupSerial(c.certSerial)}</span> ·{' '}
-          {c.source === 'self'
+          {c.source === AnafConnectionSource.Self
             ? 'certificatul cabinetului'
             : 'autorizat prin link'}{' '}
           · {pluralFirme(companies)}
@@ -163,7 +166,7 @@ function ConnectionCard({
                 : 'Accesul a expirat.'
             }
           >
-            {c.source === 'self'
+            {c.source === AnafConnectionSource.Self
               ? 'Conectați din nou certificatul cabinetului.'
               : 'Generați un link nou din pagina firmei și trimiteți-l titularului.'}
           </Alert>
@@ -204,7 +207,7 @@ function ConnectionCard({
               Redenumește
             </Button>
           ) : null}
-          {c.source === 'self' &&
+          {c.source === AnafConnectionSource.Self &&
           (status === 'expiring' || status === 'expired') ? (
             <ButtonAnchor
               size="sm"

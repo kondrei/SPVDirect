@@ -8,10 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { AnafConnection } from '../../anaf/anaf-connection.entity.js';
 import { AnafCompanyAccessService } from '../../anaf/services/anaf-company-access.service.js';
-import {
-  isForeignKeyViolation,
-  isUniqueViolation,
-} from '../../common/db-errors.js';
+import { isUniqueViolation } from '../../common/db-errors.js';
 import { validateLogo } from '../helpers/company-logo.js';
 import {
   companyFieldsFromAnaf,
@@ -24,13 +21,17 @@ import {
   CreateCompanyDto,
   UpdateCompanyDto,
 } from '../dto/company.dto.js';
+import { BulkCreateStatus } from '../dto/company.enums.js';
 
 export const CUI_NOT_FOUND =
   'CUI incorect: nu există nicio firmă cu acest CUI în baza de date ANAF.';
 
 export type BulkCreateResult =
-  | { cui: string; status: 'created'; company: Company }
-  | { cui: string; status: 'exists' | 'not_found' };
+  | { cui: string; status: BulkCreateStatus.Created; company: Company }
+  | {
+      cui: string;
+      status: BulkCreateStatus.Exists | BulkCreateStatus.NotFound;
+    };
 
 @Injectable()
 export class CompaniesService {
@@ -111,12 +112,12 @@ export class CompaniesService {
     const results: BulkCreateResult[] = [];
     for (const cui of cuis) {
       if (existing.has(cui)) {
-        results.push({ cui, status: 'exists' });
+        results.push({ cui, status: BulkCreateStatus.Exists });
         continue;
       }
       const record = found.get(Number(cui));
       if (!record) {
-        results.push({ cui, status: 'not_found' });
+        results.push({ cui, status: BulkCreateStatus.NotFound });
         continue;
       }
       try {
@@ -128,10 +129,10 @@ export class CompaniesService {
             anafSyncedAt: new Date(),
           }),
         );
-        results.push({ cui, status: 'created', company });
+        results.push({ cui, status: BulkCreateStatus.Created, company });
       } catch (err) {
         if (!isUniqueViolation(err)) throw err;
-        results.push({ cui, status: 'exists' });
+        results.push({ cui, status: BulkCreateStatus.Exists });
       }
     }
     return results;
@@ -233,19 +234,5 @@ export class CompaniesService {
     );
     company.logoContentType = null;
     return company;
-  }
-
-  async remove(accountantId: number, id: number): Promise<void> {
-    const company = await this.get(accountantId, id);
-    try {
-      await this.companies.remove(company);
-    } catch (err) {
-      if (isForeignKeyViolation(err)) {
-        throw new ConflictException(
-          'Firma are facturi emise și nu poate fi ștearsă.',
-        );
-      }
-      throw err;
-    }
   }
 }

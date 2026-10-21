@@ -20,7 +20,7 @@ import { attachment } from '../../../common/download-file.js';
 import { ParseIdPipe } from '../../../common/parse-id.pipe.js';
 import { SpvArchiveService } from '../services/spv-archive.service.js';
 import { MAX_IMPORT_BYTES, MAX_SPV_PDF_BYTES } from '../spv-import.js';
-import { ArchiveQuery } from '../spv.dto.js';
+import { ArchiveQuery } from '../dto/spv.dto.js';
 
 @Controller('accountants/:accountantId/spv/archive')
 @UseGuards(JwtAuthGuard, AccountantParamGuard)

@@ -1,5 +1,6 @@
 import { line } from '../../testing/invoice-fixtures.js';
 import { computeInvoice, fromCents, toCents } from './invoice-calc.js';
+import { VatCategory } from '../dto/invoice.enums.js';
 
 describe('toCents', () => {
   it('rounds half up without floating point drift', () => {
@@ -56,8 +57,16 @@ describe('computeInvoice', () => {
   it('keeps exempt lines with different reasons in separate groups', () => {
     const { totals } = computeInvoice(
       [
-        line({ vatRate: 0, vatCategory: 'E', vatExemptionReason: 'Scutit A' }),
-        line({ vatRate: 0, vatCategory: 'E', vatExemptionReason: 'Scutit B' }),
+        line({
+          vatRate: 0,
+          vatCategory: VatCategory.Exempt,
+          vatExemptionReason: 'Scutit A',
+        }),
+        line({
+          vatRate: 0,
+          vatCategory: VatCategory.Exempt,
+          vatExemptionReason: 'Scutit B',
+        }),
       ],
       null,
     );
