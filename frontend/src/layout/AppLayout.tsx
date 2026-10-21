@@ -153,6 +153,11 @@ export function AppLayout() {
               icon: 'download',
             },
             {
+              to: path('/efactura/archive'),
+              label: 'Arhivă e-Factura',
+              icon: 'invoice',
+            },
+            {
               to: path('/efactura/validator'),
               label: 'Validator XML',
               icon: 'check',

@@ -9,6 +9,7 @@ import type { AnafConnectionsService } from '../../anaf/services/anaf-connection
 import { SpvMessage } from '../../anaf/spv/spv-message.entity.js';
 import { hashPassword } from '../../common/crypto/password.js';
 import { Company } from '../../companies/company.entity.js';
+import { EfacturaInvoice } from '../../efactura/efactura-invoice.entity.js';
 import { EfacturaUpload } from '../../efactura/efactura-upload.entity.js';
 import { Invoice } from '../../invoices/invoice.entity.js';
 import { Accountant } from '../accountant.entity.js';
@@ -66,6 +67,7 @@ describe('AccountDeletionService.softDelete', () => {
     expect(calls).toEqual([
       ['softDelete', Invoice, { accountantId: 1 }],
       ['softDelete', EfacturaUpload, { accountantId: 1 }],
+      ['softDelete', EfacturaInvoice, { accountantId: 1 }],
       ['softDelete', SpvMessage, { accountantId: 1 }],
       ['softDelete', Company, { accountantId: 1 }],
       ['delete', AuthorizationLink, { accountantId: 1 }],

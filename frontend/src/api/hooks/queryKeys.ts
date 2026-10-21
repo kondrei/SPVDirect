@@ -9,6 +9,7 @@ export const keys = {
   connections: ['connections'] as const,
   invoices: ['invoices'] as const,
   efactura: ['efactura'] as const,
+  efacturaArchive: ['efactura-archive'] as const,
   publicStats: ['public-stats'] as const,
   spvArchive: ['spv-archive'] as const,
   activity: ['activity'] as const,

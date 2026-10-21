@@ -17,4 +17,4 @@ scripts:
       });
       pm.collectionVariables.set('linkToken', link.url.split('/').pop());
     language: text/javascript
-order: 13000
+order: 18000

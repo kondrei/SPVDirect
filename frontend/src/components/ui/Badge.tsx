@@ -48,7 +48,11 @@ export type Status =
   | 'messageError'
   | 'messageReceived'
   | 'messageSent'
-  | 'messageOther';
+  | 'messageOther'
+  | 'archived'
+  | 'parseIncomplete'
+  | 'issuedHere'
+  | 'creditNote';
 
 export const STATUS: Record<
   Status,
@@ -79,6 +83,10 @@ export const STATUS: Record<
   messageReceived: { tone: 'brand', icon: 'download', label: 'Factură primită' },
   messageSent: { tone: 'success', icon: 'upload', label: 'Factură trimisă' },
   messageOther: { tone: 'neutral', icon: 'info', label: 'Mesaj' },
+  archived: { tone: 'success', icon: 'check', label: 'În arhivă' },
+  parseIncomplete: { tone: 'warning', icon: 'alert', label: 'Citire incompletă' },
+  issuedHere: { tone: 'brand', icon: 'invoice', label: 'Emisă în SPVDirect' },
+  creditNote: { tone: 'warning', icon: 'alert', label: 'Notă de credit' },
 };
 
 export function StatusBadge({

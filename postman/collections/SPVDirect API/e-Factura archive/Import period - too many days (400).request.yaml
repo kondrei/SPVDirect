@@ -1,0 +1,23 @@
+$kind: http-request
+url: "{{baseUrl}}/accountants/{{accountantId}}/efactura/companies/{{companyId}}/messages/import-period"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "zile": 61
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      if (!pm.collectionVariables.get('companyId')) {
+        console.log('No company yet: run the Companies folder first.');
+        pm.execution.skipRequest();
+      }
+    language: text/javascript
+  - type: afterResponse
+    code: pm.test('Status 400', () => pm.response.to.have.status(400));
+    language: text/javascript
+order: 2000

@@ -4,7 +4,9 @@ import { AuthorizationLink } from '../../anaf/authorization-links/authorization-
 import type { AnafConnectionsService } from '../../anaf/services/anaf-connections.service.js';
 import type { SpvFileStore } from '../../anaf/spv/services/spv-file-store.service.js';
 import { SpvMessage } from '../../anaf/spv/spv-message.entity.js';
+import { EfacturaInvoice } from '../../efactura/efactura-invoice.entity.js';
 import { EfacturaUpload } from '../../efactura/efactura-upload.entity.js';
+import type { EfacturaFileStore } from '../../efactura/services/efactura-file-store.service.js';
 import { Invoice } from '../../invoices/invoice.entity.js';
 import type { InvoiceFileStore } from '../../invoices/services/invoice-file-store.service.js';
 import { Accountant } from '../../accountants/accountant.entity.js';
@@ -28,7 +30,9 @@ function setup({
   sending = false,
   locked = true,
   unlinked = [] as { id: number }[],
-  stored = {} as Partial<Record<'invoices' | 'messages' | 'live', unknown[]>>,
+  stored = {} as Partial<
+    Record<'invoices' | 'messages' | 'live' | 'archived', unknown[]>
+  >,
 } = {}) {
   const calls: [string, unknown, ...unknown[]][] = [];
   const builder = {
@@ -59,6 +63,10 @@ function setup({
   const repositories = new Map<unknown, { find: ReturnType<typeof vi.fn> }>([
     [Invoice, { find: vi.fn().mockResolvedValue(stored.invoices ?? []) }],
     [
+      EfacturaInvoice,
+      { find: vi.fn().mockResolvedValue(stored.archived ?? []) },
+    ],
+    [
       SpvMessage,
       {
         find: vi.fn((options: { withDeleted?: boolean }) =>
@@ -80,6 +88,7 @@ function setup({
   };
   const invoiceFiles = { remove: vi.fn().mockResolvedValue(undefined) };
   const spvFiles = { remove: vi.fn().mockResolvedValue(undefined) };
+  const efacturaFiles = { remove: vi.fn().mockResolvedValue(undefined) };
   const connections = { removeAll: vi.fn().mockResolvedValue([]) };
   const activity = fakeActivityLogs();
   const service = new CompanyDeletionService(
@@ -87,6 +96,7 @@ function setup({
     companies as unknown as CompaniesService,
     invoiceFiles as unknown as InvoiceFileStore,
     spvFiles as unknown as SpvFileStore,
+    efacturaFiles as unknown as EfacturaFileStore,
     connections as unknown as AnafConnectionsService,
     activity as unknown as ActivityLogsService,
   );
@@ -100,6 +110,7 @@ function setup({
     companies,
     invoiceFiles,
     spvFiles,
+    efacturaFiles,
     connections,
     repositories,
   };
@@ -113,6 +124,7 @@ describe('CompanyDeletionService.softDelete', () => {
     expect(calls).toEqual([
       ['softDelete', Invoice, { companyId: 7 }],
       ['softDelete', EfacturaUpload, { companyId: 7 }],
+      ['softDelete', EfacturaInvoice, { companyId: 7 }],
       ['softDelete', SpvMessage, { companyId: 7 }],
       ['delete', AuthorizationLink, { companyId: 7, usedAt: IsNull() }],
       ['softDelete', Company, { id: 7 }],
@@ -131,7 +143,7 @@ describe('CompanyDeletionService.softDelete', () => {
       { id: In([30, 31]) },
       { companyId: 7 },
     ]);
-    expect(calls[3]).toEqual(['softDelete', SpvMessage, { companyId: 7 }]);
+    expect(calls[4]).toEqual(['softDelete', SpvMessage, { companyId: 7 }]);
   });
 
   it('refuses while an invoice of the company is being sent to ANAF', async () => {
@@ -213,12 +225,36 @@ describe('CompanyDeletionService.purge', () => {
     expect(invoiceFiles.remove).toHaveBeenCalledWith(['1/7/A-000001.pdf']);
     expect(spvFiles.remove).toHaveBeenCalledWith(['1/900.pdf']);
     expect(calls).toEqual([
+      ['delete', EfacturaInvoice, { companyId: 7 }],
       ['delete', EfacturaUpload, { companyId: 7 }],
       ['delete', Invoice, { companyId: 7, stornoOfInvoiceId: Not(IsNull()) }],
       ['delete', Invoice, { companyId: 7 }],
       ['delete', SpvMessage, { companyId: 7 }],
       ['delete', ApiLog, { companyId: 7, service: ApiLogService.Activity }],
       ['delete', Company, { id: 7 }],
+    ]);
+  });
+
+  it('removes the stored ZIPs and PDFs of the e-Factura archive', async () => {
+    const { service, efacturaFiles, repositories } = setup({
+      stored: {
+        archived: [
+          {
+            id: 4,
+            zipStoragePath: '1/7/prod/55.zip',
+            pdfStoragePath: '1/7/prod/55.pdf',
+          },
+          { id: 5, zipStoragePath: null, pdfStoragePath: null },
+        ],
+      },
+    });
+    await service.purge(7);
+    expect(repositories.get(EfacturaInvoice)?.find).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { companyId: 7 }, withDeleted: true }),
+    );
+    expect(efacturaFiles.remove).toHaveBeenCalledWith([
+      '1/7/prod/55.zip',
+      '1/7/prod/55.pdf',
     ]);
   });
 
@@ -285,10 +321,11 @@ describe('CompanyDeletionService.purge', () => {
   });
 
   it('skips Storage when nothing was stored there', async () => {
-    const { service, invoiceFiles, spvFiles } = setup();
+    const { service, invoiceFiles, spvFiles, efacturaFiles } = setup();
     await service.purge(7);
     expect(invoiceFiles.remove).not.toHaveBeenCalled();
     expect(spvFiles.remove).not.toHaveBeenCalled();
+    expect(efacturaFiles.remove).not.toHaveBeenCalled();
   });
 
   it('keeps the rows when Storage fails, so the next run retries', async () => {

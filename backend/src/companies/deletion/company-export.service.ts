@@ -7,7 +7,9 @@ import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import { SpvArchiveService } from '../../anaf/spv/services/spv-archive.service.js';
 import { SpvMessage } from '../../anaf/spv/spv-message.entity.js';
 import type { DownloadFile } from '../../common/download-file.js';
+import type { EfacturaInvoice } from '../../efactura/efactura-invoice.entity.js';
 import { EfacturaUpload } from '../../efactura/efactura-upload.entity.js';
+import { EfacturaArchiveService } from '../../efactura/services/efactura-archive.service.js';
 import { Invoice } from '../../invoices/invoice.entity.js';
 import { InvoiceDeliveryService } from '../../invoices/services/invoice-delivery.service.js';
 import type { Company } from '../company.entity.js';
@@ -15,50 +17,15 @@ import { CompaniesService } from '../services/companies.service.js';
 import { companySpvMessages } from './company-records.js';
 import { toCsv, type CsvValue } from './csv.js';
 import { ZipStream } from './zip-stream.js';
-import { companyExportFilename } from '../dto/company.constants.js';
+import {
+  EFACTURA_ARCHIVE_HEADER,
+  INVOICE_HEADER,
+  SPV_HEADER,
+  UPLOAD_HEADER,
+  companyExportFilename,
+} from '../dto/company.constants.js';
 import { CompanyExportFile, LogoContentType } from '../dto/company.enums.js';
 import type { CompanyExport } from '../dto/company.types.js';
-
-const INVOICE_HEADER = [
-  'id',
-  'serie',
-  'numar',
-  'data_emiterii',
-  'data_livrarii',
-  'scadenta',
-  'moneda',
-  'cumparator',
-  'cui_cumparator',
-  'total_fara_tva',
-  'tva',
-  'total',
-  'storno_pentru',
-  'creata_la',
-];
-
-const UPLOAD_HEADER = [
-  'id',
-  'factura_id',
-  'mediu',
-  'standard',
-  'index_incarcare',
-  'stare',
-  'id_descarcare',
-  'eroare',
-  'verificata_la',
-  'creata_la',
-];
-
-const SPV_HEADER = [
-  'id',
-  'id_mesaj_anaf',
-  'cif',
-  'tip',
-  'detalii',
-  'id_solicitare',
-  'data_anaf',
-  'descarcat_la',
-];
 
 @Injectable()
 export class CompanyExportService {
@@ -74,6 +41,7 @@ export class CompanyExportService {
     private readonly messages: Repository<SpvMessage>,
     private readonly delivery: InvoiceDeliveryService,
     private readonly spv: SpvArchiveService,
+    private readonly efacturaArchive: EfacturaArchiveService,
     private readonly activity: ActivityLogsService,
   ) {}
 
@@ -121,7 +89,7 @@ export class CompanyExportService {
     errors: string[],
   ): Promise<boolean> {
     const accountantId = company.accountantId;
-    const [invoices, uploads, messages] = await Promise.all([
+    const [invoices, uploads, archived, messages] = await Promise.all([
       this.invoices.find({
         where: { accountantId, companyId: company.id },
         order: { issueDate: 'ASC', id: 'ASC' },
@@ -130,6 +98,7 @@ export class CompanyExportService {
         where: { accountantId, companyId: company.id },
         order: { id: 'ASC' },
       }),
+      this.efacturaArchive.forCompany(accountantId, company.id),
       companySpvMessages(this.messages, company)
         .orderBy('m.anafCreatedAt', 'ASC', 'NULLS LAST')
         .addOrderBy('m.id', 'ASC')
@@ -165,6 +134,20 @@ export class CompanyExportService {
         uploads.map((u) => uploadRow(u)),
       ),
     );
+    zip.add(
+      `${prefix}${CompanyExportFile.EfacturaArchiveList}`,
+      toCsv(
+        EFACTURA_ARCHIVE_HEADER,
+        archived.map((a) => archiveRow(a)),
+      ),
+    );
+    const archiveFolder = `${prefix}${CompanyExportFile.EfacturaArchiveFolder}`;
+    for (const row of archived) {
+      if (!(await zip.ready())) return false;
+      await this.addFile(zip, errors, archiveFolder, false, () =>
+        this.efacturaArchive.zip(accountantId, row.id),
+      );
+    }
     return this.writeSpv(
       zip,
       accountantId,
@@ -271,6 +254,32 @@ function uploadRow(u: EfacturaUpload): CsvValue[] {
     u.errorMessage,
     u.checkedAt,
     u.createdAt,
+  ];
+}
+
+function archiveRow(a: EfacturaInvoice): CsvValue[] {
+  return [
+    a.id,
+    a.anafMessageId,
+    a.uploadIndex,
+    a.environment,
+    a.direction,
+    a.standard,
+    a.typeCode,
+    a.number,
+    a.issueDate,
+    a.dueDate,
+    a.currency,
+    a.supplierName,
+    a.supplierCui,
+    a.customerName,
+    a.customerCui,
+    a.totalNet,
+    a.totalVat,
+    a.totalGross,
+    a.invoiceId,
+    a.parseError,
+    a.createdAt,
   ];
 }
 

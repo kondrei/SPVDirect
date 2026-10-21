@@ -11,13 +11,20 @@ import {
   type FindOptionsWhere,
 } from 'typeorm';
 import { Accountant } from '../../accountants/accountant.entity.js';
+import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
+import { jobFailed, purgeCompleted } from '../../api-logs/activity-entries.js';
+import { ScheduledJob } from '../../api-logs/dto/api-log.enums.js';
+import {
+  CRON_OPTIONS,
+  PURGE_LOCK_KEY,
+  PURGE_SCHEDULE,
+} from '../../common/constants.js';
 import { Company } from '../company.entity.js';
+import type { PurgeTally } from '../dto/company.types.js';
 import { CompanyDeletionService } from './company-deletion.service.js';
 
-export const PURGE_SCHEDULE = '0 3 1 * *';
 export const PURGE_GRACE_DAYS = 30;
 export const PURGE_BATCH = 50;
-export const PURGE_LOCK_KEY = 7_400_001;
 const DAY_MS = 24 * 3600 * 1000;
 
 @Injectable()
@@ -32,9 +39,10 @@ export class PurgeJob {
     private readonly accountants: Repository<Accountant>,
     private readonly deletion: CompanyDeletionService,
     @InjectDataSource() private readonly dataSource: DataSource,
+    private readonly activity: ActivityLogsService,
   ) {}
 
-  @Cron(PURGE_SCHEDULE, { timeZone: 'Europe/Bucharest' })
+  @Cron(PURGE_SCHEDULE, CRON_OPTIONS)
   async run(): Promise<void> {
     if (this.running) return;
     this.running = true;
@@ -60,15 +68,23 @@ export class PurgeJob {
         'account',
         (id) => this.deletion.purgeAccountant(id),
       );
-      if (companies || accountants) {
+      if (companies.purged || accountants.purged) {
         this.logger.log(
-          `Purged ${companies} deleted companies and ${accountants} deleted accounts`,
+          `Purged ${companies.purged} deleted companies and ${accountants.purged} deleted accounts`,
         );
       }
+      await this.activity.recordJob(
+        purgeCompleted({
+          companies: companies.purged,
+          accountants: accountants.purged,
+          failed: companies.failed + accountants.failed,
+        }),
+      );
     } catch (err) {
       this.logger.error(
         `Purging deleted data failed: ${(err as Error).message}`,
       );
+      await this.activity.recordJob(jobFailed(ScheduledJob.Purge, err));
     } finally {
       if (locked) {
         await runner
@@ -85,8 +101,8 @@ export class PurgeJob {
     cutoff: Date,
     label: string,
     purge: (id: number) => Promise<void>,
-  ): Promise<number> {
-    let purged = 0;
+  ): Promise<PurgeTally> {
+    const result: PurgeTally = { purged: 0, failed: 0 };
     let lastId = 0;
     for (;;) {
       const due = await repo.find({
@@ -103,14 +119,15 @@ export class PurgeJob {
         lastId = id;
         try {
           await purge(id);
-          purged++;
+          result.purged++;
         } catch (err) {
+          result.failed++;
           this.logger.error(
             `Purging deleted ${label} ${id} failed: ${(err as Error).message}`,
           );
         }
       }
-      if (due.length < PURGE_BATCH) return purged;
+      if (due.length < PURGE_BATCH) return result;
     }
   }
 }

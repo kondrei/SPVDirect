@@ -53,7 +53,6 @@ import {
   ACTIVE_UPLOAD_STATUSES,
   EfacturaStandard,
   ValidateStandard,
-  MessageFilter,
 } from '../dto/efactura.enums.js';
 import type {
   UploadInput,
@@ -63,15 +62,18 @@ import type {
   AnafTarget,
   SendOutcome,
   RawMessageList,
+  MessageQuery,
 } from '../dto/efactura.types.js';
+import {
+  NO_CERTIFICATE,
+  NO_MESSAGES_PATTERN,
+  STALE_SENDING_MS,
+  UPLOAD_INTERRUPTED,
+  ZIP_MAGIC,
+} from '../dto/efactura.constants.js';
+import { EfacturaInvoice } from '../efactura-invoice.entity.js';
 
-export const NO_CERTIFICATE =
-  'Firma nu are un certificat ANAF asociat. Legați un certificat din pagina firmei.';
-export const STALE_SENDING_MS = 5 * 60 * 1000;
-const INTERRUPTED = 'Trimiterea a fost întreruptă înainte de răspunsul ANAF';
-const ZIP_MAGIC = [0x50, 0x4b];
-
-function certified(company: Company): CertifiedCompany {
+export function certified(company: Company): CertifiedCompany {
   if (!company.anafConnectionId) throw new BadRequestException(NO_CERTIFICATE);
   return {
     id: company.id,
@@ -98,6 +100,8 @@ export class EfacturaService {
     @InjectRepository(EfacturaUpload)
     private readonly uploads: Repository<EfacturaUpload>,
     private readonly activity: ActivityLogsService,
+    @InjectRepository(EfacturaInvoice)
+    private readonly archive: Repository<EfacturaInvoice>,
   ) {}
 
   async upload(
@@ -269,23 +273,35 @@ export class EfacturaService {
   async listMessages(
     accountantId: number,
     companyId: number,
-    query: {
-      zile?: number;
-      filtru?: MessageFilter;
-      startTime?: number;
-      endTime?: number;
-      pagina?: number;
-    },
+    query: MessageQuery,
   ): Promise<MessageList> {
     const record = await this.companies.get(accountantId, companyId);
     const company = certified(record);
+    const list = await this.fetchMessages(
+      { accountantId, connectionId: company.connectionId, companyId },
+      company.cui,
+      query,
+    );
+    await this.markArchived(companyId, list);
+    await this.activity.record(
+      accountantId,
+      efacturaMessagesLoaded(record, list.messages.length, query),
+    );
+    return list;
+  }
+
+  async fetchMessages(
+    target: AnafTarget,
+    cui: string,
+    query: MessageQuery,
+  ): Promise<MessageList> {
     const paged = query.startTime !== undefined;
     if (paged && query.endTime === undefined) {
       throw new BadRequestException(
         'Intervalul are nevoie de startTime și endTime',
       );
     }
-    const params: Record<string, string | number> = { cif: company.cui };
+    const params: Record<string, string | number> = { cif: cui };
     if (paged) {
       params.startTime = query.startTime as number;
       params.endTime = query.endTime as number;
@@ -296,9 +312,7 @@ export class EfacturaService {
     if (query.filtru) params.filtru = query.filtru;
 
     const res = await this.api.request<RawMessageList>({
-      accountantId,
-      connectionId: company.connectionId,
-      companyId,
+      ...target,
       service: ApiLogService.Efactura,
       path: this.api.envPath(
         `/FCTEL/rest/${paged ? 'listaMesajePaginatieFactura' : 'listaMesajeFactura'}`,
@@ -311,9 +325,11 @@ export class EfacturaService {
       throw new BadGatewayException('ANAF a returnat un răspuns neașteptat');
     }
     const failure = body.eroare ?? (res.status === 400 ? body.message : null);
-    if (failure) throw new BadRequestException(failure);
+    if (failure && !NO_MESSAGES_PATTERN.test(failure)) {
+      throw new BadRequestException(failure);
+    }
 
-    const list: MessageList = {
+    return {
       title: orNull(body.titlu),
       messages: (body.mesaje ?? []).map((m) => ({
         id: String(m.id),
@@ -323,16 +339,31 @@ export class EfacturaService {
         cif: orNull(m.cif),
         createdAt: anafStampToIso(m.data_creare),
         createdAtRaw: orNull(m.data_creare),
+        archivedId: null,
       })),
       total: body.numar_total_inregistrari ?? null,
       page: body.index_pagina_curenta ?? null,
       pages: body.numar_total_pagini ?? null,
     };
-    await this.activity.record(
-      accountantId,
-      efacturaMessagesLoaded(record, list.messages.length, query),
-    );
-    return list;
+  }
+
+  private async markArchived(
+    companyId: number,
+    list: MessageList,
+  ): Promise<void> {
+    if (!list.messages.length) return;
+    const rows = await this.archive.find({
+      select: { id: true, anafMessageId: true },
+      where: {
+        companyId,
+        environment: this.api.environment(),
+        anafMessageId: In(list.messages.map((m) => m.id)),
+      },
+    });
+    const ids = new Map(rows.map((r) => [r.anafMessageId, r.id]));
+    for (const message of list.messages) {
+      message.archivedId = ids.get(message.id) ?? null;
+    }
   }
 
   async downloadMessage(
@@ -472,7 +503,7 @@ export class EfacturaService {
     }
     await this.uploads.update(
       { id: active.id, status: UploadStatus.Sending },
-      { status: UploadStatus.Rejected, errorMessage: INTERRUPTED },
+      { status: UploadStatus.Rejected, errorMessage: UPLOAD_INTERRUPTED },
     );
     try {
       return await insert();
@@ -534,7 +565,7 @@ export class EfacturaService {
         };
   }
 
-  private async fetchZip(
+  async fetchZip(
     target: AnafTarget,
     environment: AnafEnvironment,
     id: string,

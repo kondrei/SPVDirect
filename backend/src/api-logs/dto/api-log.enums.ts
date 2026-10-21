@@ -37,6 +37,8 @@ export enum ActivityAction {
   EfacturaMessagesLoaded = 'efactura.messages_loaded',
   EfacturaValidated = 'efactura.validated',
   EfacturaTransformed = 'efactura.transformed',
+  EfacturaArchiveImported = 'efactura.archive_imported',
+  EfacturaArchiveEmailed = 'efactura.archive_emailed',
   SpvImported = 'spv.imported',
   SpvDocumentSaved = 'spv.document_saved',
   CertificateConnected = 'certificate.connected',
@@ -44,4 +46,16 @@ export enum ActivityAction {
   CertificateRemoved = 'certificate.removed',
   CertificateTested = 'certificate.tested',
   AuthorizationLinkCreated = 'authorization_link.created',
+}
+
+export enum JobActivityAction {
+  Completed = 'job.completed',
+  Failed = 'job.failed',
+}
+
+export enum ScheduledJob {
+  Purge = 'purge',
+  AdminApprovalRetry = 'admin_approval_retry',
+  EfacturaArchiveSync = 'efactura_archive_sync',
+  SpvSync = 'spv_sync',
 }

@@ -12,6 +12,7 @@ import { SpvMessage } from '../../anaf/spv/spv-message.entity.js';
 import { verifyPassword } from '../../common/crypto/password.js';
 import { lockLiveCompanies } from '../../companies/company-lock.js';
 import { Company } from '../../companies/company.entity.js';
+import { EfacturaInvoice } from '../../efactura/efactura-invoice.entity.js';
 import { EfacturaUpload } from '../../efactura/efactura-upload.entity.js';
 import { Invoice } from '../../invoices/invoice.entity.js';
 import { Accountant } from '../accountant.entity.js';
@@ -53,6 +54,7 @@ export class AccountDeletionService {
       }
       await manager.softDelete(Invoice, { accountantId });
       await manager.softDelete(EfacturaUpload, { accountantId });
+      await manager.softDelete(EfacturaInvoice, { accountantId });
       await manager.softDelete(SpvMessage, { accountantId });
       await manager.softDelete(Company, { accountantId });
       await manager.delete(AuthorizationLink, { accountantId });

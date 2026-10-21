@@ -6,22 +6,39 @@ import {
 import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  ArrayMinSize,
+  ArrayUnique,
   IsArray,
   IsBoolean,
+  IsDateString,
+  IsEmail,
   IsEnum,
   IsInt,
   IsOptional,
+  IsString,
+  Matches,
   Max,
+  MaxLength,
   Min,
 } from 'class-validator';
 import {
+  EfacturaDirection,
   EfacturaStandard,
   MessageFilter,
   ValidateStandard,
 } from './efactura.enums.js';
-
-export const MAX_MESSAGE_DAYS = 60;
-export const MAX_XML_BYTES = 10 * 1024 * 1024;
+import {
+  ANAF_ID_PATTERN,
+  ARCHIVE_PAGE_SIZE,
+  ISO_DATE_PATTERN,
+  MAX_ARCHIVE_PAGE_SIZE,
+  MAX_ARCHIVE_SEARCH,
+  MAX_EMAIL_MESSAGE,
+  MAX_IMPORT_IDS,
+  MAX_LATEST_UPLOAD_IDS,
+  MAX_MESSAGE_DAYS,
+  MAX_XML_BYTES,
+} from './efactura.constants.js';
 
 export function assertXmlPayload(xml: string): void {
   if (!xml.trim()) throw new BadRequestException('Fișierul XML este gol');
@@ -43,7 +60,7 @@ function toBoolean({ value }: { value: unknown }): unknown {
 @Injectable()
 export class ParseAnafIdPipe implements PipeTransform<string, string> {
   transform(value: string): string {
-    if (!/^\d{1,20}$/.test(value)) {
+    if (!ANAF_ID_PATTERN.test(value)) {
       throw new BadRequestException('Identificator invalid');
     }
     return value;
@@ -130,8 +147,6 @@ export class ListUploadsQuery {
   pageSize?: number;
 }
 
-export const MAX_LATEST_UPLOAD_IDS = 100;
-
 export class LatestUploadsQuery {
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string'
@@ -179,4 +194,81 @@ export class ListMessagesQuery {
   @IsInt()
   @Min(1)
   pagina?: number;
+}
+
+export class ImportMessagesDto {
+  @IsArray({ message: 'Alegeți mesajele de importat' })
+  @ArrayMinSize(1, { message: 'Alegeți cel puțin un mesaj' })
+  @ArrayMaxSize(MAX_IMPORT_IDS, {
+    message: `Se pot importa cel mult ${MAX_IMPORT_IDS} de mesaje odată`,
+  })
+  @ArrayUnique({ message: 'Un mesaj apare de mai multe ori' })
+  @IsString({ each: true })
+  @Matches(ANAF_ID_PATTERN, { each: true, message: 'Identificator invalid' })
+  messageIds: string[];
+}
+
+export class ImportPeriodDto {
+  @Type(() => Number)
+  @IsInt({ message: 'Numărul de zile trebuie să fie întreg' })
+  @Min(1, { message: 'Numărul de zile trebuie să fie cel puțin 1' })
+  @Max(MAX_MESSAGE_DAYS, {
+    message: `ANAF permite cel mult ${MAX_MESSAGE_DAYS} de zile`,
+  })
+  zile: number;
+}
+
+export class ArchiveQuery {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  companyId?: number;
+
+  @IsOptional()
+  @IsEnum(EfacturaDirection, {
+    message: `Direcția trebuie să fie ${Object.values(EfacturaDirection).join(' sau ')}`,
+  })
+  direction?: EfacturaDirection;
+
+  @IsOptional()
+  @Matches(ISO_DATE_PATTERN, { message: 'Data de început nu este validă' })
+  @IsDateString({ strict: true }, { message: 'Data de început nu este validă' })
+  from?: string;
+
+  @IsOptional()
+  @Matches(ISO_DATE_PATTERN, { message: 'Data de sfârșit nu este validă' })
+  @IsDateString({ strict: true }, { message: 'Data de sfârșit nu este validă' })
+  to?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(MAX_ARCHIVE_SEARCH, { message: 'Căutarea este prea lungă' })
+  q?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number = 1;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(MAX_ARCHIVE_PAGE_SIZE)
+  pageSize?: number = ARCHIVE_PAGE_SIZE;
+}
+
+export class EmailArchiveDto {
+  @IsEmail({}, { message: 'Adresa de email nu este validă' })
+  @MaxLength(254)
+  to: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(MAX_EMAIL_MESSAGE, {
+    message: `Mesajul poate avea cel mult ${MAX_EMAIL_MESSAGE} de caractere`,
+  })
+  message?: string;
 }

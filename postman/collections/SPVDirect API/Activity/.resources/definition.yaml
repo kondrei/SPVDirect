@@ -1,0 +1,3 @@
+$kind: collection
+description: "The activity log shown on Panou: operations done in the app (companies, invoices, e-Factura, SPV, certificates, profile, login), stored in `api_logs` with `service` `ACTIVITY`. The accountant name is joined from `accountants`. Run after the Companies folder so there is activity to list."
+order: 8000

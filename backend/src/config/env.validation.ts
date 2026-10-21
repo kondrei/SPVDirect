@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import { NodeEnv, SpvStorage } from './dto/env.enums.js';
+import { NodeEnv, FileStorage } from './dto/env.enums.js';
 import { AnafEnvironment } from '../anaf/dto/anaf.enums.js';
 
 export const envValidationSchema = Joi.object({
@@ -44,8 +44,8 @@ export const envValidationSchema = Joi.object({
     .uri()
     .default('https://webservicesp.anaf.ro/prod/FCTEL/rest'),
   SPV_STORAGE: Joi.string()
-    .valid(...Object.values(SpvStorage))
-    .default(SpvStorage.Database),
+    .valid(...Object.values(FileStorage))
+    .default(FileStorage.Database),
   SUPABASE_URL: Joi.string().uri().empty(''),
   SUPABASE_SERVICE_KEY: Joi.string().empty(''),
   SUPABASE_SPV_BUCKET: Joi.string()
@@ -54,6 +54,13 @@ export const envValidationSchema = Joi.object({
   SUPABASE_INVOICE_BUCKET: Joi.string()
     .pattern(/^[a-z0-9][a-z0-9-]{1,62}$/)
     .default('invoices'),
+  EFACTURA_STORAGE: Joi.string()
+    .valid(...Object.values(FileStorage))
+    .default(FileStorage.Database),
+  SUPABASE_EFACTURA_BUCKET: Joi.string()
+    .pattern(/^[a-z0-9][a-z0-9-]{1,62}$/)
+    .default('efactura'),
+  EFACTURA_ARCHIVE_SYNC: Joi.boolean().default(false),
   DATA_GOV_RO_API_URL: Joi.string()
     .uri()
     .default('https://data.gov.ro/api/3/action'),
@@ -77,11 +84,14 @@ export const envValidationSchema = Joi.object({
 })
   .and('HTTPS_KEY_FILE', 'HTTPS_CERT_FILE')
   .custom((env: Record<string, unknown>, helpers) => {
-    if (env.SPV_STORAGE !== SpvStorage.Supabase) return env;
+    const mode = ['SPV_STORAGE', 'EFACTURA_STORAGE'].find(
+      (name) => env[name] === FileStorage.Supabase,
+    );
+    if (!mode) return env;
     for (const key of ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY']) {
       if (!env[key]) {
         return helpers.message({
-          custom: `"${key}" is required when SPV_STORAGE is supabase`,
+          custom: `"${key}" is required when ${mode} is supabase`,
         });
       }
     }
@@ -108,11 +118,14 @@ export interface Env {
   ANAF_SPV_ENDPOINT: string;
   ANAF_TVA_ENDPOINT: string;
   ANAF_EFACTURA_VALIDATE_ENDPOINT: string;
-  SPV_STORAGE: SpvStorage;
+  SPV_STORAGE: FileStorage;
   SUPABASE_URL?: string;
   SUPABASE_SERVICE_KEY?: string;
   SUPABASE_SPV_BUCKET: string;
   SUPABASE_INVOICE_BUCKET: string;
+  EFACTURA_STORAGE: FileStorage;
+  SUPABASE_EFACTURA_BUCKET: string;
+  EFACTURA_ARCHIVE_SYNC: boolean;
   DATA_GOV_RO_API_URL: string;
   RECAPTCHA_SECRET_KEY: string;
   RECAPTCHA_MIN_SCORE: number;

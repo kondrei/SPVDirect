@@ -1,5 +1,5 @@
 $kind: http-request
-description: Returns 204. Skipped unless this run created the company, so existing data is kept.
+description: "Soft delete: marks the company, its invoices, e-Factura uploads and SPV messages as deleted (they disappear from every list) and drops unused authorization links. Returns 204, or 409 while an invoice is being sent to ANAF. A monthly job erases the rows and their Storage files 30 days later. Skipped unless this run created the company, so existing data is kept."
 url: "{{baseUrl}}/accountants/{{accountantId}}/companies/{{companyId}}"
 method: DELETE
 scripts:

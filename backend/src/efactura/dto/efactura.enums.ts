@@ -42,3 +42,31 @@ export enum AnafExecutionStatus {
   Success = '0',
   Error = '1',
 }
+
+export enum EfacturaDirection {
+  Received = 'received',
+  Sent = 'sent',
+}
+
+export enum AnafMessageType {
+  InvoiceSent = 'FACTURA TRIMISA',
+  InvoiceReceived = 'FACTURA PRIMITA',
+  InvoiceErrors = 'ERORI FACTURA',
+}
+
+export enum ImportStatus {
+  Imported = 'imported',
+  Already = 'already',
+  Skipped = 'skipped',
+  Failed = 'failed',
+}
+
+export enum EinvoiceTypeCode {
+  CreditNote = '381',
+}
+
+export enum EfacturaFileKind {
+  Zip = 'zip',
+  Xml = 'xml',
+  Pdf = 'pdf',
+}

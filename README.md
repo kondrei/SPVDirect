@@ -1,7 +1,6 @@
 # SPVDirect – ANAF SPV Accountant Portal
 
-**Language:** Romanian UI · **Stack:** NestJS 12 + React (planned) + PostgreSQL (Supabase) + TypeORM 1.x · **Author:** Andrei
-**Status:** Phase 1 backend scaffold done: accounts, ANAF OAuth, database schema
+**Language:** Romanian UI · **Stack:** NestJS 12 + React + PostgreSQL (Supabase) + TypeORM 1.x · **Author:** Andrei
 
 SPVDirect is an accountant portal for ANAF SPV services: **e-Factura**, **e-Transport** and related tax documents.
 
@@ -13,53 +12,53 @@ SPVDirect/
 
 ---
 
-## How authentication works
+## Features
 
-There are **two separate logins**. Don't confuse them:
+- **Accountant account**: sign up with email and password; an administrator approves each new account before it can be used.
+- **Professional profile**: name, phone, CECCAR membership, CCF card and your own practice (filled in from ANAF by CUI).
+- **Client companies**: add a company by its CUI, one at a time or up to 500 at once. Name, address, VAT status and CAEN activity come from ANAF automatically and can be refreshed anytime.
+- **ANAF certificates**: connect your digital certificate (USB token or cloud) once, then work without plugging it in again. Several certificates per account, each with a name you choose, and a quick connection test.
+- **Authorization links**: when a client holds the certificate, send them a one-time link (valid 7 days) so they can authorize SPVDirect for you without sharing the certificate.
+- **Invoices (Facturi)**: issue fiscal invoices with automatic numbering per series, VAT calculated by rate and delivery date, buyer data filled in from ANAF, line suggestions from earlier invoices to the same buyer and your company logo. Download them as PDF or as the XML ANAF expects.
+- **Storno invoices**: reverse an invoice fully or only some of its lines; the app never lets a line be reversed more than once.
+- **e-Factura**: send invoices (or any XML file) to ANAF, follow their status, read ANAF's answer and download the confirmation. Invoices are checked with ANAF's validator before sending, and the same invoice can't be sent twice by mistake.
+- **e-Factura messages**: see the invoices received and sent through e-Factura for each client company.
+- **e-Factura archive**: keep the invoices from e-Factura after ANAF removes them (ANAF keeps them only 60 days). Search by partner, number or period, see totals, download the original ZIP, the XML or a PDF, and email them. The archive can fill itself three times a week.
+- **XML validator and PDF converter**: check any e-Factura XML with ANAF's validator and turn it into a readable PDF.
+- **SPV messages archive**: keep the messages from your SPV inbox (notices, certificates, reports) and their PDFs in one place, matched to your client companies.
+- **Email and cloud copies**: email any invoice to the client and keep a copy of the PDF in secure cloud storage.
+- **Dashboard (Panou)**: monthly and yearly invoicing totals, the last 6 months at a glance, and an activity log of everything done in the account.
+- **Export and deletion**: download everything held for a company, or for the whole account, as one ZIP. Deleted data can still be recovered for 30 days before it is erased for good.
+- **e-Transport**: coming soon.
 
-| | What | Who issues it | Where it lives |
-|---|---|---|---|
-| **SPVDirect session** | Accountant logs in to *our* app with email + password | SPVDirect (JWT signed with `JWT_SECRET`) | httpOnly cookie `spv_session`, 7 days |
-| **ANAF connection** | A qualified certificate authorizes SPVDirect to call api.anaf.ro | ANAF (OAuth 2.0, JWT tokens signed by ANAF) | `anaf_connections` table, AES-256-GCM encrypted |
+### Scheduled jobs
 
-ANAF only offers OAuth 2.0. The access and refresh tokens it issues are JWTs, per `Oauth_procedura_inregistrare_aplicatii_portal_ANAF.pdf`.
+Some work runs on its own, on a fixed schedule (Romania time, Europe/Bucharest). When several servers run the app, only one of them does each job. Every run is written to the activity log as a system entry, but these entries don't show on Panou or in exports.
 
-### The USB token / certificate is only used during authorization
-
-```
-Accountant (logged in to SPVDirect)
-  → "Conectează certificat ANAF"  (GET /accountants/:accountantId/anaf/connect)
-  → redirect to logincert.anaf.ro/anaf-oauth2/v1/authorize?...&token_content_type=jwt
-  → browser: "Select a certificate" + token PIN   (USB token or cloud certificate)
-  → ANAF checks the SPV PJ role (reprezentant legal / desemnat / împuternicit)
-  → GET /anaf/callback?code=…
-  → backend POST /token (Basic auth, token_content_type=jwt) → access + refresh JWT
-  → tokens encrypted and stored, keyed by the certificate serial
-  → the USB token is no longer needed until the refresh token expires (365 days)
-```
-
-An împuternicit certificate usually covers many CUIs, so one connection can serve many client companies.
-
-### Authorization links (the company's own certificate)
-
-When the certificate belongs to the client company's legal representative:
-
-1. The accountant calls `POST /accountants/:accountantId/companies/:id/authorization-links` and sends the returned URL (valid for 7 days, single use).
-2. The certificate holder opens it on their own PC. A Romanian explanation page appears, with the button **"Autorizează cu certificatul"**.
-3. They go through logincert on their machine. The connection is created under the accountant's account and attached to that company.
-
-### ANAF rules the code follows
-
-- Client credentials go in an **HTTP Basic** header. Scope is empty.
-- `token_content_type=jwt` goes on both the authorize query and the token body.
-- A refresh returns a **new access AND refresh token**. Both are saved.
-- Expiry is read from the JWT `exp` (documented as 90 days for access, 365 days for refresh).
-- There is a 60-second cooldown between token-endpoint calls. Refreshes are serialized per connection.
-- api.anaf.ro allows 1000 requests per minute and returns 403 when unauthorized and 429 when rate limited.
-- e-Factura and e-Transport use `/test/…` and `/prod/…` paths (`ANAF_ENV`). TestOAuth has no prefix.
-- Tokens, codes and Authorization headers are never logged. If tokens leak, ANAF must be told so it can block them.
+| Job | When | What it does |
+|---|---|---|
+| e-Factura archive sync (`EfacturaArchiveSyncJob`) | Monday, Wednesday and Friday at 07:00 | Imports the invoices from the last 60 days into **Arhivă e-Factura** for every company that has a certificate, so nothing is lost when ANAF deletes them. Off by default; turn it on with `EFACTURA_ARCHIVE_SYNC=true` |
+| Account approval reminder (`AdminApprovalRetryJob`) | Every day at 08:00 | Sends the approve/reject email to the administrator again for sign-up requests whose first email failed |
+| Purge of deleted data (`PurgeJob`) | The 1st of every month at 03:00 | Erases for good the companies and accounts deleted more than 30 days ago, with their invoices, e-Factura files, SPV messages and stored PDFs. Any ANAF certificate still connected to a purged account is revoked first |
+| SPV inbox sync (`SpvSyncJob`) | Monday, Wednesday and Friday at 03:00 (when enabled) | Would pull SPV messages and their PDFs from ANAF. **Not active:** ANAF does not accept application access to the SPV inbox yet (see `docs/adr/0001-no-spv-inbox-over-oauth.md`), so the job is not registered |
 
 ---
+
+## User guide for accountants
+
+1. **Sign up.** Open **Cont nou** on the home page. An administrator approves your account, then you can log in and fill in **Profil**.
+2. **Connect your certificate.** In **Certificate ANAF**, choose to connect, then confirm at ANAF with your USB token or cloud certificate. You only do this once; after that the token isn't needed. If a client holds the certificate, open their company and send them a one-time link (**Generează link**, valid 7 days).
+3. **Add companies.** In **Firme**, press **Adaugă** and type the CUI without "RO" (or paste a list). The details come from ANAF. Pick the certificate to use for each company and add the IBAN, contact details and logo for its invoices.
+4. **Issue invoices.** In **Facturi**, pick the company and series, type the buyer's CUI (the details are filled in) and add the lines; VAT is calculated for you. Invoices can't be edited or deleted. To correct one, issue a **storno**.
+5. **Send to e-Factura.** From an invoice, send it to ANAF; it is checked first. Follow its status and download ANAF's answer in **Trimise la ANAF**.
+6. **Keep received invoices.** **Mesaje e-Factura** shows what ANAF holds for the last 60 days. Import them into **Arhivă e-Factura** to keep them after ANAF deletes them.
+7. **SPV messages.** In **Mesaje SPV**, follow the steps on the page: open your message list at ANAF, then paste or upload it here, along with each PDF.
+8. **Export and delete.** **Descarcă arhiva firmei** downloads everything about a company. Keep it, because invoices must be kept for 10 years. Deleted data is erased for good after 30 days.
+
+Your certificate and PIN are only ever used on ANAF's own login page. Everything done in the account appears in the activity log on **Panou**.
+
+---
+
 
 ## API (Phase 1)
 
@@ -115,7 +114,13 @@ When the certificate belongs to the client company's legal representative:
 | GET | `/accountants/:accountantId/efactura/uploads/:id` | session | One upload |
 | POST | `/accountants/:accountantId/efactura/uploads/:id/refresh` | session | Ask ANAF for the state (`stareMesaj`): `processing`, `ok`, `nok` or `rejected`. A final state is returned without calling ANAF again (limit: 100 queries per message per day) |
 | GET | `/accountants/:accountantId/efactura/uploads/:id/download` | session | ANAF's answer as a zip (`descarcare`; limit: 10 downloads per message per day) |
-| GET | `/accountants/:accountantId/efactura/companies/:companyId/messages` | session | Messages from ANAF with the company certificate. Query: `zile` (1–60, default 30), `filtru` (E errors, P received, T sent, R buyer message), or `startTime` + `endTime` (Unix ms) + `pagina` for the paginated list |
+| GET | `/accountants/:accountantId/efactura/companies/:companyId/messages` | session | Messages from ANAF with the company certificate. Query: `zile` (1–60, default 30), `filtru` (E errors, P received, T sent, R buyer message), or `startTime` + `endTime` (Unix ms) + `pagina` for the paginated list. ANAF's "Nu exista mesaje" is an empty list. Each message has `archivedId` when it is already in the e-Factura archive |
+| POST | `/accountants/:accountantId/efactura/companies/:companyId/messages/import` | session | Import up to 50 messages (`{ messageIds }`) into the e-Factura archive: each is downloaded once, its invoice XML is read (UBL, credit note or CII) and the signed ZIP is stored. Per message: `imported`, `already`, `skipped` (not an invoice, or the company is neither supplier nor buyer) or `failed` with a reason |
+| POST | `/accountants/:accountantId/efactura/companies/:companyId/messages/import-period` | session | Import the invoices (FACTURA PRIMITA / TRIMISA) of the last `zile` days (1–60), at most 50 per call. Returns `{ found, remaining, results }`; call again while `remaining > 0` |
+| GET | `/accountants/:accountantId/efactura/archive` | session | Archived invoices. Query: `direction` (`received` / `sent`), `companyId`, `from`/`to` (issue date), `q` (number, partner or CUI), `page`, `pageSize`. Returns `{ items, total, page, pageSize, totals }` (sum per currency, credit notes negative) |
+| GET | `/accountants/:accountantId/efactura/archive/:id` | session | One archived invoice with its lines |
+| GET | `/accountants/:accountantId/efactura/archive/:id/{zip,xml,pdf}` | session | The original ZIP from ANAF, the invoice XML from it, or a PDF made once by ANAF's converter (no validation) and cached. CII has no PDF (400) |
+| POST | `/accountants/:accountantId/efactura/archive/:id/email` | session | Email the archived invoice (`{ to, message? }`) with the PDF and the original ZIP |
 | GET | `/accountants/:accountantId/efactura/companies/:companyId/messages/:messageId/download` | session | Download a message (an invoice received, or an error report) as a zip |
 | POST | `/accountants/:accountantId/efactura/validate` | session | Validate an XML with ANAF's public validator (multipart `file`, optional `standard` FACT1 or FCN). Returns `{ valid, messages, traceId }` |
 | POST | `/accountants/:accountantId/efactura/invoices/:invoiceId/validate` | session | Same, for the XML of an issued invoice |
@@ -142,6 +147,7 @@ The schema is managed by TypeORM migrations in `backend/src/database/migrations`
 | `authorization_links` | Delegated-authorization links (only the SHA-256 of the token is stored) |
 | `spv_messages` | SPV messages kept per accountant (unique on ANAF message id), PDF in a `bytea` column (`SPV_STORAGE=database`, default) or in a private Supabase Storage bucket (`SPV_STORAGE=supabase`, path kept in `storage_path`), matched to a company by CIF. Only messages saved before SPV was turned off are here: the nightly sync job (`SpvSyncJob`, which also moved PDFs from the database to Supabase Storage) is not registered, because SPVWS2 does not accept ANAF OAuth tokens (docs/adr/0001-no-spv-inbox-over-oauth.md) |
 | `invoices` | Issued invoices, unique on company + series + number. Seller and buyer are stored as they were on the issue date (jsonb), with lines, VAT breakdown and totals; `storage_path` points to the PDF in the private bucket `SUPABASE_INVOICE_BUCKET` when the user chose to save it; `emailed_to` / `emailed_at` record the last send. A storno invoice points to the invoice it reverses (`storno_of_*`). Rows of a deleted company carry `deleted_at` until the monthly purge |
+| `efactura_invoices` | The e-Factura archive: one row per imported ANAF message (unique per company, environment and message among live rows), direction `received`/`sent`, the header read from the XML, the signed ZIP and the cached PDF (bytea or Supabase Storage, `EFACTURA_STORAGE`), `invoice_id` when it is one of our own uploads |
 | `efactura_uploads` | One row per upload to ANAF e-Factura: index, environment it was sent to, status (`sending` while the request is in flight, then `processing`, `ok`, `nok` or `rejected`), download id. A partial unique index allows one `sending`/`processing`/`ok` upload per invoice; a `sending` row older than 5 minutes is treated as an interrupted send and can be taken over |
 | `api_logs` | Audit of every api.anaf.ro call and every VAT-registry lookup (service, endpoint, status, latency) |
 
@@ -196,10 +202,9 @@ Then open `https://localhost:3000/accountants/<your id>/anaf/connect` in the bro
 
 - [x] Phase 1: backend scaffold, accounts, ANAF OAuth (self + authorization links), schema
 - [x] Phase 2, e-Factura: upload, stareMesaj, listaMesajeFactura (plain and paginated), descarcare, validation and XML to PDF. Not done: ANAF's signature validation service.
-- [ ] Phase 2, e-Transport module
-- [ ] Phase 3: React frontend. Done: Login, Dashboard, Companies, Connections. Invoices (Facturi): issue fiscal invoices as PDF and CIUS-RO XML. e-Factura: send invoices and XML files, state, messages, validator. Still to do: e-Transport.
-- [ ] Phase 4: a background job for proactive token refresh and expiry notifications, plus rate limiting for ANAF calls (1000 per minute)
-- [ ] Phase 5: Azure deployment, CI/CD
+- [x] Phase 3: React frontend. Done: Login, Dashboard, Companies, Connections. Invoices (Facturi): issue fiscal invoices as PDF and CIUS-RO XML. e-Factura: send invoices and XML files, state, messages, validator. Still to do: e-Transport.
+- [ ] Phase 4, e-Transport module
+- [ ] Phase 5: AWS deployment, CI/CD
 
 ## References
 - ANAF OAuth procedure: `Oauth_procedura_inregistrare_aplicatii_portal_ANAF.pdf` (anaf.ro → Dezvoltatori aplicații → Instrucțiuni de utilizare)

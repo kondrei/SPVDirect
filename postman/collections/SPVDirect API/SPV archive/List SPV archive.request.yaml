@@ -1,0 +1,18 @@
+$kind: http-request
+url: "{{baseUrl}}/accountants/{{accountantId}}/spv/archive?page=1&pageSize=25"
+method: GET
+queryParams:
+  page: "1"
+  pageSize: "25"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status 200', () => pm.response.to.have.status(200));
+      pm.test('Page shape', () => {
+        const p = pm.response.json();
+        pm.expect(p.items).to.be.an('array');
+        pm.expect(p.total).to.be.a('number');
+        pm.expect(p.page).to.eql(1);
+      });
+    language: text/javascript
+order: 1000

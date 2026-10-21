@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseStorage } from '../../../common/storage/supabase-storage.js';
-import { SpvStorage } from '../../../config/dto/env.enums.js';
+import { FileStorage } from '../../../config/dto/env.enums.js';
 
 @Injectable()
 export class SpvFileStore {
@@ -16,7 +16,7 @@ export class SpvFileStore {
   }
 
   get enabled(): boolean {
-    return this.config.get<SpvStorage>('SPV_STORAGE') === SpvStorage.Supabase;
+    return this.config.get<FileStorage>('SPV_STORAGE') === FileStorage.Supabase;
   }
 
   pathFor(accountantId: number, anafMessageId: string): string {

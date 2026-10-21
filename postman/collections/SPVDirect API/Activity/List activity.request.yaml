@@ -1,0 +1,31 @@
+$kind: http-request
+description: "Query: `page` (default 1), `pageSize` (default 20, max 100), `companyId`, `action` (e.g. `invoice.issued`, `invoice.storno`, `company.created`, `company.deleted`, `efactura.uploaded`, `efactura.validated`, `efactura.messages_loaded`). Returns `{ items, total, page, pageSize }`, newest first; every item has `accountantName` from the profile."
+url: "{{baseUrl}}/accountants/{{accountantId}}/activity"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status 200', () => pm.response.to.have.status(200));
+      pm.test('Page shape', () => {
+        const p = pm.response.json();
+        pm.expect(p.items).to.be.an('array');
+        pm.expect(p.total).to.be.a('number');
+        pm.expect(p.page).to.eql(1);
+        pm.expect(p.pageSize).to.eql(20);
+      });
+      pm.test('Newest first, with the accountant name', () => {
+        const items = pm.response.json().items;
+        items.forEach((i) => {
+          pm.expect(i).to.have.keys('id', 'action', 'companyId', 'description', 'details', 'accountantName', 'createdAt');
+          pm.expect(i.accountantName).to.be.a('string').and.not.empty;
+        });
+        for (let k = 1; k < items.length; k++) {
+          pm.expect(new Date(items[k - 1].createdAt) >= new Date(items[k].createdAt)).to.be.true;
+        }
+      });
+      pm.test('Logs the company created earlier in the run', () => {
+        const actions = pm.response.json().items.map((i) => i.action);
+        if (pm.collectionVariables.get('companyId')) pm.expect(actions).to.include('company.created');
+      });
+    language: text/javascript
+order: 1000

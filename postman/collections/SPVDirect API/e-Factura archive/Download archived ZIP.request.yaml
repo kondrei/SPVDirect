@@ -1,0 +1,20 @@
+$kind: http-request
+url: "{{baseUrl}}/accountants/{{accountantId}}/efactura/archive/{{archiveId}}/zip"
+method: GET
+scripts:
+  - type: beforeRequest
+    code: |-
+      if (!pm.collectionVariables.get('archiveId')) {
+        console.log('Nothing imported yet: the import needs a company with a certificate and invoices in SPV.');
+        pm.execution.skipRequest();
+      }
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('Status 200', () => pm.response.to.have.status(200));
+      pm.test('ZIP attachment', () => {
+        pm.expect(pm.response.headers.get('Content-Type')).to.include('application/zip');
+        pm.expect(pm.response.headers.get('Content-Disposition')).to.include('attachment');
+      });
+    language: text/javascript
+order: 13000

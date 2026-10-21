@@ -1,0 +1,3 @@
+$kind: collection
+description: "Saved SPV messages. SPVWS2 does not accept ANAF OAuth tokens (docs/adr/0001-no-spv-inbox-over-oauth.md), so the list is imported from the browser: open https://webserviced.anaf.ro/SPVWS2/rest/listaMesaje?zile=60 with your certificate, save the JSON and send it to the import request."
+order: 6000

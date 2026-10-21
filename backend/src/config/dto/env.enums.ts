@@ -4,7 +4,7 @@ export enum NodeEnv {
   Production = 'production',
 }
 
-export enum SpvStorage {
+export enum FileStorage {
   Database = 'database',
   Supabase = 'supabase',
 }

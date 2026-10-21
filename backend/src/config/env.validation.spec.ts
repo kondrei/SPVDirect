@@ -96,6 +96,21 @@ describe('envValidationSchema: SPV storage', () => {
     ).toBeUndefined();
   });
 
+  it('requires the Supabase keys when only EFACTURA_STORAGE is supabase', () => {
+    const error = validate({ ...base, EFACTURA_STORAGE: 'supabase' }).error;
+    expect(error?.message).toMatch(
+      'SUPABASE_URL" is required when EFACTURA_STORAGE is supabase',
+    );
+  });
+
+  it('defaults the e-Factura archive to the database with the sync off', () => {
+    expect(validate(base).value).toMatchObject({
+      EFACTURA_STORAGE: 'database',
+      SUPABASE_EFACTURA_BUCKET: 'efactura',
+      EFACTURA_ARCHIVE_SYNC: false,
+    });
+  });
+
   it('rejects an unknown storage mode and a bad bucket name', () => {
     expect(validate({ ...base, SPV_STORAGE: 's3' }).error).toBeDefined();
     expect(

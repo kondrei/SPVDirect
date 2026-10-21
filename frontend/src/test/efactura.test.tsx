@@ -180,6 +180,7 @@ describe('e-Factura: mesaje ANAF', () => {
         cif: '12345678',
         createdAt: '2022-10-31T12:52:00.000Z',
         createdAtRaw: '202210311452',
+        archivedId: null,
       },
     ],
     total: null,

@@ -1,15 +1,14 @@
 import type { DataSource, Repository } from 'typeorm';
 import type { Accountant } from '../../accountants/accountant.entity.js';
+import type { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
+import {
+  JobActivityAction,
+  ScheduledJob,
+} from '../../api-logs/dto/api-log.enums.js';
+import { PURGE_LOCK_KEY, PURGE_SCHEDULE } from '../../common/constants.js';
 import type { Company } from '../company.entity.js';
 import type { CompanyDeletionService } from './company-deletion.service.js';
-import {
-  PURGE_BATCH,
-  PURGE_GRACE_DAYS,
-  PURGE_LOCK_KEY,
-  PURGE_SCHEDULE,
-  PurgeJob,
-} from './purge.job.js';
-
+import { PURGE_BATCH, PURGE_GRACE_DAYS, PurgeJob } from './purge.job.js';
 function setup(
   batches: number[][],
   accountantBatches: number[][] = [],
@@ -34,13 +33,23 @@ function setup(
     release: vi.fn().mockResolvedValue(undefined),
   };
   const dataSource = { createQueryRunner: vi.fn(() => runner) };
+  const recordJob = vi.fn().mockResolvedValue(undefined);
   const job = new PurgeJob(
     { find } as unknown as Repository<Company>,
     { find: findAccountants } as unknown as Repository<Accountant>,
     { purge, purgeAccountant } as unknown as CompanyDeletionService,
     dataSource as unknown as DataSource,
+    { recordJob } as unknown as ActivityLogsService,
   );
-  return { job, find, findAccountants, purge, purgeAccountant, runner };
+  return {
+    job,
+    find,
+    findAccountants,
+    purge,
+    purgeAccountant,
+    runner,
+    recordJob,
+  };
 }
 
 describe('PurgeJob', () => {
@@ -162,5 +171,42 @@ describe('PurgeJob', () => {
     await expect(job.run()).resolves.toBeUndefined();
     await job.run();
     expect(purge).toHaveBeenCalledWith(3);
+  });
+
+  it('logs each run with what was purged and how many failed', async () => {
+    const { job, purge, recordJob } = setup([[3, 4]], [[8]]);
+    purge.mockRejectedValueOnce(new Error('storage down'));
+    await job.run();
+    expect(recordJob).toHaveBeenCalledWith({
+      action: JobActivityAction.Completed,
+      description:
+        'Ștergerea definitivă a datelor șterse a rulat: 1 firmă și 1 cont șterse definitiv (1 eroare)',
+      details: {
+        job: ScheduledJob.Purge,
+        companies: 1,
+        accountants: 1,
+        failed: 1,
+      },
+    });
+  });
+
+  it('logs a failed run with the error', async () => {
+    const { job, find, recordJob } = setup([]);
+    find.mockReset();
+    find.mockRejectedValue(new Error('connection lost'));
+    await job.run();
+    expect(recordJob).toHaveBeenCalledWith({
+      action: JobActivityAction.Failed,
+      description:
+        'Ștergerea definitivă a datelor șterse a eșuat: connection lost',
+      details: { job: ScheduledJob.Purge },
+      error: 'connection lost',
+    });
+  });
+
+  it('logs nothing when another instance holds the lock', async () => {
+    const { job, recordJob } = setup([[3]], [], false);
+    await job.run();
+    expect(recordJob).not.toHaveBeenCalled();
   });
 });

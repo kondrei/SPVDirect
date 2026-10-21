@@ -1,0 +1,26 @@
+$kind: http-request
+description: "Soft delete of the whole account: the account, its companies and all their data get `deleted_at`, ANAF certificates are revoked (best-effort) and removed, and the session cookie is cleared. 409 while an invoice is being sent to ANAF. The email can register again right away; the monthly purge erases the data 30 days later. Skipped unless `allowAccountDelete` is `true`."
+url: "{{baseUrl}}/accountants/{{accountantId}}"
+method: DELETE
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: '{ "password": "{{password}}" }'
+scripts:
+  - type: beforeRequest
+    code: |-
+      if (pm.collectionVariables.get('allowAccountDelete') !== 'true') {
+        console.log('Set allowAccountDelete=true to delete the account used by this run.');
+        pm.execution.skipRequest();
+      }
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('Status 204', () => pm.response.to.have.status(204));
+      pm.test('Clears the spv_session cookie', () => {
+        const setCookie = pm.response.headers.all().filter((h) => h.key.toLowerCase() === 'set-cookie').map((h) => h.value).join(';');
+        pm.expect(setCookie).to.include('spv_session=;');
+      });
+    language: text/javascript
+order: 7000

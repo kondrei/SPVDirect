@@ -1,4 +1,4 @@
-import { BulkCreateStatus, AnafConnectionStatus, AnafConnectionSource, ProfessionalTitle, VatCategory, Currency, PaymentMethod, BuyerSource, UploadStatus, EfacturaStandard, AnafEnvironment, ActivityAction, MessageFilter } from './enums';
+import { BulkCreateStatus, AnafConnectionStatus, AnafConnectionSource, ProfessionalTitle, VatCategory, Currency, PaymentMethod, BuyerSource, UploadStatus, EfacturaStandard, AnafEnvironment, ActivityAction, MessageFilter, EfacturaDirection, ImportStatus } from './enums';
 export interface Accountant {
   id: number;
   email: string;
@@ -417,6 +417,7 @@ export interface EfacturaMessage {
   cif: string | null;
   createdAt: string | null;
   createdAtRaw: string | null;
+  archivedId: number | null;
 }
 
 export interface MessagesQuery {
@@ -432,6 +433,102 @@ export interface EfacturaMessageList {
   page: number | null;
   pages: number | null;
 }
+
+export interface ImportResult {
+  messageId: string;
+  status: ImportStatus;
+  id?: number;
+  reason?: string;
+}
+
+export interface ImportPeriodResult {
+  found: number;
+  remaining: number;
+  results: ImportResult[];
+}
+
+export type ImportCounts = Record<ImportStatus, number>;
+
+export interface ImportPeriodState {
+  running: boolean;
+  counts: ImportCounts;
+  found: number | null;
+  remaining: number | null;
+  problems: ImportResult[];
+  error: string | null;
+}
+
+export interface ArchivedInvoice {
+  id: number;
+  companyId: number;
+  anafMessageId: string;
+  uploadIndex: string | null;
+  environment: AnafEnvironment;
+  direction: EfacturaDirection;
+  standard: EfacturaStandard;
+  typeCode: string | null;
+  creditNote: boolean;
+  number: string | null;
+  issueDate: string | null;
+  dueDate: string | null;
+  currency: string | null;
+  supplierCui: string | null;
+  supplierName: string | null;
+  customerCui: string | null;
+  customerName: string | null;
+  totalNet: number | null;
+  totalVat: number | null;
+  totalGross: number | null;
+  invoiceId: number | null;
+  parseError: string | null;
+  messageCreatedAt: string | null;
+  createdAt: string;
+}
+
+export interface ArchivedInvoiceLine {
+  name: string | null;
+  quantity: number | null;
+  unitCode: string | null;
+  unitPrice: number | null;
+  vatCategory: string | null;
+  vatPercent: number | null;
+  net: number | null;
+}
+
+export interface ArchivedInvoiceDetail extends ArchivedInvoice {
+  lines: ArchivedInvoiceLine[];
+}
+
+export interface ArchiveTotal {
+  currency: string;
+  count: number;
+  total: number;
+}
+
+export interface ArchivePage {
+  items: ArchivedInvoice[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totals: ArchiveTotal[];
+}
+
+export interface ArchiveQuery {
+  direction: EfacturaDirection;
+  companyId?: number;
+  from?: string;
+  to?: string;
+  q?: string;
+  page: number;
+}
+
+export interface ArchiveEmailInput {
+  id: number;
+  to: string;
+  message?: string;
+}
+
+export type ArchiveFileKind = 'pdf' | 'xml' | 'zip';
 
 export interface XmlValidation {
   valid: boolean;

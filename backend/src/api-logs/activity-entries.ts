@@ -1,6 +1,11 @@
 import { COMPANY_FIELD_LABELS } from '../companies/dto/company.constants.js';
 import type { CompanyField } from '../companies/dto/company.types.js';
-import { ValidateStandard } from '../efactura/dto/efactura.enums.js';
+import { DIRECTION_LABELS } from '../efactura/dto/efactura.constants.js';
+import {
+  EfacturaDirection,
+  ValidateStandard,
+} from '../efactura/dto/efactura.enums.js';
+import type { ImportCounts } from '../efactura/dto/efactura.types.js';
 
 import {
   formatAmount,
@@ -9,14 +14,29 @@ import {
 } from '../invoices/helpers/invoice-format.js';
 
 import type {
+  ActivityDetails,
   ActivityEntry,
+  AdminApprovalRetryCounts,
+  ArchiveRef,
   CompanyRef,
+  EfacturaArchiveSyncCounts,
   InvoiceRef,
+  JobEntry,
+  PurgeCounts,
+  SpvSyncCounts,
   UploadRef,
   ConnectionRef,
 } from './dto/api-log.types.js';
-import { UPLOAD_STATUS_LABELS } from './dto/api-log.constants.js';
-import { ActivityAction } from './dto/api-log.enums.js';
+import {
+  JOB_LABELS,
+  MAX_JOB_ERROR_LENGTH,
+  UPLOAD_STATUS_LABELS,
+} from './dto/api-log.constants.js';
+import {
+  ActivityAction,
+  JobActivityAction,
+  ScheduledJob,
+} from './dto/api-log.enums.js';
 
 function firm(company: CompanyRef): string {
   return `${company.name} (CUI ${company.cui})`;
@@ -281,6 +301,50 @@ export function efacturaTransformed(standard: ValidateStandard): ActivityEntry {
   };
 }
 
+export function efacturaArchiveImported(
+  company: CompanyRef,
+  counts: ImportCounts,
+  automatic: boolean,
+): ActivityEntry {
+  const skipped = counts.already + counts.skipped;
+  const extra = [
+    skipped ? `${skipped} existau deja sau nu sunt facturi` : null,
+    counts.failed ? plural(counts.failed, 'eroare', 'erori') : null,
+  ].filter((part) => part !== null);
+  const verb = automatic ? 'Importul automat a adăugat' : 'Au fost importate';
+  const notes = extra.length ? ' (' + extra.join(', ') + ')' : '';
+  return {
+    action: ActivityAction.EfacturaArchiveImported,
+    companyId: company.id,
+    description: `${verb} în arhiva e-Factura a firmei ${firm(company)} ${plural(counts.imported, 'factură', 'facturi')}${notes}`,
+    details: { ...companyDetails(company), ...counts, automatic },
+  };
+}
+
+export function efacturaArchiveEmailed(
+  invoice: ArchiveRef,
+  to: string,
+): ActivityEntry {
+  const partner =
+    invoice.direction === EfacturaDirection.Received
+      ? invoice.supplierName
+      : invoice.customerName;
+  const who = partner ? ' (' + partner + ')' : '';
+  return {
+    action: ActivityAction.EfacturaArchiveEmailed,
+    companyId: invoice.companyId,
+    description: `Factura ${DIRECTION_LABELS[invoice.direction]} ${invoice.number ?? invoice.anafMessageId}${who} a fost trimisă pe email la ${to}`,
+    details: {
+      archiveId: invoice.id,
+      anafMessageId: invoice.anafMessageId,
+      direction: invoice.direction,
+      invoiceNumber: invoice.number,
+      issueDate: invoice.issueDate,
+      to,
+    },
+  };
+}
+
 export function spvImported(summary: {
   fetched: number;
   added: number;
@@ -372,5 +436,69 @@ export function authorizationLinkCreated(
     companyId: company.id,
     description: `Un link de autorizare ANAF a fost creat pentru firma ${firm(company)}`,
     details: { ...companyDetails(company), expiresAt: expiresAt.toISOString() },
+  };
+}
+
+function jobCompleted(
+  job: ScheduledJob,
+  summary: string,
+  counts: { failed: number } & ActivityDetails,
+): JobEntry {
+  const errors = counts.failed
+    ? ' (' + plural(counts.failed, 'eroare', 'erori') + ')'
+    : '';
+  return {
+    action: JobActivityAction.Completed,
+    description: `${JOB_LABELS[job]} a rulat: ${summary}${errors}`,
+    details: { job, ...counts },
+  };
+}
+
+export function purgeCompleted(counts: PurgeCounts): JobEntry {
+  return jobCompleted(
+    ScheduledJob.Purge,
+    `${plural(counts.companies, 'firmă', 'firme')} și ${plural(counts.accountants, 'cont', 'conturi')} șterse definitiv`,
+    { ...counts },
+  );
+}
+
+export function adminApprovalRetryCompleted(
+  counts: AdminApprovalRetryCounts,
+): JobEntry {
+  return jobCompleted(
+    ScheduledJob.AdminApprovalRetry,
+    plural(counts.sent, 'email trimis', 'emailuri trimise'),
+    { ...counts },
+  );
+}
+
+export function efacturaArchiveSyncCompleted(
+  counts: EfacturaArchiveSyncCounts,
+): JobEntry {
+  return jobCompleted(
+    ScheduledJob.EfacturaArchiveSync,
+    `${plural(counts.imported, 'factură importată', 'facturi importate')} pentru ${plural(counts.companies, 'firmă', 'firme')}`,
+    { ...counts },
+  );
+}
+
+export function spvSyncCompleted(counts: SpvSyncCounts): JobEntry {
+  return jobCompleted(
+    ScheduledJob.SpvSync,
+    `${plural(counts.connections, 'certificat sincronizat', 'certificate sincronizate')}, ${plural(counts.moved, 'document mutat', 'documente mutate')} în Storage`,
+    { ...counts },
+  );
+}
+
+export function jobFailed(job: ScheduledJob, err: unknown): JobEntry {
+  const message = (err instanceof Error ? err.message : String(err)).slice(
+    0,
+    MAX_JOB_ERROR_LENGTH,
+  );
+  return {
+    action: JobActivityAction.Failed,
+    description: `${JOB_LABELS[job]} a eșuat: ${message}`,
+    details: { job },
+    error: message,
   };
 }

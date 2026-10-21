@@ -1,6 +1,7 @@
-import type { ActivityAction } from './api-log.enums.js';
+import type { ActivityAction, JobActivityAction } from './api-log.enums.js';
 import type { AnafConnection } from '../../anaf/anaf-connection.entity.js';
 import type { Company } from '../../companies/company.entity.js';
+import type { EfacturaInvoice } from '../../efactura/efactura-invoice.entity.js';
 import type { EfacturaUpload } from '../../efactura/efactura-upload.entity.js';
 import type { Invoice } from '../../invoices/invoice.entity.js';
 
@@ -14,6 +15,37 @@ export interface ActivityEntry {
   description: string;
   companyId?: number | null;
   details?: ActivityDetails;
+}
+
+export interface JobEntry {
+  action: JobActivityAction;
+  description: string;
+  details: ActivityDetails;
+  error?: string;
+}
+
+export interface PurgeCounts {
+  companies: number;
+  accountants: number;
+  failed: number;
+}
+
+export interface AdminApprovalRetryCounts {
+  sent: number;
+  skipped: number;
+  failed: number;
+}
+
+export interface EfacturaArchiveSyncCounts {
+  companies: number;
+  imported: number;
+  failed: number;
+}
+
+export interface SpvSyncCounts {
+  connections: number;
+  moved: number;
+  failed: number;
 }
 
 export interface ActivityFilter {
@@ -51,6 +83,18 @@ export interface ActivityRow {
 }
 
 export type CompanyRef = Pick<Company, 'id' | 'name' | 'cui'>;
+
+export type ArchiveRef = Pick<
+  EfacturaInvoice,
+  | 'id'
+  | 'companyId'
+  | 'anafMessageId'
+  | 'direction'
+  | 'number'
+  | 'issueDate'
+  | 'supplierName'
+  | 'customerName'
+>;
 
 export type InvoiceRef = Pick<
   Invoice,

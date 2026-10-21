@@ -21,4 +21,4 @@ scripts:
         pm.expect(c).to.include.keys('regCom', 'address', 'caenCode', 'registrationStatus', 'vatPayer', 'vatOnCollection', 'splitVat', 'eFactura', 'inactive', 'anafSyncedAt', 'createdAt', 'updatedAt');
       });
     language: text/javascript
-order: 9000
+order: 14000

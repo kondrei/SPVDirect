@@ -1,0 +1,17 @@
+$kind: http-request
+url: "{{baseUrl}}/accountants/{{accountantId}}/spv/archive/import"
+method: POST
+body:
+  type: formdata
+  content: []
+scripts:
+  - type: afterResponse
+    code: |-
+      const errorMessage = () => {
+        const m = pm.response.json().message;
+        return Array.isArray(m) ? m.join(' | ') : m;
+      };
+      pm.test('Status 400', () => pm.response.to.have.status(400));
+      pm.test('Asks for the ANAF list', () => pm.expect(errorMessage()).to.include('lista de mesaje primită de la ANAF'));
+    language: text/javascript
+order: 3000

@@ -42,6 +42,10 @@
       "value": ""
     },
     {
+      "key": "archiveId",
+      "value": ""
+    },
+    {
       "key": "allowConnectionDelete",
       "value": "false"
     },
@@ -1495,6 +1499,508 @@
           "request": {
             "method": "GET",
             "url": "{{baseUrl}}/accountants/{{accountantId}}/spv/archive/2147483647/download"
+          }
+        }
+      ]
+    },
+    {
+      "name": "e-Factura archive",
+      "item": [
+        {
+          "name": "Import invoices of the last 60 days",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('companyId')) {",
+                  "  console.log('No company yet: run the Companies folder first.');",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Imports or explains why not (no certificate on the company)', () => {",
+                  "  pm.expect([200, 400]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('Batch shape', () => {",
+                  "    const r = pm.response.json();",
+                  "    pm.expect(r.found).to.be.a('number');",
+                  "    pm.expect(r.remaining).to.be.a('number');",
+                  "    pm.expect(r.results).to.be.an('array');",
+                  "    r.results.forEach((i) => pm.expect(['imported', 'already', 'skipped', 'failed']).to.include(i.status));",
+                  "  });",
+                  "  const first = pm.response.json().results.find((i) => i.id);",
+                  "  if (first) pm.collectionVariables.set('archiveId', first.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/efactura/companies/{{companyId}}/messages/import-period",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"zile\": 60\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Lists FACTURA PRIMITA / FACTURA TRIMISA messages of the period (paginated), downloads each new one once and stores the signed ZIP. At most 50 per call; call again while `remaining > 0`. Needs a certificate on the company (400 otherwise)."
+          }
+        },
+        {
+          "name": "Import period - too many days (400)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('companyId')) {",
+                  "  console.log('No company yet: run the Companies folder first.');",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/efactura/companies/{{companyId}}/messages/import-period",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"zile\": 61\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Import messages - invalid ids (400)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('companyId')) {",
+                  "  console.log('No company yet: run the Companies folder first.');",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/efactura/companies/{{companyId}}/messages/import",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messageIds\": [\n    \"30x1\",\n    \"30x1\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Import messages - more than 50 (400)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('companyId')) {",
+                  "  console.log('No company yet: run the Companies folder first.');",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/efactura/companies/{{companyId}}/messages/import",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messageIds\": [\n    \"3000\",\n    \"3001\",\n    \"3002\",\n    \"3003\",\n    \"3004\",\n    \"3005\",\n    \"3006\",\n    \"3007\",\n    \"3008\",\n    \"3009\",\n    \"3010\",\n    \"3011\",\n    \"3012\",\n    \"3013\",\n    \"3014\",\n    \"3015\",\n    \"3016\",\n    \"3017\",\n    \"3018\",\n    \"3019\",\n    \"3020\",\n    \"3021\",\n    \"3022\",\n    \"3023\",\n    \"3024\",\n    \"3025\",\n    \"3026\",\n    \"3027\",\n    \"3028\",\n    \"3029\",\n    \"3030\",\n    \"3031\",\n    \"3032\",\n    \"3033\",\n    \"3034\",\n    \"3035\",\n    \"3036\",\n    \"3037\",\n    \"3038\",\n    \"3039\",\n    \"3040\",\n    \"3041\",\n    \"3042\",\n    \"3043\",\n    \"3044\",\n    \"3045\",\n    \"3046\",\n    \"3047\",\n    \"3048\",\n    \"3049\",\n    \"3050\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Import messages - unknown company (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/efactura/companies/2147483647/messages/import",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messageIds\": [\n    \"3001\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List e-Factura archive",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Page shape with totals per currency', () => {",
+                  "  const p = pm.response.json();",
+                  "  pm.expect(p.items).to.be.an('array');",
+                  "  pm.expect(p.total).to.be.a('number');",
+                  "  pm.expect(p.pageSize).to.eql(10);",
+                  "  pm.expect(p.totals).to.be.an('array');",
+                  "  p.items.forEach((i) => pm.expect(i.direction).to.eql('received'));",
+                  "  p.items.forEach((i) => pm.expect(i).to.not.have.any.keys('zipContent', 'zipStoragePath', 'pdfContent'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/efactura/archive?direction=received&pageSize=10",
+            "description": "Query: `companyId`, `direction` (`received` | `sent`), `from`/`to` (issue date, YYYY-MM-DD), `q` (number, partner name or CUI), `page`, `pageSize` (default 25, max 100). Returns `{ items, total, page, pageSize, totals }`; `totals` sums each currency, credit notes negative."
+          }
+        },
+        {
+          "name": "List archive - unknown direction (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/efactura/archive?direction=both"
+          }
+        },
+        {
+          "name": "List archive - bad date (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/efactura/archive?from=01.10.2026"
+          }
+        },
+        {
+          "name": "List archive - other accountant (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/2147483647/efactura/archive"
+          }
+        },
+        {
+          "name": "Get archived invoice",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('archiveId')) {",
+                  "  console.log('Nothing imported yet: the import needs a company with a certificate and invoices in SPV.');",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Detail with lines', () => {",
+                  "  pm.expect(pm.response.json().lines).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/efactura/archive/{{archiveId}}"
+          }
+        },
+        {
+          "name": "Get archived invoice - invalid id (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/efactura/archive/abc"
+          }
+        },
+        {
+          "name": "Get archived invoice - not found (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/efactura/archive/2147483647"
+          }
+        },
+        {
+          "name": "Download archived ZIP",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('archiveId')) {",
+                  "  console.log('Nothing imported yet: the import needs a company with a certificate and invoices in SPV.');",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('ZIP attachment', () => {",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/zip');",
+                  "  pm.expect(pm.response.headers.get('Content-Disposition')).to.include('attachment');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/efactura/archive/{{archiveId}}/zip"
+          }
+        },
+        {
+          "name": "Download archived PDF - not found (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/efactura/archive/2147483647/pdf",
+            "description": "The PDF is made once by ANAF (transformare, without validation) and cached. CII invoices answer 400."
+          }
+        },
+        {
+          "name": "Email archived invoice - invalid address (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/efactura/archive/2147483647/email",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"not-an-email\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Email archived invoice - not found (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/efactura/archive/2147483647/email",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"client@example.com\",\n  \"message\": \"Factura atașată.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         }
       ]
