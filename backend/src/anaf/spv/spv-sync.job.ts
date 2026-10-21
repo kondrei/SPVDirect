@@ -7,6 +7,7 @@ import {
   DEFAULT_SYNC_DAYS,
   SpvArchiveService,
 } from './services/spv-archive.service.js';
+import { AnafConnectionStatus } from '../dto/anaf.enums.js';
 
 export const SYNC_SCHEDULE = '0 03 * * *';
 export const MAX_MOVE_BATCHES = 10;
@@ -29,7 +30,10 @@ export class SpvSyncJob {
     try {
       const active = await this.connections.find({
         select: { id: true, accountantId: true },
-        where: { status: 'active', refreshExpiresAt: MoreThan(new Date()) },
+        where: {
+          status: AnafConnectionStatus.Active,
+          refreshExpiresAt: MoreThan(new Date()),
+        },
         order: { id: 'ASC' },
       });
       for (const { id, accountantId } of active) {

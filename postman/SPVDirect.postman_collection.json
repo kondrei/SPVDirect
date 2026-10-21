@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "SPVDirect API",
-    "description": "All SPVDirect backend endpoints, with Postman tests. Run the whole collection with the Collection Runner (in order) against a running backend (`npm run dev` in `backend/`).\n\nSetup: the dev server uses HTTPS with a self-signed certificate (`npm run cert:dev`), so turn off *Settings → SSL certificate verification* in Postman. Cookies (`spv_session`, `spv_anaf_oauth`) are kept by Postman's cookie jar for `localhost`.\n\nVariables: `baseUrl`, `email`, `password`, `cui` (a real CUI; creating a company looks it up at ANAF). `accountantId`, `companyId`, `connectionId` and `linkToken` are filled in by the test scripts.\n\nSafety: the run deletes only a company it created itself (`companyCreatedByRun`). *Delete connection* revokes the certificate's tokens at ANAF, so it is skipped unless you set `allowConnectionDelete` to `true`. Requests that need an ANAF connection are skipped until one exists: connect a certificate in the browser (`/accountants/:accountantId/anaf/connect`) and run again.\n\nRegister and Login are throttled to 10 requests per minute; creating or refreshing a company to 20 per minute.",
+    "description": "All SPVDirect backend endpoints, with Postman tests. Run the whole collection with the Collection Runner (in order) against a running backend (`npm run dev` in `backend/`).\n\nSetup: the dev server uses HTTPS with a self-signed certificate (`npm run cert:dev`), so turn off *Settings → SSL certificate verification* in Postman. Cookies (`spv_session`, `spv_anaf_oauth`) are kept by Postman's cookie jar for `localhost`.\n\nVariables: `baseUrl`, `email`, `password`, `cui` (a real CUI; creating a company looks it up at ANAF). `accountantId`, `companyId`, `connectionId` and `linkToken` are filled in by the test scripts.\n\nSafety: the run deletes only a company it created itself (`companyCreatedByRun`). *Delete connection* revokes the certificate's tokens at ANAF, so it is skipped unless you set `allowConnectionDelete` to `true`. *Delete account* deletes the account the run logged in with, so it is skipped unless you set `allowAccountDelete` to `true`. Requests that need an ANAF connection are skipped until one exists: connect a certificate in the browser (`/accountants/:accountantId/anaf/connect`) and run again.\n\nRegister and Login are throttled to 10 requests per minute; creating or refreshing a company to 20 per minute.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -43,6 +43,10 @@
     },
     {
       "key": "allowConnectionDelete",
+      "value": "false"
+    },
+    {
+      "key": "allowAccountDelete",
       "value": "false"
     }
   ],
@@ -542,6 +546,103 @@
             "method": "GET",
             "url": "{{baseUrl}}/accountants/2147483647/companies",
             "description": "`AccountantParamGuard`: the URL accountant must be the session accountant."
+          }
+        },
+        {
+          "name": "Export company data (ZIP)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Is a ZIP attachment', () => {",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/zip');",
+                  "  pm.expect(pm.response.headers.get('Content-Disposition')).to.match(/^attachment; filename=\"firma-\\d+-export-\\d{4}-\\d{2}-\\d{2}\\.zip\"$/);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/companies/{{companyId}}/export",
+            "description": "Streams a ZIP with everything SPVDirect holds for the company: `firma.json`, the logo, `facturi.csv`/`facturi.json` with each invoice's PDF and UBL XML, `efactura.csv`, `spv.csv` with the stored SPV PDFs, and `erori.txt` for files that could not be read. 5 requests/min."
+          }
+        },
+        {
+          "name": "Export company - not found (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Message is \"Firma nu a fost găsită\"', () => pm.expect(pm.response.json().message).to.eql('Firma nu a fost găsită'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/companies/2147483647/export"
+          }
+        },
+        {
+          "name": "Export company - invalid id (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/companies/abc/export"
+          }
+        },
+        {
+          "name": "Export company - other accountant (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/2147483647/companies/{{companyId}}/export"
+          }
+        },
+        {
+          "name": "Delete company - not found (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/companies/2147483647",
+            "description": "A company that does not exist or is already deleted answers 404."
           }
         },
         {
@@ -1434,7 +1535,7 @@
           "request": {
             "method": "DELETE",
             "url": "{{baseUrl}}/accountants/{{accountantId}}/companies/{{companyId}}",
-            "description": "Returns 204. Skipped unless this run created the company, so existing data is kept."
+            "description": "Soft delete: marks the company, its invoices, e-Factura uploads and SPV messages as deleted (they disappear from every list) and drops unused authorization links. Returns 204, or 409 while an invoice is being sent to ANAF. A monthly job erases the rows and their Storage files 30 days later. Skipped unless this run created the company, so existing data is kept."
           }
         },
         {
@@ -1467,6 +1568,150 @@
             "method": "DELETE",
             "url": "{{baseUrl}}/accountants/{{accountantId}}/anaf/connections/{{connectionId}}",
             "description": "Revokes both tokens at ANAF (best-effort) and deletes the connection. Returns 204. Skipped unless `allowConnectionDelete` is `true`."
+          }
+        },
+        {
+          "name": "Export account data (ZIP)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Is a ZIP attachment', () => {",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/zip');",
+                  "  pm.expect(pm.response.headers.get('Content-Disposition')).to.match(/^attachment; filename=\"cont-spvdirect-export-\\d{4}-\\d{2}-\\d{2}\\.zip\"$/);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/export",
+            "description": "Streams a ZIP of the whole account: `cont.json` (profile), `certificate.csv` (no tokens), `firme.csv`, a `firme/<cui>/` folder per company with the same content as the company export, and `spv-fara-firma.csv` for SPV messages that match no company. 5 requests/min."
+          }
+        },
+        {
+          "name": "Export account - other accountant (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/2147483647/export"
+          }
+        },
+        {
+          "name": "Delete account - missing password (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": "{{baseUrl}}/accountants/{{accountantId}}"
+          }
+        },
+        {
+          "name": "Delete account - wrong password (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Message is \"Parola este incorectă\"', () => pm.expect(pm.response.json().message).to.eql('Parola este incorectă'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"password\": \"not-the-password\" }"
+            },
+            "url": "{{baseUrl}}/accountants/{{accountantId}}",
+            "description": "The account is kept and the session stays valid."
+          }
+        },
+        {
+          "name": "Delete account",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.collectionVariables.get('allowAccountDelete') !== 'true') {",
+                  "  console.log('Set allowAccountDelete=true to delete the account used by this run.');",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 204', () => pm.response.to.have.status(204));",
+                  "pm.test('Clears the spv_session cookie', () => {",
+                  "  const setCookie = pm.response.headers.all().filter((h) => h.key.toLowerCase() === 'set-cookie').map((h) => h.value).join(';');",
+                  "  pm.expect(setCookie).to.include('spv_session=;');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"password\": \"{{password}}\" }"
+            },
+            "url": "{{baseUrl}}/accountants/{{accountantId}}",
+            "description": "Soft delete of the whole account: the account, its companies and all their data get `deleted_at`, ANAF certificates are revoked (best-effort) and removed, and the session cookie is cleared. 409 while an invoice is being sent to ANAF. The email can register again right away; the monthly purge erases the data 30 days later. Skipped unless `allowAccountDelete` is `true`."
           }
         },
         {
@@ -1526,6 +1771,24 @@
           "request": {
             "method": "GET",
             "url": "{{baseUrl}}/accountants/{{accountantId}}/companies"
+          }
+        },
+        {
+          "name": "Export company - no session (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/companies/{{companyId}}/export"
           }
         },
         {

@@ -2,6 +2,7 @@ import { deflateSync } from 'node:zlib';
 import { computeInvoice } from '../helpers/invoice-calc.js';
 import { line, sampleInvoice } from '../../testing/invoice-fixtures.js';
 import { renderInvoicePdf } from './invoice-pdf.js';
+import { VatCategory, Currency } from '../dto/invoice.enums.js';
 
 function tinyPng(): Buffer {
   const crcTable = Array.from({ length: 256 }, (_, n) => {
@@ -92,7 +93,7 @@ describe('renderInvoicePdf', () => {
       [
         line({
           vatRate: 0,
-          vatCategory: 'AE',
+          vatCategory: VatCategory.ReverseCharge,
           vatExemptionReason: 'Taxare inversă',
         }),
       ],
@@ -100,7 +101,7 @@ describe('renderInvoicePdf', () => {
     );
     const pdf = await renderInvoicePdf(
       sampleInvoice({
-        currency: 'EUR',
+        currency: Currency.EUR,
         exchangeRate: 4.9765,
         vatOnCollection: true,
         notes: 'Mulțumim pentru colaborare',

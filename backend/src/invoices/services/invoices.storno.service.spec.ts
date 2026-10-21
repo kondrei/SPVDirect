@@ -7,6 +7,7 @@ import {
 } from '../helpers/invoice-storno.js';
 import type { Invoice } from '../invoice.entity.js';
 import { buildInvoiceServices } from '../../testing/invoice-services.js';
+import { VatCategory } from '../dto/invoice.enums.js';
 
 function setup({
   original = sampleInvoice({ id: 3, number: 12 }),
@@ -44,13 +45,13 @@ function setup({
   };
   const mailer = { send: vi.fn().mockResolvedValue(undefined) };
   const companies = { getLogo: vi.fn().mockResolvedValue(null) };
-  const { service } = buildInvoiceServices({
+  const { service, lockedCompanies } = buildInvoiceServices({
     invoices,
     companies,
     store,
     mailer,
   });
-  return { service, invoices, store, mailer };
+  return { service, invoices, lockedCompanies, store, mailer };
 }
 
 describe('InvoiceStornoService.createStorno', () => {
@@ -63,6 +64,33 @@ describe('InvoiceStornoService.createStorno', () => {
     expect(invoices.findOne.mock.invocationCallOrder[0]).toBeLessThan(
       invoices.save.mock.invocationCallOrder[0],
     );
+  });
+
+  it('locks the company before the original, in the same order as a company deletion', async () => {
+    const { service, invoices, lockedCompanies } = setup();
+    await service.createStorno(1, 3, { issueDate: '2026-10-10' });
+    expect(lockedCompanies).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        where: { accountantId: 1, id: 7 },
+        lock: { mode: 'pessimistic_write' },
+      }),
+    );
+    const lockedOriginal = invoices.findOne.mock.calls.findIndex(
+      ([options]) => (options as { lock?: unknown }).lock !== undefined,
+    );
+    expect(lockedCompanies.mock.invocationCallOrder[0]).toBeLessThan(
+      invoices.findOne.mock.invocationCallOrder[lockedOriginal],
+    );
+  });
+
+  it('answers 404 when the company of the original was deleted', async () => {
+    const { service, lockedCompanies, invoices } = setup();
+    lockedCompanies.mockResolvedValueOnce([]);
+    await expect(
+      service.createStorno(1, 3, { issueDate: '2026-10-10' }),
+    ).rejects.toThrow('Firma nu a fost găsită');
+    expect(invoices.save).not.toHaveBeenCalled();
   });
 
   it('answers 404 for an invoice of another accountant', async () => {
@@ -135,7 +163,7 @@ describe('InvoiceStornoService.createStorno', () => {
             unit: 'buc',
             unitPrice: 10,
             vatRate: 21,
-            vatCategory: 'S',
+            vatCategory: VatCategory.Standard,
             vatExemptionReason: null,
           },
         ],

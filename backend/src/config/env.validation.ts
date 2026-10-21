@@ -1,9 +1,11 @@
 import Joi from 'joi';
+import { NodeEnv, SpvStorage } from './dto/env.enums.js';
+import { AnafEnvironment } from '../anaf/dto/anaf.enums.js';
 
 export const envValidationSchema = Joi.object({
   NODE_ENV: Joi.string()
-    .valid('development', 'test', 'production')
-    .default('development'),
+    .valid(...Object.values(NodeEnv))
+    .default(NodeEnv.Development),
   PORT: Joi.number().port().default(3000),
   API_URL: Joi.string().uri().required(),
   FRONTEND_URL: Joi.string().uri().required(),
@@ -29,7 +31,9 @@ export const envValidationSchema = Joi.object({
     .uri()
     .default('https://logincert.anaf.ro/anaf-oauth2/v1/revoke'),
   ANAF_API_ENDPOINT: Joi.string().uri().default('https://api.anaf.ro'),
-  ANAF_ENV: Joi.string().valid('test', 'prod').default('test'),
+  ANAF_ENV: Joi.string()
+    .valid(...Object.values(AnafEnvironment))
+    .default(AnafEnvironment.Test),
   ANAF_SPV_ENDPOINT: Joi.string()
     .uri()
     .default('https://webserviced.anaf.ro/SPVWS2/rest'),
@@ -39,7 +43,9 @@ export const envValidationSchema = Joi.object({
   ANAF_EFACTURA_VALIDATE_ENDPOINT: Joi.string()
     .uri()
     .default('https://webservicesp.anaf.ro/prod/FCTEL/rest'),
-  SPV_STORAGE: Joi.string().valid('database', 'supabase').default('database'),
+  SPV_STORAGE: Joi.string()
+    .valid(...Object.values(SpvStorage))
+    .default(SpvStorage.Database),
   SUPABASE_URL: Joi.string().uri().empty(''),
   SUPABASE_SERVICE_KEY: Joi.string().empty(''),
   SUPABASE_SPV_BUCKET: Joi.string()
@@ -71,7 +77,7 @@ export const envValidationSchema = Joi.object({
 })
   .and('HTTPS_KEY_FILE', 'HTTPS_CERT_FILE')
   .custom((env: Record<string, unknown>, helpers) => {
-    if (env.SPV_STORAGE !== 'supabase') return env;
+    if (env.SPV_STORAGE !== SpvStorage.Supabase) return env;
     for (const key of ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY']) {
       if (!env[key]) {
         return helpers.message({
@@ -83,7 +89,7 @@ export const envValidationSchema = Joi.object({
   });
 
 export interface Env {
-  NODE_ENV: 'development' | 'test' | 'production';
+  NODE_ENV: NodeEnv;
   PORT: number;
   API_URL: string;
   FRONTEND_URL: string;
@@ -98,11 +104,11 @@ export interface Env {
   ANAF_TOKEN_ENDPOINT: string;
   ANAF_REVOKE_ENDPOINT: string;
   ANAF_API_ENDPOINT: string;
-  ANAF_ENV: 'test' | 'prod';
+  ANAF_ENV: AnafEnvironment;
   ANAF_SPV_ENDPOINT: string;
   ANAF_TVA_ENDPOINT: string;
   ANAF_EFACTURA_VALIDATE_ENDPOINT: string;
-  SPV_STORAGE: 'database' | 'supabase';
+  SPV_STORAGE: SpvStorage;
   SUPABASE_URL?: string;
   SUPABASE_SERVICE_KEY?: string;
   SUPABASE_SPV_BUCKET: string;

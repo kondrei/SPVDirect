@@ -1,12 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, API_URL, ApiError } from '../client';
-import type {
-  AuthorizationLink,
-  BulkCompanyResult,
-  Company,
-} from '../types';
+import { api, API_URL, ApiError, downloadFile } from '../client';
+import type { AuthorizationLink, BulkCompanyResult, Company } from '../types';
 import { keys } from './queryKeys';
 import { useAccountantApiPath, requirePath } from './accountantPath';
+import { BulkCreateStatus } from '../enums';
 
 function useCompaniesPath() {
   return useAccountantApiPath('/companies');
@@ -58,7 +55,7 @@ export function useCreateCompanies() {
       }),
     onSuccess: (results) => {
       for (const r of results) {
-        if (r.status === 'created')
+        if (r.status === BulkCreateStatus.Created)
           qc.setQueryData(keys.company(r.company.id), r.company);
       }
       void qc.invalidateQueries({ queryKey: keys.companies, exact: true });
@@ -117,7 +114,16 @@ export function useDeleteCompany() {
       void qc.invalidateQueries({ queryKey: keys.companies });
       void qc.invalidateQueries({ queryKey: keys.invoices });
       void qc.invalidateQueries({ queryKey: keys.efactura });
+      void qc.invalidateQueries({ queryKey: keys.spvArchive });
     },
+  });
+}
+
+export function useExportCompany() {
+  const path = useCompaniesPath();
+  return useMutation({
+    mutationFn: ({ id, cui }: { id: number; cui: string }) =>
+      downloadFile(`${requirePath(path)}/${id}/export`, `firma-${cui}-export.zip`),
   });
 }
 

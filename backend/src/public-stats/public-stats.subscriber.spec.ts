@@ -62,6 +62,12 @@ describe('PublicStatsSubscriber', () => {
     expect(stats.invalidate).not.toHaveBeenCalled();
   });
 
+  it('invalidates after a soft delete of a counted table', () => {
+    const { stats, subscriber } = setup();
+    subscriber.afterSoftRemove(event(Company, runner(false)));
+    expect(stats.invalidate).toHaveBeenCalledOnce();
+  });
+
   it('ignores tables that are not counted', () => {
     const { stats, subscriber } = setup();
     subscriber.afterInsert(event(ApiLog, runner(false)));

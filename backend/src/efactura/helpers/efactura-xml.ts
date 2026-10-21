@@ -1,5 +1,9 @@
 import { parseAnafDateTime } from '../../anaf/spv/spv-date.js';
-import type { UploadStatus } from '../efactura-upload.entity.js';
+import {
+  UploadStatus,
+  AnafUploadState,
+  AnafExecutionStatus,
+} from '../dto/efactura.enums.js';
 
 const ENTITIES: Record<string, string> = {
   '&amp;': '&',
@@ -35,7 +39,8 @@ export function parseUploadResponse(xml: string): UploadResponse {
   const index = attribute(xml, 'header', 'index_incarcare');
   const error = attribute(xml, 'Errors', 'errorMessage');
   return {
-    accepted: status === '0' && index !== null && index !== '',
+    accepted:
+      status === AnafExecutionStatus.Success && index !== null && index !== '',
     uploadIndex: index || null,
     error,
   };
@@ -52,10 +57,12 @@ export function parseStatusResponse(xml: string): StatusResponse {
   const stare = attribute(xml, 'header', 'stare')?.trim().toLowerCase() ?? null;
   const downloadId = attribute(xml, 'header', 'id_descarcare') || null;
   let status: UploadStatus | null = null;
-  if (stare === 'ok') status = 'ok';
-  else if (stare === 'nok') status = 'nok';
-  else if (stare === 'in prelucrare') status = 'processing';
-  else if (stare?.startsWith('xml cu erori')) status = 'rejected';
+  if (stare === AnafUploadState.Ok) status = UploadStatus.Ok;
+  else if (stare === AnafUploadState.Nok) status = UploadStatus.Nok;
+  else if (stare === AnafUploadState.InProgress)
+    status = UploadStatus.Processing;
+  else if (stare?.startsWith(AnafUploadState.XmlErrors))
+    status = UploadStatus.Rejected;
   return { status, downloadId, error };
 }
 

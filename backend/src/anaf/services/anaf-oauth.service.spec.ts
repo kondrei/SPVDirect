@@ -11,6 +11,7 @@ import {
   AnafTokenError,
 } from './anaf-token-client.service.js';
 import { fakeAnafJwt } from '../../testing/fake-anaf-jwt.js';
+import { AnafConnectionSource } from '../dto/anaf.enums.js';
 
 const env = {
   ANAF_CLIENT_ID: 'client-id',
@@ -161,18 +162,15 @@ describe('AnafOAuthService', () => {
     let resolve!: (v: unknown) => void;
     post.mockReturnValue(new Promise((r) => (resolve = r)));
 
-    const calls = [
-      service.getAccessToken(7),
-      service.getAccessToken(7),
-    ];
+    const calls = [service.getAccessToken(7), service.getAccessToken(7)];
     await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
     resolve({ data: { access_token: newAccess, refresh_token: newRefresh } });
 
     await expect(Promise.all(calls)).resolves.toEqual([newAccess, newAccess]);
     expect(post).toHaveBeenCalledTimes(1);
     const saved = update.mock.calls[0][1];
-    expect(cipher.decrypt(saved.accessTokenEnc)).toBe(newAccess);
-    expect(cipher.decrypt(saved.refreshTokenEnc)).toBe(newRefresh);
+    expect(cipher.decrypt(String(saved.accessTokenEnc))).toBe(newAccess);
+    expect(cipher.decrypt(String(saved.refreshTokenEnc))).toBe(newRefresh);
   });
 
   it('does not refresh again from a stale row right after a successful refresh', async () => {
@@ -186,9 +184,9 @@ describe('AnafOAuthService', () => {
     await expect(service.getAccessToken(7)).resolves.toBe(newAccess);
     getOne.mockResolvedValueOnce(stale);
 
-    await expect(
-      service.getAccessToken(7, { force: true }),
-    ).resolves.toBe(newAccess);
+    await expect(service.getAccessToken(7, { force: true })).resolves.toBe(
+      newAccess,
+    );
     expect(post).toHaveBeenCalledTimes(1);
   });
 
@@ -231,9 +229,9 @@ describe('AnafOAuthService', () => {
     const { service, post } = setup({
       lastRefreshedAt: new Date(Date.now() - 10 * 1000),
     });
-    await expect(
-      service.getAccessToken(7, { force: true }),
-    ).resolves.toBe('old-access');
+    await expect(service.getAccessToken(7, { force: true })).resolves.toBe(
+      'old-access',
+    );
     expect(post).not.toHaveBeenCalled();
   });
 
@@ -266,9 +264,7 @@ describe('AnafOAuthService', () => {
         response: { status: 400, data: { error: 'invalid_grant' } },
       }),
     );
-    await expect(service.getAccessToken(7)).rejects.toThrow(
-      /Reautorizați/,
-    );
+    await expect(service.getAccessToken(7)).rejects.toThrow(/Reautorizați/);
     expect(update).toHaveBeenCalledWith(7, {
       status: 'expired',
       refreshStartedAt: null,
@@ -380,7 +376,7 @@ describe('AnafOAuthService', () => {
         serial: 'ab:cd',
         roles: [],
       },
-      'self',
+      AnafConnectionSource.Self,
     );
     expect(saved.id).toBe(7);
     expect(saved.deniedWithFreshTokenAt).toBeNull();
@@ -417,12 +413,10 @@ describe('AnafOAuthService', () => {
       const { service, instance, post } = setup();
       post.mockRejectedValue(new Error('ECONNRESET'));
 
-      await expect(service.getAccessToken(7)).resolves.toBe(
+      await expect(service.getAccessToken(7)).resolves.toBe('old-access');
+      await expect(instance().getAccessToken(7, { force: true })).resolves.toBe(
         'old-access',
       );
-      await expect(
-        instance().getAccessToken(7, { force: true }),
-      ).resolves.toBe('old-access');
       expect(post).toHaveBeenCalledTimes(1);
     });
 

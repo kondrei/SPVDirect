@@ -1,12 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, ApiError } from '../client';
-import type {
-  Accountant,
-  AccountantProfile,
-  CaenInfo,
-  FirmLookup,
-  ProfileUpdate,
-} from '../types';
+import { api, ApiError, downloadFile } from '../client';
+import type { Accountant, AccountantProfile, CaenInfo, FirmLookup, ProfileUpdate } from '../types';
 import { keys } from './queryKeys';
 import { useAccountantApiPath, requirePath } from './accountantPath';
 
@@ -71,6 +65,26 @@ export function useCaen(code: string) {
     },
     enabled: valid,
     staleTime: Infinity,
+  });
+}
+
+export function useExportAccount() {
+  const path = useAccountantApiPath('/export');
+  return useMutation({
+    mutationFn: () => downloadFile(requirePath(path), 'cont-spvdirect-export.zip'),
+  });
+}
+
+export function useDeleteAccount() {
+  const qc = useQueryClient();
+  const path = useAccountantApiPath('');
+  return useMutation({
+    mutationFn: (password: string) =>
+      api<void>(requirePath(path), { method: 'DELETE', json: { password } }),
+    onSuccess: () => {
+      qc.clear();
+      qc.setQueryData(keys.me, null);
+    },
   });
 }
 

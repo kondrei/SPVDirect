@@ -1,12 +1,4 @@
-import type {
-  BuyerLookup,
-  Company,
-  CreateInvoiceInput,
-  InvoiceCurrency,
-  InvoiceUnit,
-  LineSuggestion,
-  PaymentMethod,
-} from '../../api/types';
+import type { BuyerLookup, Company, CreateInvoiceInput, InvoiceUnit, LineSuggestion } from '../../api/types';
 import {
   decimalText,
   isValidCui,
@@ -14,6 +6,7 @@ import {
   parseDecimal,
 } from '../../lib/format';
 import { allowedVatRates, todayIso, ZERO_VAT_REASONS } from '../../lib/invoice';
+import { Currency, PaymentMethod, VatCategory } from '../../api/enums';
 
 export type ZeroReason = keyof typeof ZERO_VAT_REASONS;
 
@@ -49,7 +42,7 @@ export interface InvoiceHeader {
   issueDate: string;
   deliveryDate: string;
   dueDate: string;
-  currency: InvoiceCurrency;
+  currency: Currency;
   exchangeRate: string;
   paymentMethod: PaymentMethod;
   notes: string;
@@ -103,7 +96,7 @@ export function emptyLine(vatRate: number): LineForm {
     unit: 'serviciu',
     unitPrice: '',
     vatRate: String(vatRate),
-    zeroReason: 'E',
+    zeroReason: VatCategory.Exempt,
   };
 }
 
@@ -132,9 +125,9 @@ export function initialInvoiceForm(companyId: number): InvoiceFormState {
       issueDate: today,
       deliveryDate: today,
       dueDate: '',
-      currency: 'RON',
+      currency: Currency.RON,
       exchangeRate: '',
-      paymentMethod: 'transfer',
+      paymentMethod: PaymentMethod.Transfer,
       notes: '',
     },
     buyer: EMPTY_BUYER,
@@ -212,7 +205,7 @@ export function lineFromSuggestion(
   rates: number[],
 ): Partial<LineForm> {
   const keepsRate =
-    vatPayer && suggestion.vatCategory !== 'O' && rates.includes(suggestion.vatRate);
+    vatPayer && suggestion.vatCategory !== VatCategory.NotSubject && rates.includes(suggestion.vatRate);
   return {
     description: suggestion.description,
     quantity: decimalText(suggestion.quantity),
@@ -226,7 +219,7 @@ export function lineFromSuggestion(
 }
 
 export function exchangeRateOf(header: InvoiceHeader): number | null {
-  return header.currency === 'RON' ? null : parseDecimal(header.exchangeRate);
+  return header.currency === Currency.RON ? null : parseDecimal(header.exchangeRate);
 }
 
 export function validateInvoiceForm(state: InvoiceFormState): string | null {
@@ -244,7 +237,7 @@ export function validateInvoiceForm(state: InvoiceFormState): string | null {
   if (header.dueDate && header.dueDate < header.issueDate) {
     return 'Scadența nu poate fi înaintea datei emiterii.';
   }
-  if (header.currency !== 'RON' && !(exchange && exchange > 0)) {
+  if (header.currency !== Currency.RON && !(exchange && exchange > 0)) {
     return 'Introduceți cursul BNR pentru a calcula TVA în RON.';
   }
   if (!buyer.name.trim() || !buyer.address.trim()) {

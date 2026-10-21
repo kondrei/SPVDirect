@@ -3,10 +3,11 @@ import type { FoundBuyer } from '../../api/types';
 import { Alert, Button, Card, StatusBadge, TextField } from '../../components/ui';
 import type { BuyerForm, InvoiceFormAction } from './invoiceForm';
 import type { useBuyerAutofill } from './useBuyerAutofill';
+import { BuyerSource } from '../../api/enums';
 
 function buyerSource(buyer: FoundBuyer): string {
-  if (buyer.source === 'company') return 'Date preluate din firmele dvs.';
-  if (buyer.source === 'anaf') return 'Date preluate din ANAF.';
+  if (buyer.source === BuyerSource.Company) return 'Date preluate din firmele dvs.';
+  if (buyer.source === BuyerSource.Anaf) return 'Date preluate din ANAF.';
   return buyer.anafChecked
     ? 'Date preluate din ultima factură emisă acestui client, cu statusul actual din ANAF.'
     : 'Date preluate din ultima factură emisă acestui client. ANAF nu a răspuns: apăsați Caută la ANAF pentru a verifica statusul.';
@@ -24,7 +25,7 @@ function BuyerStatus({ buyer }: { buyer: FoundBuyer }) {
         </StatusBadge>
       )}
       {buyer.inactive ? <StatusBadge status="inactive" /> : null}
-      {buyer.source === 'invoice' && !buyer.anafChecked ? (
+      {buyer.source === BuyerSource.Invoice && !buyer.anafChecked ? (
         <StatusBadge status="unverified" />
       ) : null}
       <span className="muted small">{buyerSource(buyer)}</span>

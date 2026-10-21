@@ -24,7 +24,7 @@ import {
   ListSpvMessagesQuery,
   ParseSpvMessageIdPipe,
   SyncSpvDto,
-} from '../spv.dto.js';
+} from '../dto/spv.dto.js';
 import { SpvArchiveService } from '../services/spv-archive.service.js';
 import { SpvService } from '../services/spv.service.js';
 

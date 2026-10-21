@@ -5,6 +5,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, LessThan, Repository } from 'typeorm';
 import { Accountant } from '../../accountants/accountant.entity.js';
 import { ResendAdminApprovalCommand } from './resend-admin-approval.command.js';
+import { AccountStatus } from '../../accountants/dto/accountant.enums.js';
+import { ResendResult } from '../dto/auth.enums.js';
 
 export const RETRY_SCHEDULE = CronExpression.EVERY_DAY_AT_8AM;
 export const RETRY_GRACE_MS = 5 * 60_000;
@@ -29,7 +31,7 @@ export class AdminApprovalRetryJob {
       const due = await this.accountants.find({
         select: { id: true },
         where: {
-          status: 'pending',
+          status: AccountStatus.Pending,
           adminNotifiedAt: IsNull(),
           createdAt: LessThan(new Date(Date.now() - RETRY_GRACE_MS)),
         },
@@ -40,7 +42,7 @@ export class AdminApprovalRetryJob {
         const result = await this.commands.execute(
           new ResendAdminApprovalCommand(id),
         );
-        if (result === 'failed') break;
+        if (result === ResendResult.Failed) break;
       }
     } catch (err) {
       this.logger.error(

@@ -30,6 +30,6 @@ import { InvoicesService } from './services/invoices.service.js';
     InvoiceFileStore,
     InvoiceMailer,
   ],
-  exports: [InvoicesService],
+  exports: [InvoicesService, InvoiceDeliveryService, InvoiceFileStore],
 })
 export class InvoicesModule {}

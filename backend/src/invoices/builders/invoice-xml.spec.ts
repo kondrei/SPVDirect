@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { computeInvoice } from '../helpers/invoice-calc.js';
 import { line, party, sampleInvoice } from '../../testing/invoice-fixtures.js';
 import { CIUS_RO_CUSTOMIZATION_ID, renderInvoiceXml } from './invoice-xml.js';
+import { VatCategory, Currency, PaymentMethod } from '../dto/invoice.enums.js';
 
 describe('renderInvoiceXml', () => {
   const xml = renderInvoiceXml(sampleInvoice());
@@ -78,7 +79,7 @@ describe('renderInvoiceXml', () => {
     const computed = computeInvoice([line({ unitPrice: 1000 })], 4.9765);
     const out = renderInvoiceXml(
       sampleInvoice({
-        currency: 'EUR',
+        currency: Currency.EUR,
         exchangeRate: 4.9765,
         lines: computed.lines,
         vatBreakdown: computed.totals.breakdown,
@@ -97,7 +98,7 @@ describe('renderInvoiceXml', () => {
       [
         line({
           vatRate: 0,
-          vatCategory: 'O',
+          vatCategory: VatCategory.NotSubject,
           vatExemptionReason: 'Neplătitor',
         }),
       ],
@@ -125,7 +126,7 @@ describe('renderInvoiceXml', () => {
       [
         line({
           vatRate: 0,
-          vatCategory: 'O',
+          vatCategory: VatCategory.NotSubject,
           vatExemptionReason: 'Neplătitor',
         }),
       ],
@@ -155,7 +156,7 @@ describe('renderInvoiceXml', () => {
   it('omits the payment means of a transfer without an IBAN (BR-61)', () => {
     const out = renderInvoiceXml(
       sampleInvoice({
-        paymentMethod: 'transfer',
+        paymentMethod: PaymentMethod.Transfer,
         seller: party({ iban: null }),
       }),
     );

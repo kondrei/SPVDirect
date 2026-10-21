@@ -7,6 +7,8 @@ import { SpvMessage } from '../anaf/spv/spv-message.entity.js';
 import { Company } from '../companies/company.entity.js';
 import { EfacturaUpload } from '../efactura/efactura-upload.entity.js';
 import { Invoice } from '../invoices/invoice.entity.js';
+import { AccountStatus } from '../accountants/dto/accountant.enums.js';
+import { UploadStatus } from '../efactura/dto/efactura.enums.js';
 
 export const PUBLIC_STATS_TTL_MS = 5 * 60_000;
 
@@ -81,10 +83,10 @@ export class PublicStatsService {
       spvMessages,
       anafConnections,
     ] = await Promise.all([
-      this.accountants.countBy({ status: 'active' }),
+      this.accountants.countBy({ status: AccountStatus.Active }),
       this.companies.count(),
       this.invoices.count(),
-      this.uploads.countBy({ status: 'ok' }),
+      this.uploads.countBy({ status: UploadStatus.Ok }),
       this.spvMessages.count(),
       this.connections.count(),
     ]);

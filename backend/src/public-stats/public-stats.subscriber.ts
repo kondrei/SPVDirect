@@ -7,6 +7,7 @@ import type {
   InsertEvent,
   QueryRunner,
   RemoveEvent,
+  SoftRemoveEvent,
   TransactionCommitEvent,
   TransactionRollbackEvent,
   UpdateEvent,
@@ -50,6 +51,10 @@ export class PublicStatsSubscriber implements EntitySubscriberInterface {
   }
 
   afterRemove(event: RemoveEvent<unknown>): void {
+    this.changed(event.metadata, event.queryRunner, COUNTED);
+  }
+
+  afterSoftRemove(event: SoftRemoveEvent<unknown>): void {
     this.changed(event.metadata, event.queryRunner, COUNTED);
   }
 

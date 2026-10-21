@@ -1,5 +1,7 @@
+import { BadGatewayException } from '@nestjs/common';
 import type { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
+import { REMOVE_CHUNK } from '../../common/storage/supabase-storage.js';
 import { InvoiceFileStore } from './invoice-file-store.service.js';
 
 function setup(env: Record<string, string> = {}) {
@@ -36,5 +38,33 @@ describe('InvoiceFileStore', () => {
       url: 'https://abc.supabase.co/storage/v1/object/invoices/1/7/FCT-000012.pdf',
       headers: expect.objectContaining({ 'Content-Type': 'application/pdf' }),
     });
+  });
+
+  it('deletes stored PDFs in chunks of REMOVE_CHUNK', async () => {
+    const { store, request } = setup();
+    const paths = Array.from(
+      { length: REMOVE_CHUNK + 1 },
+      (_, i) => `1/7/FCT-${i}.pdf`,
+    );
+    await store.remove(paths);
+    const deletes = request.mock.calls
+      .map((c) => c[0] as { method: string; url: string; data: unknown })
+      .filter((c) => c.method === 'DELETE');
+    expect(deletes).toHaveLength(2);
+    expect(deletes[0]).toMatchObject({
+      url: 'https://abc.supabase.co/storage/v1/object/invoices',
+      data: { prefixes: paths.slice(0, REMOVE_CHUNK) },
+    });
+    expect(deletes[1].data).toEqual({ prefixes: paths.slice(REMOVE_CHUNK) });
+  });
+
+  it('treats a 404 on delete as already gone and fails on other errors', async () => {
+    const { store, request } = setup();
+    request.mockResolvedValueOnce({ status: 404 });
+    await expect(store.remove(['1/7/a.pdf'])).resolves.toBeUndefined();
+    request.mockResolvedValueOnce({ status: 500 });
+    await expect(store.remove(['1/7/a.pdf'])).rejects.toBeInstanceOf(
+      BadGatewayException,
+    );
   });
 });

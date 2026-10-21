@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { CreateInvoiceDto, LineSuggestionsQuery } from './invoice.dto.js';
+import { VatCategory, Currency, PaymentMethod } from './invoice.enums.js';
 
 function body(overrides: Record<string, unknown> = {}) {
   return {
@@ -9,8 +10,8 @@ function body(overrides: Record<string, unknown> = {}) {
     series: ' fct ',
     issueDate: '2026-10-04',
     deliveryDate: '2026-10-01',
-    currency: 'RON',
-    paymentMethod: 'transfer',
+    currency: Currency.RON,
+    paymentMethod: PaymentMethod.Transfer,
     buyer: {
       name: ' Client SRL ',
       cui: 'RO 87654321',
@@ -135,7 +136,7 @@ describe('CreateInvoiceDto', () => {
             unit: 'buc',
             unitPrice: 1,
             vatRate: 0,
-            vatCategory: 'O',
+            vatCategory: VatCategory.NotSubject,
           },
         ],
       }),

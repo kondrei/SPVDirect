@@ -582,6 +582,120 @@ describe('companies', () => {
     ).toBeInTheDocument();
     expect(refreshed).toBe(true);
   });
+
+  describe('deleting a company', () => {
+    const deleteApi = () => ({
+      'GET /auth/me': { status: 200, body: ME },
+      'GET /accountants/1/companies/1': { status: 200, body: company() },
+      'GET /accountants/1/companies': { status: 200, body: [] },
+      'GET /accountants/1/anaf/connections': { status: 200, body: [] },
+      'GET /accountants/1/companies/1/export': { status: 200, body: {} },
+      'DELETE /accountants/1/companies/1': { status: 204 },
+    });
+
+    function stubObjectUrls() {
+      Object.assign(URL, {
+        createObjectURL: vi.fn(() => 'blob:export'),
+        revokeObjectURL: vi.fn(),
+      });
+    }
+
+    it('lets the accountant download the archive at any time, without deleting', async () => {
+      const user = userEvent.setup();
+      stubObjectUrls();
+      const { calls } = renderApp('/companies/1', deleteApi());
+      await user.click(
+        await screen.findByRole('button', { name: 'Descarcă arhiva firmei' }),
+      );
+      await waitFor(() =>
+        expect(calls).toContain('GET /accountants/1/companies/1/export'),
+      );
+      expect(
+        screen.queryByText('Exportați datele firmei înainte de ștergere?'),
+      ).not.toBeInTheDocument();
+      expect(calls).not.toContain('DELETE /accountants/1/companies/1');
+    });
+
+    it('shows why the archive could not be downloaded', async () => {
+      const user = userEvent.setup();
+      renderApp('/companies/1', {
+        ...deleteApi(),
+        'GET /accountants/1/companies/1/export': {
+          status: 429,
+          body: { message: 'Prea multe cereri' },
+        },
+      });
+      await user.click(
+        await screen.findByRole('button', { name: 'Descarcă arhiva firmei' }),
+      );
+      expect(await screen.findByText('Prea multe cereri')).toBeInTheDocument();
+    });
+
+    it('offers the export first, then deletes and returns to the list', async () => {
+      const user = userEvent.setup();
+      stubObjectUrls();
+      const { calls, router } = renderApp('/companies/1', deleteApi());
+      await user.click(await screen.findByRole('button', { name: 'Șterge firma' }));
+
+      expect(
+        screen.getByText('Exportați datele firmei înainte de ștergere?'),
+      ).toBeInTheDocument();
+      expect(screen.getByText(/se șterg definitiv după 30 de zile/)).toBeInTheDocument();
+      expect(screen.getByText(/SPVDirect nu mai\s+păstrează nicio copie/)).toBeInTheDocument();
+      expect(calls).not.toContain('DELETE /accountants/1/companies/1');
+
+      await user.click(screen.getByRole('button', { name: 'Exportă datele (ZIP)' }));
+      expect(
+        await screen.findByText('Arhiva cu datele firmei a fost descărcată.'),
+      ).toBeInTheDocument();
+      expect(calls).toContain('GET /accountants/1/companies/1/export');
+
+      await user.click(screen.getByRole('button', { name: 'Șterge firma' }));
+      await waitFor(() =>
+        expect(router.state.location.pathname).toBe('/accountants/1/companies'),
+      );
+      expect(calls).toContain('DELETE /accountants/1/companies/1');
+    });
+
+    it('deletes without an export when the accountant chooses so', async () => {
+      const user = userEvent.setup();
+      const { calls, router } = renderApp('/companies/1', deleteApi());
+      await user.click(await screen.findByRole('button', { name: 'Șterge firma' }));
+      await user.click(screen.getByRole('button', { name: 'Șterge fără export' }));
+      await waitFor(() =>
+        expect(router.state.location.pathname).toBe('/accountants/1/companies'),
+      );
+      expect(calls).not.toContain('GET /accountants/1/companies/1/export');
+    });
+
+    it('cancels without deleting anything', async () => {
+      const user = userEvent.setup();
+      const { calls } = renderApp('/companies/1', deleteApi());
+      await user.click(await screen.findByRole('button', { name: 'Șterge firma' }));
+      await user.click(screen.getByRole('button', { name: 'Renunță' }));
+      expect(
+        screen.queryByText('Exportați datele firmei înainte de ștergere?'),
+      ).not.toBeInTheDocument();
+      expect(calls).not.toContain('DELETE /accountants/1/companies/1');
+    });
+
+    it('shows why the delete was refused and stays on the page', async () => {
+      const user = userEvent.setup();
+      const { router } = renderApp('/companies/1', {
+        ...deleteApi(),
+        'DELETE /accountants/1/companies/1': {
+          status: 409,
+          body: { message: 'Firma are o factură în curs de trimitere la ANAF.' },
+        },
+      });
+      await user.click(await screen.findByRole('button', { name: 'Șterge firma' }));
+      await user.click(screen.getByRole('button', { name: 'Șterge fără export' }));
+      expect(
+        await screen.findByText('Firma are o factură în curs de trimitere la ANAF.'),
+      ).toBeInTheDocument();
+      expect(router.state.location.pathname).toBe('/accountants/1/companies/1');
+    });
+  });
 });
 
 describe('connections', () => {
@@ -637,6 +751,86 @@ const profileApi = (extra: Parameters<typeof renderApp>[1] = {}) => ({
 });
 
 describe('profile', () => {
+  describe('account data', () => {
+    function stubObjectUrls() {
+      Object.assign(URL, {
+        createObjectURL: vi.fn(() => 'blob:cont'),
+        revokeObjectURL: vi.fn(),
+      });
+    }
+
+    it('downloads the whole account archive without deleting anything', async () => {
+      const user = userEvent.setup();
+      stubObjectUrls();
+      const { calls } = renderApp(
+        '/accountants/1/profile',
+        profileApi({ 'GET /accountants/1/export': { status: 200, body: {} } }),
+      );
+      await user.click(
+        await screen.findByRole('button', { name: 'Descarcă toate datele' }),
+      );
+      expect(
+        await screen.findByText('Arhiva contului a fost descărcată.'),
+      ).toBeInTheDocument();
+      expect(calls).toContain('GET /accountants/1/export');
+      expect(calls).not.toContain('DELETE /accountants/1');
+    });
+
+    it('deletes the account with the password and goes to the landing page', async () => {
+      const user = userEvent.setup();
+      let body: unknown;
+      const { router } = renderApp(
+        '/accountants/1/profile',
+        profileApi({
+          'DELETE /accountants/1': (init) => {
+            body = JSON.parse(String(init?.body));
+            return { status: 204 };
+          },
+        }),
+      );
+      await user.click(await screen.findByRole('button', { name: 'Șterge contul' }));
+      expect(screen.getByText('Ștergeți contul SPVDirect?')).toBeInTheDocument();
+      expect(screen.getByText(/certificatele ANAF sunt revocate/)).toBeInTheDocument();
+      expect(screen.getByText(/Legea contabilității, art. 25/)).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Șterge contul fără export' }));
+      expect(screen.getByText('Introduceți parola.')).toBeInTheDocument();
+      expect(body).toBeUndefined();
+
+      await user.type(screen.getByLabelText('Parola, pentru confirmare'), 'parola-mea');
+      await user.click(screen.getByRole('button', { name: 'Șterge contul fără export' }));
+      await waitFor(() => expect(router.state.location.pathname).toBe('/'));
+      expect(body).toEqual({ password: 'parola-mea' });
+    });
+
+    it('shows a wrong password and keeps the account', async () => {
+      const user = userEvent.setup();
+      const { router } = renderApp(
+        '/accountants/1/profile',
+        profileApi({
+          'DELETE /accountants/1': {
+            status: 400,
+            body: { message: 'Parola este incorectă' },
+          },
+        }),
+      );
+      await user.click(await screen.findByRole('button', { name: 'Șterge contul' }));
+      await user.type(screen.getByLabelText('Parola, pentru confirmare'), 'gresita');
+      await user.click(screen.getByRole('button', { name: 'Șterge contul fără export' }));
+      expect(await screen.findByText('Parola este incorectă')).toBeInTheDocument();
+      expect(router.state.location.pathname).toBe('/accountants/1/profile');
+    });
+
+    it('cancels without deleting', async () => {
+      const user = userEvent.setup();
+      const { calls } = renderApp('/accountants/1/profile', profileApi());
+      await user.click(await screen.findByRole('button', { name: 'Șterge contul' }));
+      await user.click(screen.getByRole('button', { name: 'Renunță' }));
+      expect(screen.queryByText('Ștergeți contul SPVDirect?')).not.toBeInTheDocument();
+      expect(calls).not.toContain('DELETE /accountants/1');
+    });
+  });
+
   it('saves the name and CECCAR data and updates the sidebar', async () => {
     const user = userEvent.setup();
     let body: Record<string, unknown> = {};

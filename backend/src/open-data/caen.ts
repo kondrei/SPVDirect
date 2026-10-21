@@ -1,7 +1,8 @@
+import { CaenRevision } from './dto/caen.enums.js';
 export interface CaenInfo {
   code: string;
   name: string;
-  revision: 2 | 3;
+  revision: CaenRevision;
   rev2Name: string | null;
 }
 
@@ -35,8 +36,8 @@ export function parseCaenCsv(text: string): CaenTable {
     const n = cells[name]?.replace(/\s+/g, ' ').trim();
     if (!/^\d{4}$/.test(c) || !n) continue;
     const v = cells[version]?.trim();
-    if (v === '2') rev2.set(c, n);
-    else if (v === '3') rev3.set(c, n);
+    if (v === String(CaenRevision.Rev2)) rev2.set(c, n);
+    else if (v === String(CaenRevision.Rev3)) rev3.set(c, n);
   }
   if (!rev2.size || !rev3.size) {
     throw new Error('N_CAEN.CSV has no Rev. 2 or Rev. 3 classes');
@@ -56,10 +57,11 @@ export function describeCaen(
     return {
       code: c,
       name: rev3,
-      revision: 3,
+      revision: CaenRevision.Rev3,
       rev2Name: rev2 && rev2 !== rev3 ? rev2 : null,
     };
   }
-  if (rev2) return { code: c, name: rev2, revision: 2, rev2Name: null };
+  if (rev2)
+    return { code: c, name: rev2, revision: CaenRevision.Rev2, rev2Name: null };
   return null;
 }

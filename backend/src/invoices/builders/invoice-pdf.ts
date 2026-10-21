@@ -10,7 +10,8 @@ import {
   stornoReference,
   vatId,
 } from '../helpers/invoice-format.js';
-import type { InvoiceParty, PaymentMethod } from '../invoice.types.js';
+import type { InvoiceParty } from '../invoice.types.js';
+import { PaymentMethod, VatCategory, Currency } from '../dto/invoice.enums.js';
 
 export interface InvoiceLogo {
   content: Buffer;
@@ -80,7 +81,7 @@ function fontPath(file: string): string {
 }
 
 function vatLabel(category: string, rate: number): string {
-  return category === 'S' || rate > 0 ? `${rate}%` : '0%';
+  return category === VatCategory.Standard || rate > 0 ? `${rate}%` : '0%';
 }
 
 export function renderInvoicePdf(
@@ -333,7 +334,7 @@ function drawTotals(
     top + 42,
   );
   let totalsBottom = top + 62;
-  if (invoice.currency !== 'RON' && invoice.exchangeRate) {
+  if (invoice.currency !== Currency.RON && invoice.exchangeRate) {
     doc.font(REGULAR).fontSize(8).fillColor(MUTED);
     doc.text(
       `Curs ${invoice.exchangeRate} RON/${invoice.currency} · TVA total: ${formatAmount(invoice.totalVatRon)} RON`,
@@ -353,7 +354,7 @@ function drawMentions(
 ): void {
   const mentions: string[] = [
     `Mod de plată: ${PAYMENT_LABELS[invoice.paymentMethod]}${
-      invoice.paymentMethod === 'transfer' && invoice.seller.iban
+      invoice.paymentMethod === PaymentMethod.Transfer && invoice.seller.iban
         ? ` · IBAN ${invoice.seller.iban}`
         : ''
     }`,

@@ -17,6 +17,7 @@ import {
   type LineSuggestion,
 } from '../helpers/invoice-line-suggestions.js';
 import { Invoice } from '../invoice.entity.js';
+import { BuyerSource } from '../dto/invoice.enums.js';
 
 type BuyerStatus = Pick<BuyerLookup, 'vatPayer' | 'inactive' | 'eFactura'> & {
   anafChecked: boolean;
@@ -24,7 +25,7 @@ type BuyerStatus = Pick<BuyerLookup, 'vatPayer' | 'inactive' | 'eFactura'> & {
 
 export type FoundBuyer = BuyerLookup &
   BuyerStatus & {
-    source: 'invoice' | 'company' | 'anaf';
+    source: BuyerSource;
   };
 
 @Injectable()
@@ -53,7 +54,7 @@ export class InvoiceBuyersService {
       return {
         ...last.buyer,
         ...(await this.anafStatus(accountantId, cui)),
-        source: 'invoice',
+        source: BuyerSource.Invoice,
       };
     }
     const company = await this.companies.findByCui(accountantId, cui);
@@ -63,13 +64,13 @@ export class InvoiceBuyersService {
         inactive: company.inactive,
         eFactura: company.eFactura,
         anafChecked: false,
-        source: 'company',
+        source: BuyerSource.Company,
       };
     }
     return {
       ...(await this.lookupBuyer(accountantId, cui)),
       anafChecked: true,
-      source: 'anaf',
+      source: BuyerSource.Anaf,
     };
   }
 

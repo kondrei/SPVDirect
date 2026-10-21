@@ -7,12 +7,7 @@ import {
   useDownloadInvoice,
   useSaveInvoiceToStorage,
 } from '../../api/hooks/invoices';
-import type {
-  EfacturaUpload,
-  Invoice,
-  InvoiceSummary,
-  XmlValidation,
-} from '../../api/types';
+import type { EfacturaUpload, Invoice, InvoiceSummary, XmlValidation } from '../../api/types';
 import { invoiceFilename } from '../../lib/invoice';
 
 export type ActionState<T> =

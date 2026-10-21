@@ -14,8 +14,10 @@ import { Repository } from 'typeorm';
 import { ApiLogsService } from '../../api-logs/api-logs.service.js';
 import { trackApiCall } from '../../api-logs/track-api-call.js';
 import { AnafConnection } from '../anaf-connection.entity.js';
-import type { AnafEnvironment } from '../anaf-environment.js';
+
 import { AnafOAuthService } from './anaf-oauth.service.js';
+import { AnafEnvironment } from '../dto/anaf.enums.js';
+import { ApiLogMethod } from '../../api-logs/dto/api-log.enums.js';
 
 export interface AnafRequest {
   accountantId: number;
@@ -110,7 +112,7 @@ export class AnafApiService {
     req: AnafRequest,
     token: string,
   ): Promise<AxiosResponse<T>> {
-    const method = (req.method ?? 'GET').toUpperCase();
+    const method = (req.method ?? ApiLogMethod.Get).toUpperCase();
     return trackApiCall(
       this.apiLogs,
       {

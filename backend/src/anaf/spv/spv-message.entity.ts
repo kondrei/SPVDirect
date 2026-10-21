@@ -1,14 +1,15 @@
 import {
   Column,
   CreateDateColumn,
+  DeleteDateColumn,
   Entity,
   Index,
   PrimaryGeneratedColumn,
-  Unique,
 } from 'typeorm';
 
 @Entity('spv_messages')
-@Unique('uq_spv_messages_accountant_message', ['accountantId', 'anafMessageId'])
+@Index('uq_spv_messages_accountant_message', { synchronize: false })
+@Index('idx_spv_messages_company', ['companyId'])
 @Index('idx_spv_messages_accountant_created', ['accountantId', 'anafCreatedAt'])
 export class SpvMessage {
   @PrimaryGeneratedColumn('identity', {
@@ -70,4 +71,7 @@ export class SpvMessage {
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
+
+  @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz', nullable: true })
+  deletedAt: Date | null;
 }

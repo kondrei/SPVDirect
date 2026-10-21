@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import type { Invoice } from '../invoice.entity.js';
 import { stornoReference, vatId } from '../helpers/invoice-format.js';
 import { UNITS, type InvoiceParty } from '../invoice.types.js';
+import { VatCategory, Currency, PaymentMethod } from '../dto/invoice.enums.js';
 
 export const CIUS_RO_CUSTOMIZATION_ID =
   'urn:cen.eu:en16931:2017#compliant#urn:efactura.mfinante.ro:CIUS-RO:1.0.1';
@@ -55,7 +56,7 @@ function categoryXml(
   rate: number,
   reason: string | null,
 ): string {
-  return `<cac:TaxCategory>${tag('cbc:ID', category)}${category === 'O' ? '' : tag('cbc:Percent', rate.toFixed(2))}${category !== 'S' && reason ? tag('cbc:TaxExemptionReason', reason) : ''}<cac:TaxScheme>${tag('cbc:ID', 'VAT')}</cac:TaxScheme></cac:TaxCategory>`;
+  return `<cac:TaxCategory>${tag('cbc:ID', category)}${category === VatCategory.NotSubject ? '' : tag('cbc:Percent', rate.toFixed(2))}${category !== VatCategory.Standard && reason ? tag('cbc:TaxExemptionReason', reason) : ''}<cac:TaxScheme>${tag('cbc:ID', 'VAT')}</cac:TaxScheme></cac:TaxCategory>`;
 }
 
 type InvoiceData = Pick<
@@ -91,7 +92,9 @@ export function renderInvoiceXml(invoice: InvoiceData): string {
   }
   const currency = invoice.currency;
   const reference = stornoReference(invoice);
-  const outOfScope = invoice.lines.some((l) => l.vatCategory === 'O');
+  const outOfScope = invoice.lines.some(
+    (l) => l.vatCategory === VatCategory.NotSubject,
+  );
   const notes = [
     reference ? `Stornare factură ${reference}` : null,
     invoice.vatOnCollection ? 'TVA la încasare' : null,
@@ -113,7 +116,8 @@ export function renderInvoiceXml(invoice: InvoiceData): string {
   if (notes.length) parts.push(tag('cbc:Note', notes.join('; ')));
   parts.push(tag('cbc:TaxPointDate', invoice.deliveryDate));
   parts.push(tag('cbc:DocumentCurrencyCode', currency));
-  if (currency !== 'RON') parts.push(tag('cbc:TaxCurrencyCode', 'RON'));
+  if (currency !== Currency.RON)
+    parts.push(tag('cbc:TaxCurrencyCode', Currency.RON));
 
   if (reference && invoice.stornoOfSeries && invoice.stornoOfNumber !== null) {
     parts.push(
@@ -139,7 +143,7 @@ export function renderInvoiceXml(invoice: InvoiceData): string {
     `<cac:Delivery>${tag('cbc:ActualDeliveryDate', invoice.deliveryDate)}</cac:Delivery>`,
   );
 
-  if (invoice.paymentMethod !== 'transfer') {
+  if (invoice.paymentMethod !== PaymentMethod.Transfer) {
     parts.push(
       `<cac:PaymentMeans>${tag('cbc:PaymentMeansCode', '10')}</cac:PaymentMeans>`,
     );
@@ -163,7 +167,7 @@ export function renderInvoiceXml(invoice: InvoiceData): string {
   parts.push(
     `<cac:TaxTotal>${tag('cbc:TaxAmount', amount(invoice.totalVat), ` currencyID="${currency}"`)}${subtotals}</cac:TaxTotal>`,
   );
-  if (currency !== 'RON') {
+  if (currency !== Currency.RON) {
     parts.push(
       `<cac:TaxTotal>${tag('cbc:TaxAmount', amount(invoice.totalVatRon), ' currencyID="RON"')}</cac:TaxTotal>`,
     );
@@ -176,7 +180,7 @@ export function renderInvoiceXml(invoice: InvoiceData): string {
 
   invoice.lines.forEach((line, index) => {
     parts.push(
-      `<cac:InvoiceLine>${tag('cbc:ID', String(index + 1))}${tag('cbc:InvoicedQuantity', String(line.quantity), ` unitCode="${UNITS[line.unit]}"`)}${tag('cbc:LineExtensionAmount', amount(line.netAmount), attr)}<cac:Item>${tag('cbc:Name', line.description.slice(0, 200))}<cac:ClassifiedTaxCategory>${tag('cbc:ID', line.vatCategory)}${line.vatCategory === 'O' ? '' : tag('cbc:Percent', line.vatRate.toFixed(2))}<cac:TaxScheme>${tag('cbc:ID', 'VAT')}</cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item><cac:Price>${tag('cbc:PriceAmount', String(line.unitPrice), attr)}</cac:Price></cac:InvoiceLine>`,
+      `<cac:InvoiceLine>${tag('cbc:ID', String(index + 1))}${tag('cbc:InvoicedQuantity', String(line.quantity), ` unitCode="${UNITS[line.unit]}"`)}${tag('cbc:LineExtensionAmount', amount(line.netAmount), attr)}<cac:Item>${tag('cbc:Name', line.description.slice(0, 200))}<cac:ClassifiedTaxCategory>${tag('cbc:ID', line.vatCategory)}${line.vatCategory === VatCategory.NotSubject ? '' : tag('cbc:Percent', line.vatRate.toFixed(2))}<cac:TaxScheme>${tag('cbc:ID', 'VAT')}</cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item><cac:Price>${tag('cbc:PriceAmount', String(line.unitPrice), attr)}</cac:Price></cac:InvoiceLine>`,
     );
   });
 

@@ -1,3 +1,4 @@
+import { Currency } from '../dto/invoice.enums.js';
 export const STATS_MONTHS = 6;
 
 export interface StatsRow {
@@ -46,7 +47,7 @@ export function statsWindowStart(today: string): string {
 }
 
 function netRon(row: StatsRow): number {
-  return row.currency === 'RON'
+  return row.currency === Currency.RON
     ? row.totalNet
     : row.totalNet * (row.exchangeRate ?? 0);
 }

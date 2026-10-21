@@ -33,6 +33,7 @@ import {
   CreateCompanyDto,
   UpdateCompanyDto,
 } from '../dto/company.dto.js';
+import { BulkCreateStatus } from '../dto/company.enums.js';
 
 @Controller('accountants/:accountantId/companies')
 @UseGuards(JwtAuthGuard, AccountantParamGuard)
@@ -71,7 +72,7 @@ export class CompaniesController {
     const results = await this.companies.createMany(accountantId, dto);
     return Promise.all(
       results.map(async (r) =>
-        r.status === 'created'
+        r.status === BulkCreateStatus.Created
           ? { ...r, company: await this.respond(r.company) }
           : r,
       ),
@@ -136,14 +137,5 @@ export class CompaniesController {
     @Param('id', ParseIdPipe) id: number,
   ) {
     return this.respond(await this.companies.removeLogo(accountantId, id));
-  }
-
-  @Delete(':id')
-  @HttpCode(204)
-  remove(
-    @Param('accountantId', ParseIdPipe) accountantId: number,
-    @Param('id', ParseIdPipe) id: number,
-  ) {
-    return this.companies.remove(accountantId, id);
   }
 }

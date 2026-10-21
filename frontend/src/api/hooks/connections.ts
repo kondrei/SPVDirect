@@ -1,9 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, API_URL } from '../client';
-import type {
-  AnafConnection,
-  ConnectionTestResult,
-} from '../types';
+import type { AnafConnection, ConnectionTestResult } from '../types';
 import { keys } from './queryKeys';
 import { useAccountantApiPath, requirePath } from './accountantPath';
 

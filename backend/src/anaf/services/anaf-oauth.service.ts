@@ -10,15 +10,17 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { Repository } from 'typeorm';
 import { TokenCipher } from '../../common/crypto/token-cipher.service.js';
-import {
-  AnafConnection,
-  AnafConnectionSource,
-} from '../anaf-connection.entity.js';
+import { AnafConnection } from '../anaf-connection.entity.js';
 import {
   AnafTokenClient,
   AnafTokenError,
   type AnafTokenSet,
 } from './anaf-token-client.service.js';
+import {
+  AnafConnectionStatus,
+  AnafConnectionSource,
+  AnafTokenHint,
+} from '../dto/anaf.enums.js';
 
 export const TOKEN_COOLDOWN_MS = 60 * 1000;
 export const REFRESH_LEASE_MS = 90 * 1000;
@@ -41,7 +43,9 @@ export class AnafOAuthService {
   ) {}
 
   async revokeConnection(connectionId: number): Promise<boolean> {
-    await this.connections.update(connectionId, { status: 'revoked' });
+    await this.connections.update(connectionId, {
+      status: AnafConnectionStatus.Revoked,
+    });
     await this.inFlightRefreshes.get(connectionId)?.catch(() => undefined);
 
     const connection = await this.waitForRefreshEnd(connectionId);
@@ -51,12 +55,12 @@ export class AnafOAuthService {
     try {
       await this.tokens.revokeToken(
         this.cipher.decrypt(connection.refreshTokenEnc),
-        'refresh_token',
+        AnafTokenHint.RefreshToken,
       );
       if (connection.accessExpiresAt.getTime() > now) {
         await this.tokens.revokeToken(
           this.cipher.decrypt(connection.accessTokenEnc),
-          'access_token',
+          AnafTokenHint.AccessToken,
         );
       }
       return true;
@@ -100,7 +104,7 @@ export class AnafOAuthService {
       lastRefreshedAt: now,
       tokenCallAt: now,
       deniedWithFreshTokenAt: null,
-      status: 'active',
+      status: AnafConnectionStatus.Active,
     });
     return this.connections.save(connection);
   }
@@ -110,14 +114,16 @@ export class AnafOAuthService {
     { force = false }: { force?: boolean } = {},
   ): Promise<string> {
     const connection = await this.loadWithTokens(connectionId);
-    if (connection.status !== 'active') {
+    if (connection.status !== AnafConnectionStatus.Active) {
       throw new UnauthorizedException(
         'Conexiunea ANAF nu mai este activă. Reautorizați certificatul.',
       );
     }
     const now = Date.now();
     if (connection.refreshExpiresAt.getTime() <= now) {
-      await this.connections.update(connectionId, { status: 'expired' });
+      await this.connections.update(connectionId, {
+        status: AnafConnectionStatus.Expired,
+      });
       throw new UnauthorizedException(
         'Autorizarea ANAF a expirat. Reautorizați certificatul.',
       );
@@ -196,7 +202,7 @@ export class AnafOAuthService {
       .update(AnafConnection)
       .set({ tokenCallAt: new Date(now), refreshStartedAt: new Date(now) })
       .where('id = :id', { id: connectionId })
-      .andWhere(`status = 'active'`)
+      .andWhere('status = :active', { active: AnafConnectionStatus.Active })
       .andWhere(
         `COALESCE(GREATEST(token_call_at, last_refreshed_at), '-infinity') <= :cooldownCutoff`,
         { cooldownCutoff: new Date(now - TOKEN_COOLDOWN_MS) },
@@ -229,7 +235,7 @@ export class AnafOAuthService {
     } catch (err) {
       if (err instanceof AnafTokenError && err.invalidGrant) {
         await this.connections.update(connectionId, {
-          status: 'expired',
+          status: AnafConnectionStatus.Expired,
           refreshStartedAt: null,
         });
         throw new UnauthorizedException(
@@ -251,7 +257,7 @@ export class AnafOAuthService {
     seen: AnafConnection,
   ): Promise<string | null> {
     const current = await this.waitForRefreshEnd(seen.id);
-    if (current.status !== 'active') {
+    if (current.status !== AnafConnectionStatus.Active) {
       throw new UnauthorizedException(
         'Conexiunea ANAF nu mai este activă. Reautorizați certificatul.',
       );

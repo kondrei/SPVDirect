@@ -11,6 +11,8 @@ import { ApiLogsModule } from './api-logs/api-logs.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { CommonModule } from './common/common.module.js';
 import { CompaniesModule } from './companies/companies.module.js';
+import { CompanyDeletionModule } from './companies/deletion/company-deletion.module.js';
+import { AccountDeletionModule } from './accountants/deletion/account-deletion.module.js';
 import { Env, envValidationSchema } from './config/env.validation.js';
 import { buildTypeOrmOptions } from './config/typeorm.config.js';
 import { HealthController } from './health.controller.js';
@@ -41,6 +43,8 @@ import { PublicStatsModule } from './public-stats/public-stats.module.js';
     AccountantsModule,
     OpenDataModule,
     CompaniesModule,
+    CompanyDeletionModule,
+    AccountDeletionModule,
     InvoicesModule,
     EfacturaModule,
     ApiLogsModule,

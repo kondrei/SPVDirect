@@ -22,21 +22,25 @@ import { escapeHtml, renderPage, sendHtmlPage } from '../../common/html.js';
 import { ParseIdPipe } from '../../common/parse-id.pipe.js';
 import { ParseLinkTokenPipe } from '../../common/parse-token.pipe.js';
 import { AuthorizationLinksService } from '../authorization-links/authorization-links.service.js';
-import {
-  AnafAuthorizationService,
-  type LinkFailure,
-} from '../services/anaf-authorization.service.js';
+import { AnafAuthorizationService } from '../services/anaf-authorization.service.js';
 import {
   OAUTH_STATE_AUDIENCE,
   OAUTH_STATE_COOKIE,
   OAUTH_STATE_TTL_SECONDS,
   OAuthStatePayload,
 } from '../oauth-state.js';
+import {
+  AnafConnectionSource,
+  LinkFailure,
+  AuthorizationOutcomeKind,
+  ConnectCallbackStatus,
+} from '../dto/anaf.enums.js';
 
 const LINK_ERRORS: Record<LinkFailure, string> = {
-  not_found: 'Linkul de autorizare nu este valid.',
-  used: 'Acest link de autorizare a fost deja folosit.',
-  expired: 'Linkul de autorizare a expirat. Cereți contabilului un link nou.',
+  [LinkFailure.NotFound]: 'Linkul de autorizare nu este valid.',
+  [LinkFailure.Used]: 'Acest link de autorizare a fost deja folosit.',
+  [LinkFailure.Expired]:
+    'Linkul de autorizare a expirat. Cereți contabilului un link nou.',
 };
 
 @Controller()
@@ -59,7 +63,10 @@ export class AnafOAuthController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Res() res: Response,
   ) {
-    await this.redirectToAnaf(res, { mode: 'self', accountantId });
+    await this.redirectToAnaf(res, {
+      mode: AnafConnectionSource.Self,
+      accountantId,
+    });
   }
 
   @Get('anaf/authorize/:token')
@@ -100,7 +107,10 @@ export class AnafOAuthController {
     if (!lookup.ok) {
       return sendHtmlPage(res, 400, 'Link invalid', LINK_ERRORS[lookup.reason]);
     }
-    await this.redirectToAnaf(res, { mode: 'link', linkId: lookup.link.id });
+    await this.redirectToAnaf(res, {
+      mode: AnafConnectionSource.Link,
+      linkId: lookup.link.id,
+    });
   }
 
   @Get('anaf/callback')
@@ -136,18 +146,21 @@ export class AnafOAuthController {
     try {
       const outcome = await this.authorization.complete(payload, code);
       switch (outcome.kind) {
-        case 'self':
+        case AuthorizationOutcomeKind.Self:
           return res.redirect(
-            this.connectionsPage(outcome.accountantId, 'status=ok'),
+            this.connectionsPage(
+              outcome.accountantId,
+              `status=${ConnectCallbackStatus.Ok}`,
+            ),
           );
-        case 'link-invalid':
+        case AuthorizationOutcomeKind.LinkInvalid:
           return sendHtmlPage(
             res,
-            outcome.reason === 'used' ? 409 : 400,
+            outcome.reason === LinkFailure.Used ? 409 : 400,
             'Link invalid',
             LINK_ERRORS[outcome.reason],
           );
-        case 'link':
+        case AuthorizationOutcomeKind.Link:
           return sendHtmlPage(
             res,
             200,
@@ -164,7 +177,8 @@ export class AnafOAuthController {
   private async redirectToAnaf(
     res: Response,
     flow:
-      { mode: 'self'; accountantId: number } | { mode: 'link'; linkId: number },
+      | { mode: AnafConnectionSource.Self; accountantId: number }
+      | { mode: AnafConnectionSource.Link; linkId: number },
   ) {
     const state = randomBytes(24).toString('base64url');
     const payload: OAuthStatePayload = { ...flow, state };
@@ -190,7 +204,9 @@ export class AnafOAuthController {
         audience: OAUTH_STATE_AUDIENCE,
       });
       const id =
-        payload.mode === 'self' ? payload.accountantId : payload.linkId;
+        payload.mode === AnafConnectionSource.Self
+          ? payload.accountantId
+          : payload.linkId;
       if (!Number.isSafeInteger(id)) return null;
       return payload;
     } catch {
@@ -199,11 +215,11 @@ export class AnafOAuthController {
   }
 
   private fail(res: Response, payload: OAuthStatePayload, message: string) {
-    if (payload.mode === 'self') {
+    if (payload.mode === AnafConnectionSource.Self) {
       return res.redirect(
         this.connectionsPage(
           payload.accountantId,
-          `status=error&message=${encodeURIComponent(message)}`,
+          `status=${ConnectCallbackStatus.Error}&message=${encodeURIComponent(message)}`,
         ),
       );
     }

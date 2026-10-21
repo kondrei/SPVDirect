@@ -94,6 +94,18 @@ describe('SpvFileStore', () => {
     });
   });
 
+  it('deletes objects from the SPV bucket without creating it', async () => {
+    const { store, request } = setup();
+    request.mockResolvedValue({ status: 200 });
+    await store.remove(['3/100.pdf', '3/101.pdf']);
+    expect(request).toHaveBeenCalledOnce();
+    expect(request.mock.calls[0][0]).toMatchObject({
+      method: 'DELETE',
+      url: `${URL}/storage/v1/object/spv-messages`,
+      data: { prefixes: ['3/100.pdf', '3/101.pdf'] },
+    });
+  });
+
   it('maps an HTTP error to 502 without leaking the key', async () => {
     const { store, request } = setup();
     request.mockResolvedValue({ status: 500 });

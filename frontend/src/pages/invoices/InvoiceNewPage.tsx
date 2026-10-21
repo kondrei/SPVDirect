@@ -6,12 +6,7 @@ import {
   useInvoiceLineSuggestions,
   useNextInvoiceNumber,
 } from '../../api/hooks/invoices';
-import type {
-  Company,
-  CreatedInvoice,
-  InvoiceCurrency,
-  PaymentMethod,
-} from '../../api/types';
+import type { Company, CreatedInvoice } from '../../api/types';
 import { EmptyState } from '../../components/EmptyState';
 import { PageHead } from '../../components/PageHead';
 import { QueryError } from '../../components/QueryError';
@@ -40,6 +35,7 @@ import {
 import { InvoiceLinesCard } from './InvoiceLinesCard';
 import { InvoiceOptionsCard, InvoiceTotalsCard } from './InvoiceSummaryCards';
 import { useBuyerAutofill } from './useBuyerAutofill';
+import { Currency, PaymentMethod } from '../../api/enums';
 
 const finite = (value: number) => (Number.isFinite(value) ? value : 0);
 
@@ -134,7 +130,7 @@ function InvoiceHeaderCard({
           <SelectField
             label="Moneda"
             value={header.currency}
-            onChange={(e) => set({ currency: e.target.value as InvoiceCurrency })}
+            onChange={(e) => set({ currency: e.target.value as Currency })}
           >
             {CURRENCIES.map((c) => (
               <option key={c} value={c}>
@@ -142,7 +138,7 @@ function InvoiceHeaderCard({
               </option>
             ))}
           </SelectField>
-          {header.currency !== 'RON' ? (
+          {header.currency !== Currency.RON ? (
             <TextField
               label={`Curs BNR (RON pentru 1 ${header.currency})`}
               mono

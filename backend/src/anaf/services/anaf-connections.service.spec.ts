@@ -56,3 +56,61 @@ describe('AnafConnectionsService.test', () => {
     expect(result.body).toContain('Bearer [ascuns]');
   });
 });
+
+describe('AnafConnectionsService.removeAll', () => {
+  function setup(ids: number[]) {
+    const rows = ids.map((id) => ({ id, accountantId: 1 }));
+    const repo = {
+      find: vi.fn().mockResolvedValue(rows.map(({ id }) => ({ id }))),
+      findOneBy: vi.fn(({ id }: { id: number }) =>
+        Promise.resolve(rows.find((r) => r.id === id) ?? null),
+      ),
+      remove: vi.fn().mockResolvedValue(undefined),
+    };
+    const pending: (() => void)[] = [];
+    const oauth = {
+      revokeConnection: vi.fn(
+        () =>
+          new Promise<boolean>((resolve) => {
+            pending.push(() => resolve(true));
+          }),
+      ),
+    };
+    const service = new AnafConnectionsService(
+      {} as AnafApiService,
+      oauth as unknown as AnafOAuthService,
+      repo as unknown as Repository<AnafConnection>,
+    );
+    return { service, repo, oauth, pending };
+  }
+
+  it('revokes every certificate of the account in parallel, then removes them', async () => {
+    const { service, repo, oauth, pending } = setup([4, 5]);
+    const done = service.removeAll(1);
+    await vi.waitFor(() =>
+      expect(oauth.revokeConnection).toHaveBeenCalledTimes(2),
+    );
+    pending.forEach((release) => release());
+    await expect(done).resolves.toEqual([]);
+    expect(repo.find).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { accountantId: 1 } }),
+    );
+    expect(repo.remove).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps going when one certificate fails and reports which one', async () => {
+    const { service, repo, oauth } = setup([4, 5]);
+    oauth.revokeConnection.mockResolvedValue(true);
+    repo.remove
+      .mockRejectedValueOnce(new Error('db down'))
+      .mockResolvedValueOnce(undefined);
+    await expect(service.removeAll(1)).resolves.toEqual([4]);
+    expect(repo.remove).toHaveBeenCalledTimes(2);
+  });
+
+  it('does nothing for an account without certificates', async () => {
+    const { service, oauth } = setup([]);
+    await expect(service.removeAll(1)).resolves.toEqual([]);
+    expect(oauth.revokeConnection).not.toHaveBeenCalled();
+  });
+});

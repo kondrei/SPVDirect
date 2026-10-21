@@ -4,6 +4,11 @@ import type {
   InvoiceLineInput,
   InvoiceParty,
 } from '../invoices/invoice.types.js';
+import {
+  VatCategory,
+  Currency,
+  PaymentMethod,
+} from '../invoices/dto/invoice.enums.js';
 
 export function party(overrides: Partial<InvoiceParty> = {}): InvoiceParty {
   return {
@@ -33,7 +38,7 @@ export function line(
     unit: 'serviciu',
     unitPrice: 100,
     vatRate: 21,
-    vatCategory: 'S',
+    vatCategory: VatCategory.Standard,
     vatExemptionReason: null,
     ...overrides,
   };
@@ -53,9 +58,9 @@ export function sampleInvoice(overrides: Partial<Invoice> = {}): Invoice {
     issueDate: '2026-10-04',
     deliveryDate: '2026-10-01',
     dueDate: '2026-10-30',
-    currency: 'RON',
+    currency: Currency.RON,
     exchangeRate: null,
-    paymentMethod: 'transfer',
+    paymentMethod: PaymentMethod.Transfer,
     vatOnCollection: false,
     seller: party(),
     buyer: party({
@@ -85,6 +90,7 @@ export function sampleInvoice(overrides: Partial<Invoice> = {}): Invoice {
     emailedTo: null,
     emailedAt: null,
     createdAt: new Date('2026-10-04T10:00:00Z'),
+    deletedAt: null,
     ...overrides,
   };
 }

@@ -1,7 +1,7 @@
 import { Transform } from 'class-transformer';
 import {
   IsBoolean,
-  IsIn,
+  IsEnum,
   IsOptional,
   IsString,
   Matches,
@@ -10,10 +10,7 @@ import {
   ValidateIf,
 } from 'class-validator';
 import { CUI_PATTERN, normalizeCui } from '../../companies/dto/company.dto.js';
-import {
-  PROFESSIONAL_TITLES,
-  type ProfessionalTitle,
-} from '../accountant.entity.js';
+import { ProfessionalTitle } from './accountant.enums.js';
 
 export function blankToNull(value: unknown): unknown {
   if (typeof value !== 'string') return value;
@@ -44,7 +41,7 @@ export class UpdateProfileDto {
   @IsOptional()
   @Transform(({ value }) => blankToNull(value))
   @ValidateIf((_, v) => v !== null)
-  @IsIn(PROFESSIONAL_TITLES, { message: 'Calitate profesională invalidă' })
+  @IsEnum(ProfessionalTitle, { message: 'Calitate profesională invalidă' })
   professionalTitle?: ProfessionalTitle | null;
 
   @IsOptional()
@@ -86,6 +83,13 @@ export class UpdateProfileDto {
   @ValidateIf((_, v) => v !== null)
   @Matches(/^\d{4}$/, { message: 'Codul CAEN are 4 cifre' })
   firmCaenCode?: string | null;
+}
+
+export class DeleteAccountDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(200)
+  password: string;
 }
 
 export class ChangePasswordDto {

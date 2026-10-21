@@ -31,4 +31,8 @@ export class InvoiceFileStore {
   get(path: string): Promise<Buffer> {
     return this.storage.get(path);
   }
+
+  remove(paths: string[]): Promise<void> {
+    return this.storage.remove(paths);
+  }
 }

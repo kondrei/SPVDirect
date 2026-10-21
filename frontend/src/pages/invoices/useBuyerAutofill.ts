@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { useBuyerLookup, useFindBuyer } from '../../api/hooks/invoices';
 import type { FoundBuyer } from '../../api/types';
 import { isValidCui, normalizeCui } from '../../lib/format';
+import { BuyerSource } from '../../api/enums';
 
 export function useBuyerAutofill(
   cuiInput: string,
@@ -34,7 +35,7 @@ export function useBuyerAutofill(
     findBuyer.reset();
     lookup.mutate(cui, {
       onSuccess: (result) =>
-        accept(cui, request, { ...result, anafChecked: true, source: 'anaf' }),
+        accept(cui, request, { ...result, anafChecked: true, source: BuyerSource.Anaf }),
     });
     return true;
   };

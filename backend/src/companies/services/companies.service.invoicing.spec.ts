@@ -1,9 +1,5 @@
-import {
-  BadRequestException,
-  ConflictException,
-  NotFoundException,
-} from '@nestjs/common';
-import { QueryFailedError, type Repository } from 'typeorm';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import type { Repository } from 'typeorm';
 import type { AnafConnection } from '../../anaf/anaf-connection.entity.js';
 import type { AnafCompanyAccessService } from '../../anaf/services/anaf-company-access.service.js';
 import type { Company } from '../company.entity.js';
@@ -15,11 +11,9 @@ const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]);
 function setup({
   stored = { id: 7, accountantId: 1, name: 'AGRO', logoContentType: null },
   withLogo,
-  remove = () => Promise.resolve(),
 }: {
   stored?: Partial<Company> | null;
   withLogo?: Partial<Company> | null;
-  remove?: () => Promise<unknown>;
 } = {}) {
   const getOne = vi.fn().mockResolvedValue(withLogo ?? null);
   const builder = {
@@ -31,7 +25,6 @@ function setup({
     findOneBy: vi.fn().mockResolvedValue(stored),
     save: vi.fn((c: unknown) => Promise.resolve(c)),
     update: vi.fn().mockResolvedValue({}),
-    remove: vi.fn(remove),
     createQueryBuilder: vi.fn().mockReturnValue(builder),
   };
   const service = new CompaniesService(
@@ -135,28 +128,5 @@ describe('CompaniesService logo', () => {
       { logo: null, logoContentType: null },
     );
     expect(company.logoContentType).toBeNull();
-  });
-});
-
-describe('CompaniesService.remove', () => {
-  it('keeps a company that has issued invoices', async () => {
-    const { service } = setup({
-      remove: () =>
-        Promise.reject(
-          new QueryFailedError('DELETE', [], {
-            code: '23503',
-          } as unknown as Error),
-        ),
-    });
-    await expect(service.remove(1, 7)).rejects.toBeInstanceOf(
-      ConflictException,
-    );
-  });
-
-  it('rethrows other database errors', async () => {
-    const { service } = setup({
-      remove: () => Promise.reject(new Error('down')),
-    });
-    await expect(service.remove(1, 7)).rejects.toThrow('down');
   });
 });

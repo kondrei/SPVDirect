@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useCompanies } from '../../api/hooks/companies';
 import { useDownloadMessage, useEfacturaMessages } from '../../api/hooks/efactura';
-import type { EfacturaMessage, MessageFilter } from '../../api/types';
+import type { EfacturaMessage } from '../../api/types';
 import { EmptyState } from '../../components/EmptyState';
 import { PageHead } from '../../components/PageHead';
 import { QueryError } from '../../components/QueryError';
@@ -19,13 +19,14 @@ import {
 } from '../../components/ui';
 import { useAppPath } from '../../hooks/useAppPath';
 import { formatDateTime } from '../../lib/format';
+import { MessageFilter } from '../../api/enums';
 
 const FILTERS: { value: MessageFilter | ''; label: string }[] = [
   { value: '', label: 'Toate mesajele' },
-  { value: 'T', label: 'Facturi trimise' },
-  { value: 'P', label: 'Facturi primite' },
-  { value: 'E', label: 'Erori de validare' },
-  { value: 'R', label: 'Mesaje de la cumpărător' },
+  { value: MessageFilter.Sent, label: 'Facturi trimise' },
+  { value: MessageFilter.Received, label: 'Facturi primite' },
+  { value: MessageFilter.Errors, label: 'Erori de validare' },
+  { value: MessageFilter.BuyerMessage, label: 'Mesaje de la cumpărător' },
 ];
 
 function messageStatus(type: string): Status {

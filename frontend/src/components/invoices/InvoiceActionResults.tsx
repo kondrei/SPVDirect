@@ -4,6 +4,7 @@ import type { CreatedInvoice } from '../../api/types';
 import { ErrorLog } from '../ErrorLog';
 import { Alert } from '../ui';
 import type { InvoiceActionStates } from './useInvoiceActions';
+import { UploadStatus } from '../../api/enums';
 
 export function InvoiceActionResults({
   states,
@@ -42,7 +43,7 @@ export function InvoiceActionResults({
   } else if (states.anaf?.status === 'success') {
     const upload = states.anaf.data;
     items.push(
-      upload.status === 'rejected' ? (
+      upload.status === UploadStatus.Rejected ? (
         <Alert key="anaf" tone="danger" title="ANAF a refuzat factura.">
           {upload.errorMessage}
         </Alert>
@@ -103,6 +104,6 @@ export function DeliveryResults({ result }: { result: CreatedInvoice }) {
 
 export function anafAccepted(states: InvoiceActionStates): boolean {
   return (
-    states.anaf?.status === 'success' && states.anaf.data.status !== 'rejected'
+    states.anaf?.status === 'success' && states.anaf.data.status !== UploadStatus.Rejected
   );
 }

@@ -3,11 +3,12 @@ import {
   statsWindowStart,
   type StatsRow,
 } from './invoice-stats.js';
+import { Currency } from '../dto/invoice.enums.js';
 
 function row(overrides: Partial<StatsRow> = {}): StatsRow {
   return {
     issueDate: '2026-10-02',
-    currency: 'RON',
+    currency: Currency.RON,
     exchangeRate: null,
     totalNet: 100,
     totalVatRon: 21,
@@ -74,7 +75,7 @@ describe('computeInvoiceStats', () => {
     const stats = computeInvoiceStats(
       [
         row({
-          currency: 'EUR',
+          currency: Currency.EUR,
           exchangeRate: 5,
           totalNet: 100,
           totalVatRon: 105,

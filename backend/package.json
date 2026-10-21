@@ -43,6 +43,7 @@
     "class-validator": "^0.15.1",
     "cookie-parser": "^1.4.7",
     "dejavu-fonts-ttf": "^2.37.3",
+    "fflate": "^0.8.3",
     "helmet": "^8.3.0",
     "joi": "^18.2.9",
     "nodemailer": "^10.0.12",

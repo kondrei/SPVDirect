@@ -8,6 +8,7 @@ import { anafTvaRecord } from '../../testing/anaf-tva-record.js';
 import { CAEN_CSV } from '../../testing/caen-csv.js';
 import type { Accountant } from '../accountant.entity.js';
 import { AccountantsService } from './accountants.service.js';
+import { ProfessionalTitle, AccountStatus } from '../dto/accountant.enums.js';
 
 function accountant(overrides: Partial<Accountant> = {}): Accountant {
   return {
@@ -15,6 +16,10 @@ function accountant(overrides: Partial<Accountant> = {}): Accountant {
     email: 'a@example.com',
     passwordHash: '',
     name: 'Ana',
+    status: AccountStatus.Active,
+    approvalTokenHash: null,
+    adminNotifiedAt: null,
+    passwordChangedAt: null,
     phone: null,
     ceccarMember: false,
     professionalTitle: null,
@@ -26,6 +31,7 @@ function accountant(overrides: Partial<Accountant> = {}): Accountant {
     firmCaenCode: null,
     createdAt: new Date('2026-09-01T00:00:00Z'),
     updatedAt: new Date('2026-09-01T00:00:00Z'),
+    deletedAt: null,
     ...overrides,
   };
 }
@@ -149,13 +155,13 @@ describe('AccountantsService.updateProfile', () => {
     const { service } = setup();
     const profile = await service.updateProfile(1, {
       ceccarMember: true,
-      professionalTitle: 'expert_contabil',
+      professionalTitle: ProfessionalTitle.ExpertContabil,
       ceccarNumber: '12345',
       ceccarBranch: 'București',
     });
     expect(profile).toMatchObject({
       ceccarMember: true,
-      professionalTitle: 'expert_contabil',
+      professionalTitle: ProfessionalTitle.ExpertContabil,
       ceccarNumber: '12345',
       ceccarBranch: 'București',
     });
@@ -173,14 +179,14 @@ describe('AccountantsService.updateProfile', () => {
     const { service } = setup(
       accountant({
         ceccarMember: true,
-        professionalTitle: 'contabil_autorizat',
+        professionalTitle: ProfessionalTitle.ContabilAutorizat,
         ceccarNumber: '999',
       }),
     );
     const profile = await service.updateProfile(1, { phone: '0722000000' });
     expect(profile).toMatchObject({
       ceccarMember: true,
-      professionalTitle: 'contabil_autorizat',
+      professionalTitle: ProfessionalTitle.ContabilAutorizat,
       ceccarNumber: '999',
     });
   });
@@ -189,7 +195,7 @@ describe('AccountantsService.updateProfile', () => {
     const { service } = setup(
       accountant({
         ceccarMember: true,
-        professionalTitle: 'expert_contabil',
+        professionalTitle: ProfessionalTitle.ExpertContabil,
         ceccarNumber: '12345',
         ceccarBranch: 'Cluj',
       }),

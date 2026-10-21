@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { Repository } from 'typeorm';
+import { lockLiveCompany } from '../../companies/company-lock.js';
 import type { CreateStornoDto } from '../dto/invoice.dto.js';
 import { validateInvoiceDates } from '../builders/invoice-builder.js';
 import { computeInvoice } from '../helpers/invoice-calc.js';
@@ -49,6 +50,12 @@ export class InvoiceStornoService {
     dto: CreateStornoDto,
     issueDate: string,
   ): Promise<Invoice> {
+    const target = await invoices.findOne({
+      select: { id: true, companyId: true },
+      where: { id, accountantId },
+    });
+    if (!target) throw new NotFoundException(INVOICE_NOT_FOUND);
+    await lockLiveCompany(invoices.manager, accountantId, target.companyId);
     const original = await invoices.findOne({
       where: { id, accountantId },
       lock: { mode: 'pessimistic_write' },

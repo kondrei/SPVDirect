@@ -1,9 +1,5 @@
 import type { Dispatch } from 'react';
-import type {
-  InvoiceCurrency,
-  InvoiceUnit,
-  LineSuggestion,
-} from '../../api/types';
+import type { InvoiceUnit, LineSuggestion } from '../../api/types';
 import { SelectField } from '../../components/SelectField';
 import { LineDescriptionField } from '../../components/invoices/LineDescriptionField';
 import { Button, Card, TextField } from '../../components/ui';
@@ -14,6 +10,7 @@ import {
   type LineForm,
   type ZeroReason,
 } from './invoiceForm';
+import { Currency } from '../../api/enums';
 
 export function InvoiceLinesCard({
   lines,
@@ -26,7 +23,7 @@ export function InvoiceLinesCard({
 }: {
   lines: LineForm[];
   rates: number[];
-  currency: InvoiceCurrency;
+  currency: Currency;
   vatPayer: boolean;
   suggestions: LineSuggestion[];
   onOpenSuggestions: () => void;

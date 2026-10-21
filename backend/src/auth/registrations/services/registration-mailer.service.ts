@@ -12,9 +12,11 @@ import {
   type MailMessage,
 } from '../../../common/mail/mail.service.js';
 import type { Env } from '../../../config/env.validation.js';
-
-export const MAIL_LOG_SERVICE = 'SMTP';
-export type RegistrationMail = 'admin-approval' | 'approval-notice';
+import { RegistrationMail } from '../../dto/auth.enums.js';
+import {
+  ApiLogService,
+  ApiLogMethod,
+} from '../../../api-logs/dto/api-log.enums.js';
 
 export interface AdminApprovalRequest {
   accountantId: number;
@@ -38,7 +40,7 @@ export class RegistrationMailer {
   async notifyAdmin(request: AdminApprovalRequest): Promise<boolean> {
     const sent = await this.send(
       request.accountantId,
-      'admin-approval',
+      RegistrationMail.AdminApproval,
       this.adminMessage(request),
     );
     if (!sent) return false;
@@ -57,7 +59,7 @@ export class RegistrationMailer {
 
   notifyApproved(accountantId: number, email: string): Promise<boolean> {
     const loginUrl = `${this.config.get('FRONTEND_URL', { infer: true })}/login`;
-    return this.send(accountantId, 'approval-notice', {
+    return this.send(accountantId, RegistrationMail.ApprovalNotice, {
       to: email,
       subject: 'Contul SPVDirect a fost aprobat',
       text: `Contul dvs. SPVDirect a fost aprobat. Vă puteți autentifica la ${loginUrl}`,
@@ -77,8 +79,8 @@ export class RegistrationMailer {
         accountantId,
         anafConnectionId: null,
         companyId: null,
-        service: MAIL_LOG_SERVICE,
-        method: 'SEND',
+        service: ApiLogService.Smtp,
+        method: ApiLogMethod.Send,
         endpoint: kind,
       },
       async (outcome) => {

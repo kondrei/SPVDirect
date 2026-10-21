@@ -13,7 +13,7 @@ Run this after **every** code change in this repo, before saying the work is don
    - **Correctness:** logic errors, edge cases, null/undefined, async mistakes (missing `await`, unhandled promises), race conditions.
    - **Security:** secrets or ANAF tokens in logs or responses; ownership checks (`accountantId`) on every query; input validation with DTOs and class-validator; no injected HTML without `escapeHtml`.
    - **ANAF rules from CLAUDE.md:** Basic auth, `token_content_type=jwt`, save both tokens on refresh, 60 s cooldown, all api.anaf.ro calls go through `AnafApiService.request()`.
-   - **Project conventions:** `.js` import suffixes, migrations for schema changes (registered in `migrations/index.ts`), env vars added to Joi + `Env` + `.env.example`.
+   - **Project conventions:** `.js` import suffixes, migrations for schema changes (registered in `migrations/index.ts`), env vars added to Joi + `Env` + `.env.example`, value sets as enums with no raw literals (`value-sets` skill).
    - **Simplicity:** dead code, duplication, anything that doesn't match the surrounding style.
 3. Fix every real finding. Then list the findings for the user, marking each **fixed** or **not fixed** with the reason.
 

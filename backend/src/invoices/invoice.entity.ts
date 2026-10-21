@@ -1,6 +1,7 @@
 import {
   Column,
   CreateDateColumn,
+  DeleteDateColumn,
   Entity,
   Index,
   PrimaryGeneratedColumn,
@@ -8,12 +9,11 @@ import {
 } from 'typeorm';
 import { numericTransformer } from '../common/numeric.transformer.js';
 import type {
-  Currency,
   InvoiceLine,
   InvoiceParty,
-  PaymentMethod,
   VatBreakdownRow,
 } from './invoice.types.js';
+import { Currency, PaymentMethod } from './dto/invoice.enums.js';
 
 @Entity('invoices')
 @Unique('uq_invoices_company_series_number', ['companyId', 'series', 'number'])
@@ -49,7 +49,7 @@ export class Invoice {
   @Column({ name: 'due_date', type: 'date', nullable: true })
   dueDate: string | null;
 
-  @Column({ type: 'varchar', length: 3, default: 'RON' })
+  @Column({ type: 'varchar', length: 3, default: Currency.RON })
   currency: Currency;
 
   @Column({
@@ -66,7 +66,7 @@ export class Invoice {
     name: 'payment_method',
     type: 'varchar',
     length: 20,
-    default: 'transfer',
+    default: PaymentMethod.Transfer,
   })
   paymentMethod: PaymentMethod;
 
@@ -152,4 +152,7 @@ export class Invoice {
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
+
+  @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz', nullable: true })
+  deletedAt: Date | null;
 }

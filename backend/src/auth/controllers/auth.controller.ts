@@ -21,6 +21,7 @@ import { CREDENTIALS_THROTTLE } from '../../common/constants.js';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard.js';
 import { RegisterAccountantCommand } from '../registrations/register-accountant.command.js';
 import { SessionCookieService } from '../services/session-cookie.service.js';
+import { AccountStatus } from '../../accountants/dto/accountant.enums.js';
 
 @Controller('auth')
 export class AuthController {
@@ -36,7 +37,7 @@ export class AuthController {
   @HttpCode(202)
   async register(@Body() dto: RegisterDto, @Ip() ip: string) {
     await this.commands.execute(new RegisterAccountantCommand(dto, ip));
-    return { status: 'pending' as const };
+    return { status: AccountStatus.Pending };
   }
 
   @Post('login')

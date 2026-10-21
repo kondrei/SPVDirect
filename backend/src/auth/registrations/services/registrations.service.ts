@@ -6,6 +6,7 @@ import { Repository } from 'typeorm';
 import { Accountant } from '../../../accountants/accountant.entity.js';
 import { BannedEmail } from '../../banned-email.entity.js';
 import { AccountantApprovedEvent } from '../registration.events.js';
+import { AccountStatus } from '../../../accountants/dto/accountant.enums.js';
 
 export function hashApprovalToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
@@ -27,7 +28,10 @@ export class RegistrationsService {
   async findPending(token: string): Promise<PendingRegistration | null> {
     return this.accountants.findOne({
       select: { id: true, email: true, name: true, createdAt: true },
-      where: { approvalTokenHash: hashApprovalToken(token), status: 'pending' },
+      where: {
+        approvalTokenHash: hashApprovalToken(token),
+        status: AccountStatus.Pending,
+      },
     });
   }
 
@@ -38,9 +42,9 @@ export class RegistrationsService {
       {
         id: pending.id,
         approvalTokenHash: hashApprovalToken(token),
-        status: 'pending',
+        status: AccountStatus.Pending,
       },
-      { status: 'active', approvalTokenHash: null },
+      { status: AccountStatus.Active, approvalTokenHash: null },
     );
     if (!result.affected) return null;
     this.events.publish(new AccountantApprovedEvent(pending.id, pending.email));
@@ -54,7 +58,7 @@ export class RegistrationsService {
       const result = await m.delete(Accountant, {
         id: pending.id,
         approvalTokenHash: hashApprovalToken(token),
-        status: 'pending',
+        status: AccountStatus.Pending,
       });
       if (!result.affected) return null;
       await m

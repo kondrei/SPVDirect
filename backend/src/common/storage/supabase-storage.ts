@@ -4,6 +4,7 @@ import type { ConfigService } from '@nestjs/config';
 import { isAxiosError } from 'axios';
 
 const UNAVAILABLE = 'Stocarea documentelor nu este disponibilă momentan';
+export const REMOVE_CHUNK = 100;
 
 export class SupabaseStorage {
   private readonly logger = new Logger(SupabaseStorage.name);
@@ -39,6 +40,18 @@ export class SupabaseStorage {
     return Buffer.from(res.data as ArrayBuffer);
   }
 
+  async remove(paths: string[]): Promise<void> {
+    for (let i = 0; i < paths.length; i += REMOVE_CHUNK) {
+      const res = await this.call(
+        'DELETE',
+        `${this.baseUrl()}/storage/v1/object/${this.bucket()}`,
+        { data: { prefixes: paths.slice(i, i + REMOVE_CHUNK) } },
+      );
+      if (res.status >= 400 && res.status !== 404)
+        this.fail('delete', res.status);
+    }
+  }
+
   private objectUrl(path: string): string {
     const encoded = path.split('/').map(encodeURIComponent).join('/');
     return `${this.baseUrl()}/storage/v1/object/${this.bucket()}/${encoded}`;
@@ -66,7 +79,7 @@ export class SupabaseStorage {
   }
 
   private async call(
-    method: 'GET' | 'POST',
+    method: 'GET' | 'POST' | 'DELETE',
     url: string,
     options: {
       data?: unknown;

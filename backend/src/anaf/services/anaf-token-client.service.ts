@@ -4,6 +4,11 @@ import { ConfigService } from '@nestjs/config';
 import { isAxiosError } from 'axios';
 import { decodeAnafClaims, describeTokenShape } from '../anaf-jwt.js';
 import { ANAF_REFRESH_TOKEN_LIFETIME_MS } from '../../common/constants.js';
+import {
+  AnafGrantType,
+  AnafTokenHint,
+  AnafOAuthError,
+} from '../dto/anaf.enums.js';
 
 export interface AnafTokenSet {
   accessToken: string;
@@ -13,8 +18,6 @@ export interface AnafTokenSet {
   serial: string | null;
   roles: string[];
 }
-
-export type AnafTokenHint = 'access_token' | 'refresh_token';
 
 interface TokenResponse {
   access_token?: string;
@@ -61,7 +64,7 @@ export class AnafTokenClient {
 
   exchangeCode(code: string): Promise<AnafTokenSet> {
     return this.requestTokens({
-      grant_type: 'authorization_code',
+      grant_type: AnafGrantType.AuthorizationCode,
       code,
       redirect_uri: this.config.getOrThrow('ANAF_REDIRECT_URI'),
       token_content_type: 'jwt',
@@ -74,7 +77,7 @@ export class AnafTokenClient {
   ): Promise<AnafTokenSet> {
     return this.requestTokens(
       {
-        grant_type: 'refresh_token',
+        grant_type: AnafGrantType.RefreshToken,
         refresh_token: refreshToken,
         token_content_type: 'jwt',
       },
@@ -125,11 +128,11 @@ export class AnafTokenClient {
       if (isAxiosError(err) && err.response) {
         const body = err.response.data as { error?: string } | undefined;
         const clientError =
-          body?.error === 'invalid_client' ||
-          body?.error === 'unauthorized_client';
+          body?.error === AnafOAuthError.InvalidClient ||
+          body?.error === AnafOAuthError.UnauthorizedClient;
         const invalidGrant =
-          body?.error === 'invalid_grant' ||
-          (form.grant_type === 'refresh_token' &&
+          body?.error === AnafOAuthError.InvalidGrant ||
+          (form.grant_type === AnafGrantType.RefreshToken &&
             !clientError &&
             err.response.status === 400);
         throw new AnafTokenError(

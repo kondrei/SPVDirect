@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException } from '@nestjs/common';
 import { line } from '../../testing/invoice-fixtures.js';
 import { computeInvoice } from './invoice-calc.js';
 import { buildStornoLines, remainingQuantities } from './invoice-storno.js';
+import { VatCategory } from '../dto/invoice.enums.js';
 
 const original = computeInvoice(
   [
@@ -47,7 +48,7 @@ describe('buildStornoLines', () => {
       description: 'A',
       unitPrice: 5,
       vatRate: 21,
-      vatCategory: 'S',
+      vatCategory: VatCategory.Standard,
       stornoOfLine: 0,
     });
   });

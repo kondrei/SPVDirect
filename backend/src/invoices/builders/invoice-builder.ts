@@ -9,6 +9,7 @@ import {
   allowedVatRates,
   DEFAULT_EXEMPTION_REASON,
 } from '../helpers/vat-rates.js';
+import { VatCategory } from '../dto/invoice.enums.js';
 
 export interface BuyerLookup extends InvoiceParty {
   inactive: boolean | null;
@@ -116,7 +117,7 @@ export function normalizeLines(
       return {
         ...base,
         vatRate: 0,
-        vatCategory: 'O',
+        vatCategory: VatCategory.NotSubject,
         vatExemptionReason: DEFAULT_EXEMPTION_REASON.O,
       };
     }
@@ -127,7 +128,7 @@ export function normalizeLines(
       );
     }
     if (line.vatRate > 0) {
-      if (line.vatCategory && line.vatCategory !== 'S') {
+      if (line.vatCategory && line.vatCategory !== VatCategory.Standard) {
         throw new BadRequestException(
           `${position}: o cotă de TVA mai mare de 0% nu poate avea scutire sau taxare inversă`,
         );
@@ -135,11 +136,11 @@ export function normalizeLines(
       return {
         ...base,
         vatRate: line.vatRate,
-        vatCategory: 'S',
+        vatCategory: VatCategory.Standard,
         vatExemptionReason: null,
       };
     }
-    if (!line.vatCategory || line.vatCategory === 'S') {
+    if (!line.vatCategory || line.vatCategory === VatCategory.Standard) {
       throw new BadRequestException(
         `${position}: alegeți motivul pentru cota 0% (scutit, cotă zero sau taxare inversă)`,
       );

@@ -37,8 +37,13 @@ import {
   pluralFacturi,
 } from '../../lib/format';
 import { invoiceNumber } from '../../lib/invoice';
+import { UploadStatus } from '../../api/enums';
 
-const SENT_TO_ANAF: EfacturaUpload['status'][] = ['sending', 'processing', 'ok'];
+const SENT_TO_ANAF: EfacturaUpload['status'][] = [
+  UploadStatus.Sending,
+  UploadStatus.Processing,
+  UploadStatus.Ok,
+];
 
 function InvoiceStatuses({
   invoice,
