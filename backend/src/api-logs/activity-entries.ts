@@ -8,15 +8,15 @@ import {
   stornoReference,
 } from '../invoices/helpers/invoice-format.js';
 
-import type { ActivityEntry } from './dto/api-log.types.js';
-import { UPLOAD_STATUS_LABELS } from './dto/api-log.constants.js';
-import { ActivityAction } from './dto/api-log.enums.js';
 import type {
+  ActivityEntry,
   CompanyRef,
   InvoiceRef,
   UploadRef,
   ConnectionRef,
 } from './dto/api-log.types.js';
+import { UPLOAD_STATUS_LABELS } from './dto/api-log.constants.js';
+import { ActivityAction } from './dto/api-log.enums.js';
 
 function firm(company: CompanyRef): string {
   return `${company.name} (CUI ${company.cui})`;
@@ -175,7 +175,7 @@ export function invoiceStored(invoice: InvoiceRef): ActivityEntry {
   return {
     action: ActivityAction.InvoiceStored,
     companyId: invoice.companyId,
-    description: `Factura ${invoiceNumber(invoice.series, invoice.number)} a fost salvată în Storage`,
+    description: `Factura ${invoiceNumber(invoice.series, invoice.number)} a fost salvată în cloud`,
     details: invoiceDetails(invoice),
   };
 }

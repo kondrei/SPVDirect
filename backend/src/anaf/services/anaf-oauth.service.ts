@@ -91,7 +91,7 @@ export class AnafOAuthService {
       this.connections.create({
         accountantId,
         certSerial: tokens.serial,
-        label: `Certificat …${tokens.serial.replace(/[^0-9a-f]/gi, '').slice(-8)}`,
+        label: `Certificat …${tokens.serial.replaceAll(/[^0-9a-f]/gi, '').slice(-8)}`,
         source,
       });
     const now = new Date();

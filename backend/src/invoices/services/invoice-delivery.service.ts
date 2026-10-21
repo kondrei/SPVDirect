@@ -16,18 +16,18 @@ import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 
 import { CompaniesService } from '../../companies/services/companies.service.js';
 import { renderInvoicePdf } from '../builders/invoice-pdf.js';
-import type { InvoiceLogo } from '../dto/invoice.types.js';
+import type {
+  InvoiceLogo,
+  InvoiceFile,
+  DeliveryOptions,
+  CreatedInvoice,
+} from '../dto/invoice.types.js';
 import { renderInvoiceXml } from '../builders/invoice-xml.js';
 import { invoiceFilename } from '../helpers/invoice-format.js';
 import { Invoice } from '../invoice.entity.js';
 import { InvoiceFileStore } from './invoice-file-store.service.js';
 import { findOwnedInvoice } from './invoice-lookup.js';
 import { InvoiceMailer } from './invoice-mailer.service.js';
-import type {
-  InvoiceFile,
-  DeliveryOptions,
-  CreatedInvoice,
-} from '../dto/invoice.types.js';
 
 export const STORAGE_NOT_CONFIGURED =
   'Salvarea în Supabase Storage nu este configurată (SUPABASE_URL și SUPABASE_SERVICE_KEY).';
@@ -62,7 +62,7 @@ export class InvoiceDeliveryService {
       if (options.saveToStorage) {
         storageError = await this.attempt(
           () => this.putInStorage(invoice, pdf),
-          'Factura a fost creată, dar nu a putut fi salvată în Storage. Reîncercați din listă.',
+          'Factura a fost creată, dar nu a putut fi salvată în cloud. Reîncercați din listă.',
         );
       }
       if (options.sendToEmail) {

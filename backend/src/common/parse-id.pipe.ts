@@ -5,7 +5,7 @@ const MAX_INT4 = 2_147_483_647;
 @Injectable()
 export class ParseIdPipe implements PipeTransform<string, number> {
   transform(value: string): number {
-    const id = /^\d{1,10}$/.test(value) ? Number(value) : NaN;
+    const id = /^\d{1,10}$/.test(value) ? Number(value) : Number.NaN;
     if (!Number.isInteger(id) || id < 1 || id > MAX_INT4) {
       throw new BadRequestException('Identificator invalid');
     }

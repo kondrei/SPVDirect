@@ -43,7 +43,7 @@ describe('CreateSpvRequestDto', () => {
         cui: 'abc',
         luna: 13,
         an: 1800,
-      }).sort(),
+      }).toSorted((a, b) => a.localeCompare(b)),
     ).toEqual(['an', 'cui', 'luna']);
   });
 

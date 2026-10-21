@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ME, renderApp } from './render';
@@ -355,9 +355,8 @@ describe('Mesaje SPV', () => {
     renderApp('/accountants/1/spv', base);
     const user = userEvent.setup();
     await user.selectOptions(await screen.findByLabelText('Tip cerere'), 'D208');
-    const months = screen
+    const months = within(screen.getByLabelText('Luna'))
       .getAllByRole('option')
-      .filter((o) => o.closest('select') === screen.getByLabelText('Luna'))
       .map((o) => o.getAttribute('value'));
     expect(months).toEqual(['', '6', '12']);
   });

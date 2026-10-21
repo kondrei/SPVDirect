@@ -19,7 +19,7 @@ import { SPV_INCOME_REASONS, SPV_REQUEST_TYPES } from './spv-request-types.js';
 export const MAX_SPV_DAYS = 60;
 
 function stripSpaces(value: unknown): unknown {
-  return typeof value === 'string' ? value.replace(/\s+/g, '') : value;
+  return typeof value === 'string' ? value.replaceAll(/\s+/g, '') : value;
 }
 
 @Injectable()

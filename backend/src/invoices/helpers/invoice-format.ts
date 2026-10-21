@@ -1,5 +1,4 @@
-import type { InvoiceParty } from '../dto/invoice.types.js';
-import type { StornoFields } from '../dto/invoice.types.js';
+import type { InvoiceParty, StornoFields } from '../dto/invoice.types.js';
 
 const numberFormat = new Intl.NumberFormat('ro-RO', {
   minimumFractionDigits: 2,

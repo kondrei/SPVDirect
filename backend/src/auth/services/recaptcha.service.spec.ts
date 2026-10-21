@@ -26,7 +26,7 @@ const human = { success: true, score: 0.9, action: 'register' };
 describe('RecaptchaService', () => {
   it('posts secret, token and IP form-encoded to siteverify', async () => {
     const { service, post } = setup(human);
-    await service.verify('tok', 'register', '1.2.3.4');
+    await service.verify('tok', 'register', '203.0.113.4');
     const [url, body, opts] = post.mock.calls[0] as [
       string,
       string,
@@ -36,7 +36,7 @@ describe('RecaptchaService', () => {
     expect(Object.fromEntries(new URLSearchParams(body))).toEqual({
       secret: 'secret',
       response: 'tok',
-      remoteip: '1.2.3.4',
+      remoteip: '203.0.113.4',
     });
     expect(opts.headers['Content-Type']).toBe(
       'application/x-www-form-urlencoded',

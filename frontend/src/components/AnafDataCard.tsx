@@ -14,7 +14,7 @@ function text(
   const s = value == null ? '' : String(value).trim();
   if (!s) return <span className="muted">—</span>;
   const shown = date ? formatIsoDate(s) : s;
-  return mono || date ? <span className="mono">{shown}</span> : shown;
+  return mono || date ? <span className="mono">{shown}</span> : <>{shown}</>;
 }
 
 const flag = (on: boolean | undefined | null) =>
@@ -23,7 +23,7 @@ const date = (value: string | undefined) => text(value, { date: true });
 const inactiveFlag = (on: boolean | undefined | null) =>
   on ? <StatusBadge status="inactive" /> : flag(on);
 
-function Section({ title, rows }: { title: string; rows: Row[] }) {
+function Section({ title, rows }: Readonly<{ title: string; rows: Row[] }>) {
   return (
     <section className="stack-sm">
       <h3 className="h3">{title}</h3>
@@ -58,10 +58,10 @@ function address(a: Record<string, string>, p: 's' | 'd'): Row[] {
 export function AnafDetails({
   data,
   caen,
-}: {
+}: Readonly<{
   data: AnafTvaRecord;
   caen?: CaenInfo | null;
-}) {
+}>) {
   const g = data.date_generale;
   const tva = data.inregistrare_scop_Tva;
   const inc = data.inregistrare_RTVAI;
@@ -163,7 +163,7 @@ export function AnafDetails({
   );
 }
 
-export function AnafDataCard({ company }: { company: Company }) {
+export function AnafDataCard({ company }: Readonly<{ company: Company }>) {
   const refresh = useRefreshCompanyAnaf(company.id);
   const data = company.anafData;
   return (

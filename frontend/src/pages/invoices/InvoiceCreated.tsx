@@ -17,10 +17,10 @@ import { invoiceNumber } from '../../lib/invoice';
 export function InvoiceCreated({
   result,
   onAnother,
-}: {
+}: Readonly<{
   result: CreatedInvoice;
   onAnother: () => void;
-}) {
+}>) {
   const appPath = useAppPath();
   const actions = useInvoiceActions();
   const [panel, setPanel] = useState<'send' | 'storno' | null>(null);
@@ -78,7 +78,7 @@ export function InvoiceCreated({
                 loading={actions.isPending(invoice.id, 'store')}
                 onClick={() => actions.saveToStorage(invoice.id)}
               >
-                Salvează în Storage
+                Salvează în cloud
               </Button>
             )}
             <Button onClick={() => setPanel(panel === 'storno' ? null : 'storno')}>

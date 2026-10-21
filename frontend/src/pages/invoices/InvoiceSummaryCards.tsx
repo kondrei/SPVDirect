@@ -12,10 +12,10 @@ import { Currency } from '../../api/enums';
 export function InvoiceOptionsCard({
   state,
   dispatch,
-}: {
+}: Readonly<{
   state: InvoiceFormState;
   dispatch: Dispatch<InvoiceFormAction>;
-}) {
+}>) {
   const { delivery } = state;
   return (
     <Card title="Opțiuni">
@@ -36,7 +36,7 @@ export function InvoiceOptionsCard({
               dispatch({ type: 'delivery', patch: { saveToStorage: e.target.checked } })
             }
           />
-          Salvează PDF-ul în Supabase Storage
+          <span>Salvează PDF-ul în cloud</span>
         </label>
         <label className="check">
           <input
@@ -46,7 +46,7 @@ export function InvoiceOptionsCard({
               dispatch({ type: 'delivery', patch: { sendEmail: e.target.checked } })
             }
           />
-          Trimite factura pe email cumpărătorului
+          <span>Trimite factura pe email cumpărătorului</span>
         </label>
         {delivery.sendEmail ? (
           <TextField
@@ -68,11 +68,11 @@ export function InvoiceTotalsCard({
   totals,
   currency,
   vatPayer,
-}: {
+}: Readonly<{
   totals: Totals;
   currency: Currency;
   vatPayer: boolean;
-}) {
+}>) {
   return (
     <Card title="Totaluri">
       <dl className="dl">
@@ -90,12 +90,12 @@ export function InvoiceTotalsCard({
         <dd className="mono strong">
           {formatAmount(totals.gross)} {currency}
         </dd>
-        {currency !== Currency.RON ? (
+        {currency === Currency.RON ? null : (
           <>
             <dt>TVA în RON</dt>
             <dd className="mono">{formatAmount(totals.vatRon)}</dd>
           </>
-        ) : null}
+        )}
       </dl>
     </Card>
   );

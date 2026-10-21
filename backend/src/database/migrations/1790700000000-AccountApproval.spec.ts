@@ -6,7 +6,7 @@ function recorder() {
   const query = vi.fn();
   const qr = { query } as unknown as QueryRunner;
   const sql = () =>
-    query.mock.calls.map(([q]) => (q as string).replace(/\s+/g, ' ').trim());
+    query.mock.calls.map(([q]) => (q as string).replaceAll(/\s+/g, ' ').trim());
   return { qr, sql };
 }
 

@@ -3,7 +3,7 @@ import { isValidCui, normalizeCui } from './format';
 const SEPARATORS = /[,;\t\r\n]+/;
 
 function clean(cell: string): string {
-  return cell.trim().replace(/^["']|["']$/g, '').trim();
+  return cell.trim().replaceAll(/^["']|["']$/g, '').trim();
 }
 
 export function parseCuiList(text: string): {
@@ -31,7 +31,7 @@ export function parseCuiList(text: string): {
 export function cuisFromFile(text: string): string[] {
   const found: string[] = [];
   for (const line of text.replace(/^﻿/, '').split(/\r?\n/)) {
-    const cell = line.split(/[,;\t]/).map(clean).find(isValidCui);
+    const cell = line.split(/[,;\t]/).map((c) => clean(c)).find((c) => isValidCui(c));
     if (cell) found.push(normalizeCui(cell));
   }
   return parseCuiList(found.join('\n')).cuis;

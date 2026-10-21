@@ -20,7 +20,7 @@ export function InvoiceLinesCard({
   suggestions,
   onOpenSuggestions,
   dispatch,
-}: {
+}: Readonly<{
   lines: LineForm[];
   rates: number[];
   currency: Currency;
@@ -28,7 +28,7 @@ export function InvoiceLinesCard({
   suggestions: LineSuggestion[];
   onOpenSuggestions: () => void;
   dispatch: Dispatch<InvoiceFormAction>;
-}) {
+}>) {
   const setLine = (key: number, patch: Partial<LineForm>) =>
     dispatch({ type: 'line', key, patch });
   return (

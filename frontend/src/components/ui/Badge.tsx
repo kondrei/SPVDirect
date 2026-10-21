@@ -9,12 +9,12 @@ export function Badge({
   icon,
   children,
   className,
-}: {
+}: Readonly<{
   tone?: Tone;
   icon?: IconName;
   children: ReactNode;
   className?: string;
-}) {
+}>) {
   return (
     <span className={cx('spv-badge', `spv-badge-${tone}`, className)}>
       {icon ? <Icon name={icon} /> : null}
@@ -71,7 +71,7 @@ export const STATUS: Record<
   added: { tone: 'success', icon: 'check', label: 'Adăugată' },
   duplicate: { tone: 'neutral', icon: 'info', label: 'Exista deja' },
   notFound: { tone: 'danger', icon: 'x', label: 'Negăsit la ANAF' },
-  stored: { tone: 'success', icon: 'check', label: 'În Storage' },
+  stored: { tone: 'success', icon: 'check', label: 'În cloud' },
   emailed: { tone: 'brand', icon: 'check', label: 'Trimisă pe email' },
   storno: { tone: 'warning', icon: 'alert', label: 'Stornare' },
   stornoed: { tone: 'warning', icon: 'alert', label: 'Stornată' },
@@ -84,10 +84,10 @@ export const STATUS: Record<
 export function StatusBadge({
   status,
   children,
-}: {
+}: Readonly<{
   status: Status;
   children?: ReactNode;
-}) {
+}>) {
   const s = STATUS[status];
   return (
     <Badge tone={s.tone} icon={s.icon}>

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type ReactNode, type SubmitEvent } from 'react';
 import { Link } from 'react-router';
 import { useCompanies } from '../../api/hooks/companies';
 import { useDownloadUpload, useEfacturaUploads, useRefreshUpload, useUploadXml } from '../../api/hooks/efactura';
@@ -40,7 +40,7 @@ function UploadForm() {
   const [b2c, setB2c] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const submit = (e: FormEvent) => {
+  const submit = (e: SubmitEvent) => {
     e.preventDefault();
     if (!companyId) {
       setError('Alegeți firma pentru care se trimite fișierul.');
@@ -111,7 +111,7 @@ function UploadForm() {
             checked={extern}
             onChange={(e) => setExtern(e.target.checked)}
           />
-          Cumpărătorul nu este din România
+          <span>Cumpărătorul nu este din România</span>
         </label>
         <label className="check">
           <input
@@ -119,7 +119,7 @@ function UploadForm() {
             checked={autofactura}
             onChange={(e) => setAutofactura(e.target.checked)}
           />
-          Autofactură (emisă de beneficiar în numele furnizorului)
+          <span>Autofactură (emisă de beneficiar în numele furnizorului)</span>
         </label>
         <label className="check">
           <input
@@ -127,7 +127,7 @@ function UploadForm() {
             checked={executare}
             onChange={(e) => setExecutare(e.target.checked)}
           />
-          Depus de organul de executare în numele debitorului
+          <span>Depus de organul de executare în numele debitorului</span>
         </label>
         <label className="check">
           <input
@@ -135,7 +135,7 @@ function UploadForm() {
             checked={b2c}
             onChange={(e) => setB2c(e.target.checked)}
           />
-          Raportare B2C (către persoane fizice)
+          <span>Raportare B2C (către persoane fizice)</span>
         </label>
         {error ? <Alert tone="danger" title={error} /> : null}
         {upload.isError ? (
@@ -143,19 +143,18 @@ function UploadForm() {
             {upload.error.message}
           </Alert>
         ) : null}
-        {upload.isSuccess ? (
-          upload.data.status === UploadStatus.Rejected ? (
-            <Alert tone="danger" title="ANAF a refuzat fișierul.">
-              {upload.data.errorMessage}
-            </Alert>
-          ) : (
-            <Alert
-              tone="success"
-              title={`Fișierul a fost trimis. Index ANAF: ${upload.data.uploadIndex}.`}
-            >
-              Verificați starea în lista de mai sus după câteva momente.
-            </Alert>
-          )
+        {upload.isSuccess && upload.data.status === UploadStatus.Rejected ? (
+          <Alert tone="danger" title="ANAF a refuzat fișierul.">
+            {upload.data.errorMessage}
+          </Alert>
+        ) : null}
+        {upload.isSuccess && upload.data.status !== UploadStatus.Rejected ? (
+          <Alert
+            tone="success"
+            title={`Fișierul a fost trimis. Index ANAF: ${upload.data.uploadIndex}.`}
+          >
+            Verificați starea în lista de mai sus după câteva momente.
+          </Alert>
         ) : null}
         <div className="spv-row">
           <Button
@@ -268,6 +267,50 @@ export function EfacturaPage() {
     },
   ];
 
+  let body: ReactNode = null;
+  if (uploads.isPending) {
+    body = (
+      <div className="loading">Se încarcă…</div>
+    );
+  } else if (uploads.data?.items.length === 0) {
+    body = (
+      <EmptyState icon="invoice" title="Nicio factură trimisă la ANAF.">
+        Trimiteți o factură din pagina Facturi sau încărcați un fișier XML
+        mai jos.
+      </EmptyState>
+    );
+  } else if (uploads.data) {
+    body = (
+      <>
+        <DataTable
+          caption="Încărcări e-Factura"
+          columns={columns}
+          rows={uploads.data.items}
+          rowKey={(u) => u.id}
+        />
+        <div className="spv-row">
+          <Button
+            size="sm"
+            disabled={page <= 1}
+            onClick={() => setPage(page - 1)}
+          >
+            Anterioare
+          </Button>
+          <span className="muted">
+            Pagina {page} din {lastPage}
+          </span>
+          <Button
+            size="sm"
+            disabled={page >= lastPage}
+            onClick={() => setPage(page + 1)}
+          >
+            Următoarele
+          </Button>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <PageHead
@@ -314,42 +357,7 @@ export function EfacturaPage() {
           {uploads.isError ? (
             <QueryError error={uploads.error} retry={() => uploads.refetch()} />
           ) : null}
-          {uploads.isPending ? (
-            <div className="loading">Se încarcă…</div>
-          ) : uploads.data && uploads.data.items.length === 0 ? (
-            <EmptyState icon="invoice" title="Nicio factură trimisă la ANAF.">
-              Trimiteți o factură din pagina Facturi sau încărcați un fișier XML
-              mai jos.
-            </EmptyState>
-          ) : uploads.data ? (
-            <>
-              <DataTable
-                caption="Încărcări e-Factura"
-                columns={columns}
-                rows={uploads.data.items}
-                rowKey={(u) => u.id}
-              />
-              <div className="spv-row">
-                <Button
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage(page - 1)}
-                >
-                  Anterioare
-                </Button>
-                <span className="muted">
-                  Pagina {page} din {lastPage}
-                </span>
-                <Button
-                  size="sm"
-                  disabled={page >= lastPage}
-                  onClick={() => setPage(page + 1)}
-                >
-                  Următoarele
-                </Button>
-              </div>
-            </>
-          ) : null}
+          {body}
         </div>
       </Card>
       <UploadForm />

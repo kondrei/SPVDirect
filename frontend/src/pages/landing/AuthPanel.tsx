@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type SubmitEvent, type KeyboardEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useLogin, useRegister } from '../../api/hooks/auth';
 import { MIN_PASSWORD } from '../../common/constants';
@@ -25,7 +25,7 @@ function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const submit = (e: FormEvent) => {
+  const submit = (e: SubmitEvent) => {
     e.preventDefault();
     login.mutate(
       { email: email.trim(), password },
@@ -65,7 +65,7 @@ function LoginForm() {
   );
 }
 
-function RegisterForm({ onDone }: { onDone: () => void }) {
+function RegisterForm({ onDone }: Readonly<{ onDone: () => void }>) {
   const register = useRegister();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -73,7 +73,7 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
   const [touched, setTouched] = useState(false);
   const tooShort = password.length > 0 && password.length < MIN_PASSWORD;
 
-  const submit = (e: FormEvent) => {
+  const submit = (e: SubmitEvent) => {
     e.preventDefault();
     setTouched(true);
     if (password.length < MIN_PASSWORD) return;
@@ -128,7 +128,7 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-export function AuthPanel({ tab, onTab }: { tab: AuthTab; onTab: (tab: AuthTab) => void }) {
+export function AuthPanel({ tab, onTab }: Readonly<{ tab: AuthTab; onTab: (tab: AuthTab) => void }>) {
   const tabRefs = useRef<Partial<Record<AuthTab, HTMLButtonElement | null>>>({});
 
   useEffect(() => {
@@ -141,12 +141,10 @@ export function AuthPanel({ tab, onTab }: { tab: AuthTab; onTab: (tab: AuthTab) 
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Home' && e.key !== 'End') return;
     e.preventDefault();
     const i = TABS.findIndex((t) => t.id === tab);
-    const next =
-      e.key === 'Home'
-        ? TABS[0]
-        : e.key === 'End'
-          ? TABS[TABS.length - 1]
-          : TABS[(i + (e.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length];
+    const step = e.key === 'ArrowRight' ? 1 : TABS.length - 1;
+    let next = TABS[(i + step) % TABS.length];
+    if (e.key === 'Home') next = TABS[0];
+    if (e.key === 'End') next = TABS.at(-1) ?? next;
     onTab(next.id);
     tabRefs.current[next.id]?.focus();
   };

@@ -57,15 +57,24 @@ export class AccountExportService {
         zip.add(AccountExportFile.Profile, json(profile));
         zip.add(
           AccountExportFile.Connections,
-          toCsv(CONNECTION_HEADER, connections.map(connectionRow)),
+          toCsv(
+            CONNECTION_HEADER,
+            connections.map((c) => connectionRow(c)),
+          ),
         );
         zip.add(
           AccountExportFile.Companies,
-          toCsv(COMPANY_HEADER, companies.map(companyRow)),
+          toCsv(
+            COMPANY_HEADER,
+            companies.map((c) => companyRow(c)),
+          ),
         );
         zip.add(
           AccountExportFile.Activity,
-          toCsv(ACTIVITY_HEADER, activity.map(activityRow)),
+          toCsv(
+            ACTIVITY_HEADER,
+            activity.map((a) => activityRow(a)),
+          ),
         );
         for (const company of companies) {
           const done = await this.companyExport.writeCompany(

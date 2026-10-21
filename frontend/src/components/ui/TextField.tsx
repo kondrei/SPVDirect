@@ -23,7 +23,7 @@ export function TextField({
   className,
   id,
   ...rest
-}: TextFieldProps) {
+}: Readonly<TextFieldProps>) {
   const auto = useId();
   const inputId = id ?? auto;
   const hintId = `${inputId}-hint`;
@@ -76,7 +76,7 @@ export function TextAreaField({
   className,
   id,
   ...rest
-}: TextAreaFieldProps) {
+}: Readonly<TextAreaFieldProps>) {
   const auto = useId();
   const inputId = id ?? auto;
   const hintId = `${inputId}-hint`;

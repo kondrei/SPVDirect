@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Navigate, useSearchParams } from 'react-router';
 import { useMe } from '../api/hooks/auth';
 import { usePublicStats } from '../api/hooks/publicStats';
@@ -115,17 +115,17 @@ const SECURITY = [
 
 function Counters() {
   const stats = usePublicStats();
+  let status = 'Se încarcă cifrele…';
+  if (stats.data) {
+    status = `Actualizat la ${formatDateTime(stats.data.updatedAt)}.`;
+  } else if (stats.isError) {
+    status = 'Cifrele nu sunt disponibile momentan. Reveniți în câteva minute.';
+  }
   return (
     <section className="landing-section" id="cifre" aria-labelledby="cifre-title">
       <div className="landing-section-head">
         <h2 id="cifre-title">SPVDirect în cifre</h2>
-        <p>
-          {stats.data
-            ? `Actualizat la ${formatDateTime(stats.data.updatedAt)}.`
-            : stats.isError
-              ? 'Cifrele nu sunt disponibile momentan. Reveniți în câteva minute.'
-              : 'Se încarcă cifrele…'}
-        </p>
+        <p>{status}</p>
       </div>
       <div className="landing-stats" aria-busy={stats.isPending || undefined}>
         {COUNTERS.map((c) => (
@@ -168,7 +168,7 @@ export function LandingPage() {
 
   const openAuth = (next: AuthTab) => {
     selectTab(next);
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const reduce = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     document.getElementById('cont')?.scrollIntoView?.({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
     requestAnimationFrame(() => document.getElementById(`auth-tab-${next}`)?.focus({ preventScroll: true }));
   };
@@ -176,6 +176,24 @@ export function LandingPage() {
   if (me.data && wantsAuth) {
     const next = params.get('next');
     return <Navigate to={next ? safeNext(next) : accountantPath(me.data.id, '')} replace />;
+  }
+
+  let account: ReactNode;
+  if (appPath) {
+    account = (
+      <div className="spv-card landing-auth landing-signed">
+        <Icon name="check" />
+        <h2>Sunteți autentificat</h2>
+        <p className="muted">{me.data?.name || me.data?.email}</p>
+        <ButtonLink to={appPath} variant="primary" icon="chevron">
+          Deschide aplicația
+        </ButtonLink>
+      </div>
+    );
+  } else if (me.isPending) {
+    account = <div className="spv-card landing-auth landing-auth-wait" id="cont" aria-busy="true" />;
+  } else {
+    account = <AuthPanel tab={tab} onTab={selectTab} />;
   }
 
   return (
@@ -230,20 +248,7 @@ export function LandingPage() {
               singură dată.
             </p>
           </div>
-          {appPath ? (
-            <div className="spv-card landing-auth landing-signed">
-              <Icon name="check" />
-              <h2>Sunteți autentificat</h2>
-              <p className="muted">{me.data?.name || me.data?.email}</p>
-              <ButtonLink to={appPath} variant="primary" icon="chevron">
-                Deschide aplicația
-              </ButtonLink>
-            </div>
-          ) : me.isPending ? (
-            <div className="spv-card landing-auth landing-auth-wait" id="cont" aria-busy="true" />
-          ) : (
-            <AuthPanel tab={tab} onTab={selectTab} />
-          )}
+          {account}
         </section>
 
         <section className="landing-section" id="aplicatia" aria-labelledby="aplicatia-title">

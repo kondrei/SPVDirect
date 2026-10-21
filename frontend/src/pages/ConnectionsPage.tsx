@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { useCompanies } from '../api/hooks/companies';
 import { useConnections, useConnectUrl, useDeleteConnection, useRenameConnection, useTestConnection } from '../api/hooks/connections';
@@ -54,19 +54,82 @@ function CallbackBanner() {
   );
 }
 
+function RenameForm({
+  c,
+  rename,
+  onClose,
+}: Readonly<{
+  c: AnafConnection;
+  rename: ReturnType<typeof useRenameConnection>;
+  onClose: () => void;
+}>) {
+  const [label, setLabel] = useState(c.label);
+  return (
+    <form
+      className="form-row"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!label.trim()) return;
+        rename.mutate({ id: c.id, label: label.trim() }, { onSuccess: onClose });
+      }}
+    >
+      <TextField
+        aria-label="Denumire certificat"
+        value={label}
+        onChange={(e) => setLabel(e.target.value)}
+        maxLength={120}
+      />
+      <Button
+        type="submit"
+        size="sm"
+        variant="primary"
+        loading={rename.isPending}
+      >
+        Salvează
+      </Button>
+      <Button size="sm" onClick={onClose}>
+        Renunță
+      </Button>
+    </form>
+  );
+}
+
+function AccessLostAlert({
+  c,
+  status,
+}: Readonly<{
+  c: AnafConnection;
+  status: ReturnType<typeof connectionStatus>;
+}>) {
+  if (status !== 'expired' && status !== 'revoked') return null;
+  return (
+    <Alert
+      tone="danger"
+      title={
+        status === 'revoked'
+          ? 'Accesul a fost revocat.'
+          : 'Accesul a expirat.'
+      }
+    >
+      {c.source === AnafConnectionSource.Self
+        ? 'Conectați din nou certificatul cabinetului.'
+        : 'Generați un link nou din pagina firmei și trimiteți-l titularului.'}
+    </Alert>
+  );
+}
+
 function ConnectionCard({
   c,
   companies,
-}: {
+}: Readonly<{
   c: AnafConnection;
   companies: number;
-}) {
+}>) {
   const rename = useRenameConnection();
   const remove = useDeleteConnection();
   const test = useTestConnection();
   const connectUrl = useConnectUrl();
   const [editing, setEditing] = useState(false);
-  const [label, setLabel] = useState(c.label);
   const status = connectionStatus(c);
   const days = daysUntil(c.refreshExpiresAt);
 
@@ -74,41 +137,7 @@ function ConnectionCard({
     <Card
       title={
         editing ? (
-          <form
-            className="form-row"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!label.trim()) return;
-              rename.mutate(
-                { id: c.id, label: label.trim() },
-                { onSuccess: () => setEditing(false) },
-              );
-            }}
-          >
-            <TextField
-              aria-label="Denumire certificat"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              maxLength={120}
-            />
-            <Button
-              type="submit"
-              size="sm"
-              variant="primary"
-              loading={rename.isPending}
-            >
-              Salvează
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => {
-                setLabel(c.label);
-                setEditing(false);
-              }}
-            >
-              Renunță
-            </Button>
-          </form>
+          <RenameForm c={c} rename={rename} onClose={() => setEditing(false)} />
         ) : (
           c.label
         )
@@ -123,15 +152,13 @@ function ConnectionCard({
         </>
       }
       actions={
-        !editing ? (
-          <>
-            <StatusBadge status={status}>
-              {status === 'expiring'
-                ? `Expiră în ${pluralZile(Math.max(0, days))}`
-                : undefined}
-            </StatusBadge>
-          </>
-        ) : undefined
+        editing ? undefined : (
+          <StatusBadge status={status}>
+            {status === 'expiring'
+              ? `Expiră în ${pluralZile(Math.max(0, days))}`
+              : undefined}
+          </StatusBadge>
+        )
       }
     >
       <div className="stack">
@@ -157,20 +184,7 @@ function ConnectionCard({
             {c.lastRefreshedAt ? formatDateTime(c.lastRefreshedAt) : '—'}
           </dd>
         </dl>
-        {status === 'expired' || status === 'revoked' ? (
-          <Alert
-            tone="danger"
-            title={
-              status === 'revoked'
-                ? 'Accesul a fost revocat.'
-                : 'Accesul a expirat.'
-            }
-          >
-            {c.source === AnafConnectionSource.Self
-              ? 'Conectați din nou certificatul cabinetului.'
-              : 'Generați un link nou din pagina firmei și trimiteți-l titularului.'}
-          </Alert>
-        ) : null}
+        <AccessLostAlert c={c} status={status} />
         {test.isSuccess ? (
           <Alert tone="success" title="ANAF a răspuns.">
             <span className="mono">{test.data.body}</span>
@@ -197,7 +211,7 @@ function ConnectionCard({
           >
             Testează conexiunea
           </Button>
-          {!editing ? (
+          {editing ? null : (
             <Button
               size="sm"
               variant="ghost"
@@ -206,7 +220,7 @@ function ConnectionCard({
             >
               Redenumește
             </Button>
-          ) : null}
+          )}
           {c.source === AnafConnectionSource.Self &&
           (status === 'expiring' || status === 'expired') ? (
             <ButtonAnchor
@@ -240,6 +254,41 @@ export function ConnectionsPage() {
     companies.data?.filter((co) => co.anafConnectionId === id).length ?? 0;
   const list = connections.data ?? [];
 
+  let body: ReactNode;
+  if (connections.isPending) {
+    body = <div className="loading">Se încarcă…</div>;
+  } else if (list.length === 0) {
+    body = (
+      <Card>
+        <EmptyState
+          icon="certificate"
+          title="Niciun certificat conectat."
+          actions={
+            <ButtonAnchor
+              variant="primary"
+              icon="certificate"
+              href={connectUrl}
+            >
+              Conectează certificat
+            </ButtonAnchor>
+          }
+        >
+          Conectați certificatul cabinetului (de exemplu unul de împuternicit
+          care acoperă mai multe CUI-uri), sau trimiteți clientului un link de
+          autorizare din pagina firmei.
+        </EmptyState>
+      </Card>
+    );
+  } else {
+    body = (
+      <div className="stack">
+        {list.map((c) => (
+          <ConnectionCard key={c.id} c={c} companies={count(c.id)} />
+        ))}
+      </div>
+    );
+  }
+
   return (
     <>
       <PageHead
@@ -267,35 +316,7 @@ export function ConnectionsPage() {
           retry={() => connections.refetch()}
         />
       ) : null}
-      {connections.isPending ? (
-        <div className="loading">Se încarcă…</div>
-      ) : list.length === 0 ? (
-        <Card>
-          <EmptyState
-            icon="certificate"
-            title="Niciun certificat conectat."
-            actions={
-              <ButtonAnchor
-                variant="primary"
-                icon="certificate"
-                href={connectUrl}
-              >
-                Conectează certificat
-              </ButtonAnchor>
-            }
-          >
-            Conectați certificatul cabinetului (de exemplu unul de împuternicit
-            care acoperă mai multe CUI-uri), sau trimiteți clientului un link de
-            autorizare din pagina firmei.
-          </EmptyState>
-        </Card>
-      ) : (
-        <div className="stack">
-          {list.map((c) => (
-            <ConnectionCard key={c.id} c={c} companies={count(c.id)} />
-          ))}
-        </div>
-      )}
+      {body}
     </>
   );
 }

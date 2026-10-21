@@ -3,12 +3,13 @@ import {
   useRef,
   useState,
   type ChangeEvent,
-  type FormEvent,
+  type ReactNode,
+  type SubmitEvent,
 } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useCompanies, useCreateCompanies, useCreateCompany } from '../../api/hooks/companies';
 import { useConnections } from '../../api/hooks/connections';
-import type { BulkCompanyResult } from '../../api/types';
+import type { AnafConnection, BulkCompanyResult, Company } from '../../api/types';
 import { EmptyState } from '../../components/EmptyState';
 import { PageHead } from '../../components/PageHead';
 import { QueryError } from '../../components/QueryError';
@@ -61,11 +62,11 @@ function BulkResults({
   results,
   onAgain,
   onDone,
-}: {
+}: Readonly<{
   results: BulkCompanyResult[];
   onAgain: () => void;
   onDone: () => void;
-}) {
+}>) {
   const appPath = useAppPath();
   const count = (s: BulkCompanyResult['status']) =>
     results.filter((r) => r.status === s).length;
@@ -128,13 +129,18 @@ function BulkResults({
 
 type FileNote = { tone: 'info' | 'danger'; message: string };
 
+function submitLabel(pending: boolean, count: number): string {
+  if (pending) return 'Se caută la ANAF…';
+  return count > 1 ? `Adaugă ${pluralFirme(count)}` : 'Adaugă';
+}
+
 function AddCompanyForm({
   initial = '',
   onDone,
-}: {
+}: Readonly<{
   initial?: string;
   onDone: () => void;
-}) {
+}>) {
   const create = useCreateCompany();
   const createMany = useCreateCompanies();
   const navigate = useNavigate();
@@ -148,7 +154,7 @@ function AddCompanyForm({
   const pending = create.isPending || createMany.isPending;
   const failure = create.error ?? createMany.error;
 
-  const submit = (e: FormEvent) => {
+  const submit = (e: SubmitEvent) => {
     e.preventDefault();
     setTouched(true);
     if (pending || listError(text)) return;
@@ -251,11 +257,7 @@ function AddCompanyForm({
             icon="plus"
             loading={pending}
           >
-            {pending
-              ? 'Se caută la ANAF…'
-              : cuis.length > 1
-                ? `Adaugă ${pluralFirme(cuis.length)}`
-                : 'Adaugă'}
+            {submitLabel(pending, cuis.length)}
           </Button>
           <Button
             icon="upload"
@@ -274,7 +276,6 @@ function AddCompanyForm({
 export function CompaniesPage() {
   const companies = useCompanies();
   const connections = useConnections();
-  const appPath = useAppPath();
   const [params, setParams] = useSearchParams();
   const adding = params.get('add') === '1';
   const [q, setQ] = useState('');
@@ -299,6 +300,41 @@ export function CompaniesPage() {
   const without =
     companies.data?.filter((c) => !c.anafConnectionId).length ?? 0;
 
+  let body: ReactNode;
+  if (companies.isPending) {
+    body = <div className="loading">Se încarcă…</div>;
+  } else if (total === 0) {
+    body = (
+      <EmptyState
+        icon="building"
+        title="Nu ați adăugat încă nicio firmă."
+        actions={
+          adding ? undefined : (
+            <Button
+              variant="primary"
+              icon="plus"
+              onClick={() => setAdding(true)}
+            >
+              Adaugă prima firmă
+            </Button>
+          )
+        }
+      >
+        Adăugați clienții după CUI. Pentru fiecare firmă alegeți apoi
+        certificatul cu care SPVDirect comunică cu ANAF.
+      </EmptyState>
+    );
+  } else if (rows.length === 0) {
+    body = (
+      <EmptyState
+        icon="search"
+        title="Nicio firmă nu corespunde căutării."
+      />
+    );
+  } else {
+    body = <CompaniesTable rows={rows} byId={byId} />;
+  }
+
   return (
     <>
       <PageHead
@@ -309,7 +345,7 @@ export function CompaniesPage() {
             : undefined
         }
         actions={
-          !adding ? (
+          adding ? undefined : (
             <Button
               variant="primary"
               icon="plus"
@@ -317,7 +353,7 @@ export function CompaniesPage() {
             >
               Adaugă firmă
             </Button>
-          ) : undefined
+          )
         }
       />
       {adding ? (
@@ -340,115 +376,99 @@ export function CompaniesPage() {
         />
       ) : null}
 
-      <Card flush>
-        {companies.isPending ? (
-          <div className="loading">Se încarcă…</div>
-        ) : total === 0 ? (
-          <EmptyState
-            icon="building"
-            title="Nu ați adăugat încă nicio firmă."
-            actions={
-              !adding ? (
-                <Button
-                  variant="primary"
-                  icon="plus"
-                  onClick={() => setAdding(true)}
-                >
-                  Adaugă prima firmă
-                </Button>
-              ) : undefined
-            }
-          >
-            Adăugați clienții după CUI. Pentru fiecare firmă alegeți apoi
-            certificatul cu care SPVDirect comunică cu ANAF.
-          </EmptyState>
-        ) : rows.length === 0 ? (
-          <EmptyState
-            icon="search"
-            title="Nicio firmă nu corespunde căutării."
-          />
-        ) : (
-          <DataTable
-            caption="Firme"
-            rowKey={(r) => r.id}
-            rows={rows}
-            columns={[
-              {
-                key: 'name',
-                header: 'Firmă',
-                render: (r) => (
-                  <>
-                    <Link className="row-link" to={appPath(`/companies/${r.id}`)}>
-                      {r.name}
-                    </Link>
-                    {r.caen ? (
-                      <div className="muted small">
-                        CAEN {r.caen.code} · {r.caen.name}
-                      </div>
-                    ) : null}
-                  </>
-                ),
-              },
-              {
-                key: 'cui',
-                header: 'CUI',
-                mono: true,
-                render: (r) => formatCui(r.cui),
-              },
-              {
-                key: 'tva',
-                header: 'Plătitor TVA',
-                render: (r) =>
-                  r.vatPayer == null && !r.inactive ? (
-                    <span className="muted">—</span>
-                  ) : (
-                    <span className="spv-row">
-                      {r.vatPayer != null ? (
-                        <StatusBadge status={r.vatPayer ? 'yes' : 'no'} />
-                      ) : null}
-                      {r.inactive ? <StatusBadge status="inactive" /> : null}
-                    </span>
-                  ),
-              },
-              {
-                key: 'cert',
-                header: 'Certificat',
-                render: (r) => {
-                  const c = r.anafConnectionId
-                    ? byId.get(r.anafConnectionId)
-                    : undefined;
-                  return c ? c.label : <span className="muted">—</span>;
-                },
-              },
-              {
-                key: 'st',
-                header: 'Stare',
-                render: (r) => {
-                  const c = r.anafConnectionId
-                    ? byId.get(r.anafConnectionId)
-                    : undefined;
-                  return (
-                    <StatusBadge status={c ? connectionStatus(c) : 'none'} />
-                  );
-                },
-              },
-              {
-                key: 'a',
-                header: <span className="spv-sr-only">Acțiuni</span>,
-                render: (r) => (
-                  <ButtonLink
-                    size="sm"
-                    variant="ghost"
-                    to={appPath(`/companies/${r.id}`)}
-                  >
-                    Detalii
-                  </ButtonLink>
-                ),
-              },
-            ]}
-          />
-        )}
-      </Card>
+      <Card flush>{body}</Card>
     </>
   );
 }
+
+function CompaniesTable({
+  rows,
+  byId,
+}: Readonly<{
+  rows: Company[];
+  byId: Map<number, AnafConnection>;
+}>) {
+  const appPath = useAppPath();
+  return (
+    <DataTable
+      caption="Firme"
+      rowKey={(r) => r.id}
+      rows={rows}
+      columns={[
+        {
+          key: 'name',
+          header: 'Firmă',
+          render: (r) => (
+            <>
+              <Link className="row-link" to={appPath(`/companies/${r.id}`)}>
+                {r.name}
+              </Link>
+              {r.caen ? (
+                <div className="muted small">
+                  CAEN {r.caen.code} · {r.caen.name}
+                </div>
+              ) : null}
+            </>
+          ),
+        },
+        {
+          key: 'cui',
+          header: 'CUI',
+          mono: true,
+          render: (r) => formatCui(r.cui),
+        },
+        {
+          key: 'tva',
+          header: 'Plătitor TVA',
+          render: (r) =>
+            r.vatPayer == null && !r.inactive ? (
+              <span className="muted">—</span>
+            ) : (
+              <span className="spv-row">
+                {r.vatPayer == null ? null : (
+                  <StatusBadge status={r.vatPayer ? 'yes' : 'no'} />
+                )}
+                {r.inactive ? <StatusBadge status="inactive" /> : null}
+              </span>
+            ),
+        },
+        {
+          key: 'cert',
+          header: 'Certificat',
+          render: (r) => {
+            const c = r.anafConnectionId
+              ? byId.get(r.anafConnectionId)
+              : undefined;
+            return c ? c.label : <span className="muted">—</span>;
+          },
+        },
+        {
+          key: 'st',
+          header: 'Stare',
+          render: (r) => {
+            const c = r.anafConnectionId
+              ? byId.get(r.anafConnectionId)
+              : undefined;
+            return (
+              <StatusBadge status={c ? connectionStatus(c) : 'none'} />
+            );
+          },
+        },
+        {
+          key: 'a',
+          header: <span className="spv-sr-only">Acțiuni</span>,
+          render: (r) => (
+            <ButtonLink
+              size="sm"
+              variant="ghost"
+              to={appPath(`/companies/${r.id}`)}
+            >
+              Detalii
+            </ButtonLink>
+          ),
+        },
+      ]}
+    />
+  );
+}
+

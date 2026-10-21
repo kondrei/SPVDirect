@@ -28,9 +28,8 @@ import {
   normalizeIban,
 } from '../../companies/dto/company.dto.js';
 import { UNIT_NAMES } from './invoice.constants.js';
-import type { Unit } from './invoice.types.js';
+import type { Unit, LineVatCategory } from './invoice.types.js';
 import { Currency, PaymentMethod, VatCategory } from './invoice.enums.js';
-import type { LineVatCategory } from './invoice.types.js';
 
 export const LINE_VAT_CATEGORIES = Object.values(VatCategory).filter(
   (c): c is LineVatCategory => c !== VatCategory.NotSubject,

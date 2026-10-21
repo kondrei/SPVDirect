@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button } from './ui';
 
-export function CopyField({ value, label }: { value: string; label: string }) {
+export function CopyField({ value, label }: Readonly<{ value: string; label: string }>) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     try {

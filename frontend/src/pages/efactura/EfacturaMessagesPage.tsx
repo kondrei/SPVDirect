@@ -36,6 +36,42 @@ function messageStatus(type: string): Status {
   return 'messageOther';
 }
 
+function MessagesBody({
+  companyId,
+  messages,
+  columns,
+}: Readonly<{
+  companyId: number | undefined;
+  messages: ReturnType<typeof useEfacturaMessages>;
+  columns: Column<EfacturaMessage>[];
+}>) {
+  if (!companyId) {
+    return (
+      <EmptyState icon="invoice" title="Alegeți o firmă.">
+        Mesajele se citesc din ANAF cu certificatul legat de firmă.
+      </EmptyState>
+    );
+  }
+  if (messages.isPending && messages.fetchStatus !== 'idle') {
+    return <div className="loading">Se încarcă…</div>;
+  }
+  if (messages.isError) {
+    return <QueryError error={messages.error} retry={() => messages.refetch()} />;
+  }
+  if (!messages.data) return null;
+  if (messages.data.messages.length === 0) {
+    return <EmptyState icon="invoice" title="Niciun mesaj în această perioadă." />;
+  }
+  return (
+    <DataTable
+      caption="Mesaje e-Factura"
+      columns={columns}
+      rows={messages.data.messages}
+      rowKey={(m) => m.id}
+    />
+  );
+}
+
 export function EfacturaMessagesPage() {
   const appPath = useAppPath();
   const companies = useCompanies();
@@ -153,24 +189,7 @@ export function EfacturaMessagesPage() {
               {download.error.message}
             </Alert>
           ) : null}
-          {!companyId ? (
-            <EmptyState icon="invoice" title="Alegeți o firmă.">
-              Mesajele se citesc din ANAF cu certificatul legat de firmă.
-            </EmptyState>
-          ) : messages.isPending && messages.fetchStatus !== 'idle' ? (
-            <div className="loading">Se încarcă…</div>
-          ) : messages.isError ? (
-            <QueryError error={messages.error} retry={() => messages.refetch()} />
-          ) : messages.data && messages.data.messages.length === 0 ? (
-            <EmptyState icon="invoice" title="Niciun mesaj în această perioadă." />
-          ) : messages.data ? (
-            <DataTable
-              caption="Mesaje e-Factura"
-              columns={columns}
-              rows={messages.data.messages}
-              rowKey={(m) => m.id}
-            />
-          ) : null}
+          <MessagesBody companyId={companyId} messages={messages} columns={columns} />
         </div>
       </Card>
     </>

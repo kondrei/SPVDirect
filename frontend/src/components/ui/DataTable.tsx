@@ -18,6 +18,11 @@ export interface DataTableProps<R> {
   onRowClick?: (row: R) => void;
 }
 
+function cellClass(column: Pick<Column<unknown>, 'align' | 'mono'>): string | undefined {
+  if (column.align === 'num') return 'spv-num';
+  return column.mono ? 'spv-mono' : undefined;
+}
+
 export function DataTable<R>({
   columns,
   rows,
@@ -26,7 +31,7 @@ export function DataTable<R>({
   stack,
   rowNote,
   onRowClick,
-}: DataTableProps<R>) {
+}: Readonly<DataTableProps<R>>) {
   return (
     <div className="spv-table-wrap">
       <table className={stack ? 'spv-table spv-table-stack' : 'spv-table'}>
@@ -65,13 +70,7 @@ export function DataTable<R>({
                 <td
                   key={c.key}
                   data-label={typeof c.header === 'string' ? c.header : undefined}
-                  className={
-                    c.align === 'num'
-                      ? 'spv-num'
-                      : c.mono
-                        ? 'spv-mono'
-                        : undefined
-                  }
+                  className={cellClass(c)}
                 >
                   {c.render
                     ? c.render(r)

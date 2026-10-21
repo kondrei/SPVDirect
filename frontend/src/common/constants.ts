@@ -32,7 +32,7 @@ export const ACTIVITY_LABELS: Record<ActivityAction, { label: string; tone: Tone
   [ActivityAction.InvoiceIssued]: { label: 'Factură emisă', tone: 'brand' },
   [ActivityAction.InvoiceStorno]: { label: 'Factură stornată', tone: 'warning' },
   [ActivityAction.InvoiceSent]: { label: 'Factură trimisă pe email', tone: 'brand' },
-  [ActivityAction.InvoiceStored]: { label: 'Factură salvată în Storage', tone: 'neutral' },
+  [ActivityAction.InvoiceStored]: { label: 'Factură salvată în cloud', tone: 'neutral' },
   [ActivityAction.EfacturaUploaded]: { label: 'Trimisă la e-Factura', tone: 'brand' },
   [ActivityAction.EfacturaStatusChecked]: { label: 'Stare e-Factura verificată', tone: 'neutral' },
   [ActivityAction.EfacturaDownloaded]: { label: 'Descărcare e-Factura', tone: 'neutral' },

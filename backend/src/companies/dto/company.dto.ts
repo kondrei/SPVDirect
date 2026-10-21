@@ -22,7 +22,7 @@ import {
 
 export function normalizeCui(value: unknown): unknown {
   return typeof value === 'string'
-    ? value.replace(/\s+/g, '').replace(/^RO/i, '')
+    ? value.replaceAll(/\s+/g, '').replace(/^RO/i, '')
     : value;
 }
 
@@ -49,7 +49,7 @@ export const MAX_BULK_CUIS = 500;
 
 export class CreateCompaniesDto {
   @Transform(({ value }) =>
-    Array.isArray(value) ? value.map(normalizeCui) : value,
+    Array.isArray(value) ? value.map((v) => normalizeCui(v)) : value,
   )
   @IsArray({ message: 'Lista de CUI-uri lipsește' })
   @ArrayMinSize(1, { message: 'Introduceți cel puțin un CUI' })
@@ -65,7 +65,7 @@ export class CreateCompaniesDto {
 
 export function normalizeIban(value: unknown): unknown {
   if (typeof value !== 'string') return value;
-  const compact = value.replace(/\s+/g, '').toUpperCase();
+  const compact = value.replaceAll(/\s+/g, '').toUpperCase();
   return compact === '' ? null : compact;
 }
 

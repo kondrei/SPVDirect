@@ -13,7 +13,7 @@ function buyerSource(buyer: FoundBuyer): string {
     : 'Date preluate din ultima factură emisă acestui client. ANAF nu a răspuns: apăsați Caută la ANAF pentru a verifica statusul.';
 }
 
-function BuyerStatus({ buyer }: { buyer: FoundBuyer }) {
+function BuyerStatus({ buyer }: Readonly<{ buyer: FoundBuyer }>) {
   return (
     <div className="spv-row">
       <StatusBadge status={buyer.vatPayer ? 'yes' : 'no'}>
@@ -37,11 +37,11 @@ export function BuyerCard({
   buyer,
   dispatch,
   autofill,
-}: {
+}: Readonly<{
   buyer: BuyerForm;
   dispatch: Dispatch<InvoiceFormAction>;
   autofill: ReturnType<typeof useBuyerAutofill>;
-}) {
+}>) {
   const [cuiError, setCuiError] = useState<string | undefined>();
   const { lookup, findBuyer, found } = autofill;
   const set = (patch: Partial<BuyerForm>) => dispatch({ type: 'buyer', patch });

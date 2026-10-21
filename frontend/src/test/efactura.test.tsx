@@ -207,7 +207,7 @@ describe('e-Factura: mesaje ANAF', () => {
       screen.getByRole('button', { name: 'Descarcă mesajul 3001474425' }),
     ).toBeInTheDocument();
     expect(
-      calls.some((c) => c === 'GET /accountants/1/efactura/companies/7/messages?zile=30'),
+      calls.includes('GET /accountants/1/efactura/companies/7/messages?zile=30'),
     ).toBe(true);
   });
 

@@ -68,7 +68,7 @@ export function useUploadXml() {
     mutationFn: ({ file, ...fields }: UploadXmlInput) => {
       const body = new FormData();
       body.append('file', file);
-      for (const [key, value] of Object.entries(fields)) {
+      for (const [key, value] of Object.entries(fields) as [string, unknown][]) {
         if (value !== undefined) body.append(key, String(value));
       }
       return api<EfacturaUpload>(requirePath(path), { method: 'POST', body });

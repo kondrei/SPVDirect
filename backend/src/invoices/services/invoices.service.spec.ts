@@ -212,14 +212,18 @@ describe('InvoiceBuyersService.findBuyer', () => {
     });
   });
 
-  it('keeps the saved buyer, marked as not checked at ANAF, when ANAF fails or does not know the CUI', async () => {
-    const invoice = sampleInvoice({
-      buyer: { ...sampleInvoice().buyer, cui: '87654321' },
-    });
-    for (const answer of [
+  it.each([
+    [
+      'fails',
       () => Promise.reject(new BadGatewayException('ANAF indisponibil')),
-      () => Promise.resolve(null),
-    ]) {
+    ],
+    ['does not know the CUI', () => Promise.resolve(null)],
+  ])(
+    'keeps the saved buyer, marked as not checked at ANAF, when ANAF %s',
+    async (_, answer) => {
+      const invoice = sampleInvoice({
+        buyer: { ...sampleInvoice().buyer, cui: '87654321' },
+      });
       const { service, anaf } = withSaved({ invoice });
       anaf.lookup.mockImplementation(answer);
       expect(await service.findBuyer(1, '87654321')).toEqual({
@@ -229,8 +233,8 @@ describe('InvoiceBuyersService.findBuyer', () => {
         anafChecked: false,
         source: 'invoice',
       });
-    }
-  });
+    },
+  );
 
   it('falls back to the accountant’s own company with that CUI', async () => {
     const { service, companies, anaf } = withSaved({
@@ -254,21 +258,25 @@ describe('InvoiceBuyersService.findBuyer', () => {
     expect(anaf.lookup).not.toHaveBeenCalled();
   });
 
-  it('asks ANAF when nothing is saved, or the saved company has no address', async () => {
-    for (const company of [
-      null,
+  it.each([
+    ['nothing is saved', null],
+    [
+      'the saved company has no address',
       Object.assign({}, COMPANY, { address: null }),
+    ],
+    [
+      'the saved company has a blank address',
       Object.assign({}, COMPANY, { address: '   ' }),
-    ]) {
-      const { service, anaf } = withSaved({ company });
-      const buyer = await service.findBuyer(1, '87654321');
-      expect(anaf.lookup).toHaveBeenCalledWith(1, '87654321');
-      expect(buyer).toMatchObject({
-        cui: '87654321',
-        anafChecked: true,
-        source: 'anaf',
-      });
-    }
+    ],
+  ])('asks ANAF when %s', async (_, company) => {
+    const { service, anaf } = withSaved({ company });
+    const buyer = await service.findBuyer(1, '87654321');
+    expect(anaf.lookup).toHaveBeenCalledWith(1, '87654321');
+    expect(buyer).toMatchObject({
+      cui: '87654321',
+      anafChecked: true,
+      source: 'anaf',
+    });
   });
 
   it('answers 400 when the CUI is nowhere, not even at ANAF', async () => {

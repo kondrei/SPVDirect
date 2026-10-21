@@ -6,12 +6,12 @@ export function Stat({
   value,
   note,
   icon,
-}: {
+}: Readonly<{
   label: string;
   value: ReactNode;
   note?: ReactNode;
   icon?: IconName;
-}) {
+}>) {
   return (
     <div className="spv-card spv-stat">
       <div className="spv-stat-label">

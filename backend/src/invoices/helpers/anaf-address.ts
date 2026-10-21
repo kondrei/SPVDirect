@@ -17,7 +17,7 @@ const EMPTY: ParsedAddress = {
 
 function clean(value: string | undefined): string | null {
   const trimmed = value?.trim();
-  return trimmed ? trimmed : null;
+  return trimmed || null;
 }
 
 function bucharestSector(locality: string): string | null {

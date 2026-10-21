@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type SubmitEvent } from 'react';
 import { useCreateStorno, useDownloadInvoice, useInvoice } from '../../api/hooks/invoices';
 import type { InvoiceSummary } from '../../api/types';
-import { formatAmount, parseDecimal } from '../../lib/format';
+import { formatAmount, isEmailLike, parseDecimal } from '../../lib/format';
 import { invoiceFilename, invoiceNumber, todayIso } from '../../lib/invoice';
 import { QueryError } from '../QueryError';
 import { DeliveryResults } from './InvoiceActionResults';
@@ -16,12 +16,12 @@ function StornoForm({
   lines,
   remaining,
   onClose,
-}: {
+}: Readonly<{
   invoice: Pick<InvoiceSummary, 'id' | 'series' | 'number' | 'issueDate'>;
   lines: { description: string; unit: string }[];
   remaining: number[];
   onClose: () => void;
-}) {
+}>) {
   const create = useCreateStorno();
   const download = useDownloadInvoice();
   const [quantities, setQuantities] = useState(remaining.map(String));
@@ -34,14 +34,15 @@ function StornoForm({
   const [error, setError] = useState<string | null>(null);
   const label = invoiceNumber(invoice.series, invoice.number);
 
-  const submit = (e: FormEvent) => {
+  const submit = (e: SubmitEvent) => {
     e.preventDefault();
     const chosen = quantities
       .map((q, lineIndex) => ({ lineIndex, quantity: parseQuantity(q) }))
       .filter((l) => l.quantity !== 0);
     const bad = chosen.find(
       (l) =>
-        !(l.quantity > 0) ||
+        Number.isNaN(l.quantity) ||
+        l.quantity <= 0 ||
         Math.round(l.quantity * 1000) > Math.round(remaining[l.lineIndex] * 1000),
     );
     if (chosen.length === 0) {
@@ -62,7 +63,7 @@ function StornoForm({
       setError('Seria poate avea 1–10 litere sau cifre.');
       return;
     }
-    if (sendEmail && !/^\S+@\S+\.\S+$/.test(emailTo.trim())) {
+    if (sendEmail && !isEmailLike(emailTo.trim())) {
       setError('Introduceți adresa de email la care se trimite factura.');
       return;
     }
@@ -176,7 +177,7 @@ function StornoForm({
             checked={saveToStorage}
             onChange={(e) => setSaveToStorage(e.target.checked)}
           />
-          Salvează PDF-ul în Supabase Storage
+          <span>Salvează PDF-ul în cloud</span>
         </label>
         <label className="check">
           <input
@@ -184,7 +185,7 @@ function StornoForm({
             checked={sendEmail}
             onChange={(e) => setSendEmail(e.target.checked)}
           />
-          Trimite factura de stornare pe email
+          <span>Trimite factura de stornare pe email</span>
         </label>
         {sendEmail ? (
           <TextField
@@ -219,10 +220,10 @@ function StornoForm({
 export function StornoPanel({
   invoice,
   onClose,
-}: {
+}: Readonly<{
   invoice: Pick<InvoiceSummary, 'id' | 'series' | 'number' | 'issueDate'>;
   onClose: () => void;
-}) {
+}>) {
   const detail = useInvoice(invoice.id);
   if (detail.isPending) return <div className="loading">Se încarcă…</div>;
   if (detail.isError) {

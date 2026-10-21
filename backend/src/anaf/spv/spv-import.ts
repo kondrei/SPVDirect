@@ -138,7 +138,9 @@ export function parseSpvExport(content: Buffer | undefined): SpvExport {
   return {
     ...header,
     notice: null,
-    messages: toSpvMessages(body.mesaje.map(checkMessage)),
+    messages: toSpvMessages(
+      body.mesaje.map((m, index) => checkMessage(m, index)),
+    ),
   };
 }
 

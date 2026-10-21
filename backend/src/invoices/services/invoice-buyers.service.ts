@@ -10,12 +10,11 @@ import {
   buyerFromAnaf,
   sellerFromCompany,
 } from '../builders/invoice-builder.js';
-import type { BuyerLookup } from '../dto/invoice.types.js';
+import type { BuyerLookup, LineSuggestion } from '../dto/invoice.types.js';
 import {
   distinctLineSuggestions,
   SUGGESTION_INVOICE_LIMIT,
 } from '../helpers/invoice-line-suggestions.js';
-import type { LineSuggestion } from '../dto/invoice.types.js';
 import { Invoice } from '../invoice.entity.js';
 import { BuyerSource } from '../dto/invoice.enums.js';
 

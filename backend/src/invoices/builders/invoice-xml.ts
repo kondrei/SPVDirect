@@ -1,9 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
 import { stornoReference, vatId } from '../helpers/invoice-format.js';
 import { UNITS } from '../dto/invoice.constants.js';
-import type { InvoiceParty } from '../dto/invoice.types.js';
+import type { InvoiceParty, InvoiceXmlData } from '../dto/invoice.types.js';
 import { VatCategory, Currency, PaymentMethod } from '../dto/invoice.enums.js';
-import type { InvoiceXmlData } from '../dto/invoice.types.js';
 
 export const CIUS_RO_CUSTOMIZATION_ID =
   'urn:cen.eu:en16931:2017#compliant#urn:efactura.mfinante.ro:CIUS-RO:1.0.1';
@@ -17,7 +16,7 @@ const XML_ESCAPES: Record<string, string> = {
 };
 
 function esc(value: string): string {
-  return value.replace(/[&<>"']/g, (ch) => XML_ESCAPES[ch]);
+  return value.replaceAll(/[&<>"']/g, (ch) => XML_ESCAPES[ch]);
 }
 
 function amount(value: number): string {
@@ -26,6 +25,14 @@ function amount(value: number): string {
 
 function tag(name: string, value: string, attributes = ''): string {
   return `<${name}${attributes}>${esc(value)}</${name}>`;
+}
+
+function optionalTag(name: string, value: string | null | undefined): string {
+  return value ? tag(name, value) : '';
+}
+
+function documentId(series: string, number: number): string {
+  return series + String(number).padStart(6, '0');
 }
 
 function partyXml(
@@ -41,11 +48,11 @@ function partyXml(
       : '';
   const contact =
     party.phone || party.email
-      ? `<cac:Contact>${party.phone ? tag('cbc:Telephone', party.phone) : ''}${party.email ? tag('cbc:ElectronicMail', party.email) : ''}</cac:Contact>`
+      ? `<cac:Contact>${optionalTag('cbc:Telephone', party.phone)}${optionalTag('cbc:ElectronicMail', party.email)}</cac:Contact>`
       : '';
   return `<cac:${wrapper}><cac:Party>
 <cac:PartyName>${tag('cbc:Name', party.name)}</cac:PartyName>
-<cac:PostalAddress>${tag('cbc:StreetName', party.street ?? party.address)}${tag('cbc:CityName', party.city ?? 'Necunoscut')}${party.postalCode ? tag('cbc:PostalZone', party.postalCode) : ''}${tag('cbc:CountrySubentity', party.county ?? 'RO-B')}<cac:Country>${tag('cbc:IdentificationCode', 'RO')}</cac:Country></cac:PostalAddress>
+<cac:PostalAddress>${tag('cbc:StreetName', party.street ?? party.address)}${tag('cbc:CityName', party.city ?? 'Necunoscut')}${optionalTag('cbc:PostalZone', party.postalCode)}${tag('cbc:CountrySubentity', party.county ?? 'RO-B')}<cac:Country>${tag('cbc:IdentificationCode', 'RO')}</cac:Country></cac:PostalAddress>
 ${taxScheme}
 <cac:PartyLegalEntity>${tag('cbc:RegistrationName', party.name)}${tag('cbc:CompanyID', legalId)}</cac:PartyLegalEntity>
 ${contact}
@@ -81,23 +88,22 @@ export function renderInvoiceXml(invoice: InvoiceXmlData): string {
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">',
     tag('cbc:CustomizationID', CIUS_RO_CUSTOMIZATION_ID),
-    tag(
-      'cbc:ID',
-      `${invoice.series}${String(invoice.number).padStart(6, '0')}`,
-    ),
+    tag('cbc:ID', documentId(invoice.series, invoice.number)),
     tag('cbc:IssueDate', invoice.issueDate),
   ];
   if (invoice.dueDate) parts.push(tag('cbc:DueDate', invoice.dueDate));
   parts.push(tag('cbc:InvoiceTypeCode', '380'));
   if (notes.length) parts.push(tag('cbc:Note', notes.join('; ')));
-  parts.push(tag('cbc:TaxPointDate', invoice.deliveryDate));
-  parts.push(tag('cbc:DocumentCurrencyCode', currency));
+  parts.push(
+    tag('cbc:TaxPointDate', invoice.deliveryDate),
+    tag('cbc:DocumentCurrencyCode', currency),
+  );
   if (currency !== Currency.RON)
     parts.push(tag('cbc:TaxCurrencyCode', Currency.RON));
 
   if (reference && invoice.stornoOfSeries && invoice.stornoOfNumber !== null) {
     parts.push(
-      `<cac:BillingReference><cac:InvoiceDocumentReference>${tag('cbc:ID', `${invoice.stornoOfSeries}${String(invoice.stornoOfNumber).padStart(6, '0')}`)}${tag('cbc:IssueDate', invoice.stornoOfIssueDate ?? '')}</cac:InvoiceDocumentReference></cac:BillingReference>`,
+      `<cac:BillingReference><cac:InvoiceDocumentReference>${tag('cbc:ID', documentId(invoice.stornoOfSeries, invoice.stornoOfNumber))}${tag('cbc:IssueDate', invoice.stornoOfIssueDate ?? '')}</cac:InvoiceDocumentReference></cac:BillingReference>`,
     );
   }
 
@@ -134,14 +140,15 @@ export function renderInvoiceXml(invoice: InvoiceXmlData): string {
     );
   }
 
+  const attr = ` currencyID="${currency}"`;
   const subtotals = invoice.vatBreakdown
     .map(
       (row) =>
-        `<cac:TaxSubtotal>${tag('cbc:TaxableAmount', amount(row.taxableAmount), ` currencyID="${currency}"`)}${tag('cbc:TaxAmount', amount(row.vatAmount), ` currencyID="${currency}"`)}${categoryXml(row.category, row.rate, row.exemptionReason)}</cac:TaxSubtotal>`,
+        `<cac:TaxSubtotal>${tag('cbc:TaxableAmount', amount(row.taxableAmount), attr)}${tag('cbc:TaxAmount', amount(row.vatAmount), attr)}${categoryXml(row.category, row.rate, row.exemptionReason)}</cac:TaxSubtotal>`,
     )
     .join('');
   parts.push(
-    `<cac:TaxTotal>${tag('cbc:TaxAmount', amount(invoice.totalVat), ` currencyID="${currency}"`)}${subtotals}</cac:TaxTotal>`,
+    `<cac:TaxTotal>${tag('cbc:TaxAmount', amount(invoice.totalVat), attr)}${subtotals}</cac:TaxTotal>`,
   );
   if (currency !== Currency.RON) {
     parts.push(
@@ -149,14 +156,14 @@ export function renderInvoiceXml(invoice: InvoiceXmlData): string {
     );
   }
 
-  const attr = ` currencyID="${currency}"`;
   parts.push(
     `<cac:LegalMonetaryTotal>${tag('cbc:LineExtensionAmount', amount(invoice.totalNet), attr)}${tag('cbc:TaxExclusiveAmount', amount(invoice.totalNet), attr)}${tag('cbc:TaxInclusiveAmount', amount(invoice.totalGross), attr)}${tag('cbc:PayableAmount', amount(invoice.totalGross), attr)}</cac:LegalMonetaryTotal>`,
   );
 
   invoice.lines.forEach((line, index) => {
+    const unitCode = ` unitCode="${UNITS[line.unit]}"`;
     parts.push(
-      `<cac:InvoiceLine>${tag('cbc:ID', String(index + 1))}${tag('cbc:InvoicedQuantity', String(line.quantity), ` unitCode="${UNITS[line.unit]}"`)}${tag('cbc:LineExtensionAmount', amount(line.netAmount), attr)}<cac:Item>${tag('cbc:Name', line.description.slice(0, 200))}<cac:ClassifiedTaxCategory>${tag('cbc:ID', line.vatCategory)}${line.vatCategory === VatCategory.NotSubject ? '' : tag('cbc:Percent', line.vatRate.toFixed(2))}<cac:TaxScheme>${tag('cbc:ID', 'VAT')}</cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item><cac:Price>${tag('cbc:PriceAmount', String(line.unitPrice), attr)}</cac:Price></cac:InvoiceLine>`,
+      `<cac:InvoiceLine>${tag('cbc:ID', String(index + 1))}${tag('cbc:InvoicedQuantity', String(line.quantity), unitCode)}${tag('cbc:LineExtensionAmount', amount(line.netAmount), attr)}<cac:Item>${tag('cbc:Name', line.description.slice(0, 200))}<cac:ClassifiedTaxCategory>${tag('cbc:ID', line.vatCategory)}${line.vatCategory === VatCategory.NotSubject ? '' : tag('cbc:Percent', line.vatRate.toFixed(2))}<cac:TaxScheme>${tag('cbc:ID', 'VAT')}</cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item><cac:Price>${tag('cbc:PriceAmount', String(line.unitPrice), attr)}</cac:Price></cac:InvoiceLine>`,
     );
   });
 

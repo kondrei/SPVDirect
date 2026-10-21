@@ -4,10 +4,10 @@ import { Badge } from './ui';
 export function CaenName({
   caen,
   code,
-}: {
+}: Readonly<{
   caen: CaenInfo | null | undefined;
   code?: string | null;
-}) {
+}>) {
   if (!caen) {
     return code ? (
       <span>

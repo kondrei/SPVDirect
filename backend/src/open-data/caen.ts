@@ -33,7 +33,7 @@ export function parseCaenCsv(text: string): CaenTable {
   for (const line of lines) {
     const cells = line.split('^');
     const c = cells[code]?.trim() ?? '';
-    const n = cells[name]?.replace(/\s+/g, ' ').trim();
+    const n = cells[name]?.replaceAll(/\s+/g, ' ').trim();
     if (!/^\d{4}$/.test(c) || !n) continue;
     const v = cells[version]?.trim();
     if (v === String(CaenRevision.Rev2)) rev2.set(c, n);

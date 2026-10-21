@@ -40,7 +40,7 @@ export interface IconProps {
   className?: string;
 }
 
-export function Icon({ name, label, className }: IconProps) {
+export function Icon({ name, label, className }: Readonly<IconProps>) {
   return (
     <svg
       className={cx('spv-icon', className)}

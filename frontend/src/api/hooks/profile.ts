@@ -64,7 +64,7 @@ export function useCaen(code: string) {
       }
     },
     enabled: valid,
-    staleTime: Infinity,
+    staleTime: Number.POSITIVE_INFINITY,
   });
 }
 

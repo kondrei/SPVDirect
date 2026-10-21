@@ -68,10 +68,10 @@ export async function api<T>(
       credentials: 'include',
       headers: {
         Accept: 'application/json',
-        ...(json !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(json === undefined ? {} : { 'Content-Type': 'application/json' }),
         ...headers,
       },
-      body: json !== undefined ? JSON.stringify(json) : rest.body,
+      body: json === undefined ? rest.body : JSON.stringify(json),
     });
   } catch {
     throw new ApiError(
@@ -159,7 +159,7 @@ export async function downloadFile(
   link.href = url;
   link.download =
     filenameFrom(res.headers.get('content-disposition')) ?? fallbackName;
-  document.body.appendChild(link);
+  document.body.append(link);
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), BLOB_URL_LIFETIME_MS);
