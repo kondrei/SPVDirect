@@ -8,3 +8,14 @@ export enum LogoContentType {
   Png = 'image/png',
   Jpeg = 'image/jpeg',
 }
+
+export enum CompanyExportFile {
+  Company = 'firma.json',
+  Invoices = 'facturi.json',
+  InvoiceList = 'facturi.csv',
+  InvoicesFolder = 'facturi',
+  Uploads = 'efactura.csv',
+  Spv = 'spv',
+  Logo = 'logo',
+  Errors = 'erori.txt',
+}

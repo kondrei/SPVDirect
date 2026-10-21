@@ -11,6 +11,7 @@ import { sampleInvoice } from '../../testing/invoice-fixtures.js';
 import type { CreateInvoiceDto } from '../dto/invoice.dto.js';
 import { bucharestToday } from '../helpers/invoice-format.js';
 import type { Invoice } from '../invoice.entity.js';
+import { ActivityAction } from '../../api-logs/dto/api-log.enums.js';
 import { buildInvoiceServices } from '../../testing/invoice-services.js';
 import { STORAGE_NOT_CONFIGURED } from './invoice-delivery.service.js';
 import { Currency, PaymentMethod } from '../dto/invoice.enums.js';
@@ -99,7 +100,7 @@ function setup({
     get: vi.fn(),
   };
   const mailer = { send: vi.fn().mockResolvedValue(undefined) };
-  const { service, earlier, lockedCompanies } = buildInvoiceServices({
+  const { service, earlier, lockedCompanies, activity } = buildInvoiceServices({
     invoices,
     companies,
     anaf,
@@ -109,6 +110,7 @@ function setup({
     earlierTaken,
   });
   return {
+    activity,
     service,
     invoices,
     earlier,
@@ -559,6 +561,31 @@ describe('InvoicesService.create', () => {
     expect(invoice.id).toBe(99);
     expect(storageError).toContain('nu a putut fi salvată');
   });
+
+  it('logs the issued invoice and the email that really went out', async () => {
+    const { service, activity, mailer } = setup();
+    mailer.send.mockRejectedValue(new Error('SMTP down'));
+    await service.create(1, dto({ sendToEmail: 'client@exemplu.ro' }));
+    expect(activity.record).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        action: ActivityAction.InvoiceIssued,
+        details: expect.objectContaining({
+          invoiceId: 99,
+          emailedTo: null,
+          stored: false,
+        }),
+      }),
+    );
+  });
+
+  it('logs nothing when the invoice is not issued', async () => {
+    const { service, activity } = setup();
+    await expect(
+      service.create(1, dto({ currency: Currency.EUR })),
+    ).rejects.toThrow();
+    expect(activity.record).not.toHaveBeenCalled();
+  });
 });
 
 describe('InvoicesService.get', () => {
@@ -647,6 +674,15 @@ describe('InvoiceDeliveryService.saveToStorage', () => {
     expect(invoice.storagePath).toBe('1/7/FCT-000012.pdf');
   });
 
+  it('logs the invoice saved in storage', async () => {
+    const { service, activity } = setup({ stored: sampleInvoice() });
+    await service.saveToStorage(1, 1);
+    expect(activity.record).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ action: ActivityAction.InvoiceStored }),
+    );
+  });
+
   it('refuses when Supabase is not configured', async () => {
     const { service } = setup({
       stored: sampleInvoice(),
@@ -660,8 +696,15 @@ describe('InvoiceDeliveryService.saveToStorage', () => {
 
 describe('InvoiceDeliveryService.send', () => {
   it('sends to the given address', async () => {
-    const { service, mailer } = setup({ stored: sampleInvoice() });
+    const { service, mailer, activity } = setup({ stored: sampleInvoice() });
     await service.send(1, 1, 'alt@exemplu.ro');
+    expect(activity.record).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        action: ActivityAction.InvoiceSent,
+        details: expect.objectContaining({ emailedTo: 'alt@exemplu.ro' }),
+      }),
+    );
     expect(mailer.send).toHaveBeenCalledWith(
       expect.anything(),
       'alt@exemplu.ro',

@@ -5,6 +5,11 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import {
+  passwordChanged,
+  profileUpdated,
+} from '../../api-logs/activity-entries.js';
+import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import { normalizeCaenCode, type CaenInfo } from '../../open-data/caen.js';
 import { CaenService } from '../../open-data/services/caen.service.js';
 import { hashPassword, verifyPassword } from '../../common/crypto/password.js';
@@ -15,6 +20,7 @@ import type {
   ChangePasswordDto,
   UpdateProfileDto,
 } from '../dto/profile.dto.js';
+import type { AccountantProfile, FirmLookup } from '../dto/accountant.types.js';
 
 export function toProfile(a: Accountant, firmCaen: CaenInfo | null) {
   return {
@@ -36,15 +42,6 @@ export function toProfile(a: Accountant, firmCaen: CaenInfo | null) {
   };
 }
 
-export type AccountantProfile = ReturnType<typeof toProfile>;
-
-export interface FirmLookup {
-  firmCui: string;
-  firmName: string;
-  firmCaenCode: string | null;
-  firmCaen: CaenInfo | null;
-}
-
 @Injectable()
 export class AccountantsService {
   constructor(
@@ -52,6 +49,7 @@ export class AccountantsService {
     private readonly accountants: Repository<Accountant>,
     private readonly anafLookup: AnafCompanyLookupService,
     private readonly caen: CaenService,
+    private readonly activity: ActivityLogsService,
   ) {}
 
   findById(id: number): Promise<Accountant | null> {
@@ -84,8 +82,11 @@ export class AccountantsService {
     dto: UpdateProfileDto,
   ): Promise<AccountantProfile> {
     const accountant = await this.getOrThrow(id);
+    const changed: string[] = [];
     for (const [key, value] of Object.entries(dto)) {
-      if (value !== undefined) Object.assign(accountant, { [key]: value });
+      if (value === undefined) continue;
+      if (accountant[key as keyof Accountant] !== value) changed.push(key);
+      Object.assign(accountant, { [key]: value });
     }
     if (!accountant.ceccarMember) {
       accountant.professionalTitle = null;
@@ -101,7 +102,11 @@ export class AccountantsService {
         'Cod CAEN necunoscut în nomenclatorul CAEN',
       );
     }
-    return this.profile(await this.accountants.save(accountant));
+    const saved = await this.accountants.save(accountant);
+    if (changed.length) {
+      await this.activity.record(id, profileUpdated(changed));
+    }
+    return this.profile(saved);
   }
 
   async lookupFirm(accountantId: number, cui: string): Promise<FirmLookup> {
@@ -139,6 +144,7 @@ export class AccountantsService {
         passwordChangedAt: new Date(),
       },
     );
+    await this.activity.record(id, passwordChanged());
   }
 
   private async profile(a: Accountant): Promise<AccountantProfile> {

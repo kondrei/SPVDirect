@@ -6,6 +6,9 @@ import {
   AuthorizationLinksService,
   hashLinkToken,
 } from './authorization-links.service.js';
+import type { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
+import { ActivityAction } from '../../api-logs/dto/api-log.enums.js';
+import { fakeActivityLogs } from '../../testing/activity-logs.js';
 
 function setup(link: Partial<AuthorizationLink> | null) {
   const repo = {
@@ -19,12 +22,14 @@ function setup(link: Partial<AuthorizationLink> | null) {
   const companies = {
     get: vi.fn().mockResolvedValue({ id: 7, name: 'Firma SRL' }),
   } as unknown as CompaniesService;
+  const activity = fakeActivityLogs();
   const service = new AuthorizationLinksService(
     new ConfigService({ API_URL: 'https://api.spvdirect.ro' }),
     companies,
     repo as unknown as Repository<AuthorizationLink>,
+    activity as unknown as ActivityLogsService,
   );
-  return { service, repo };
+  return { service, repo, activity };
 }
 
 const future = () => new Date(Date.now() + 3600 * 1000);
@@ -38,6 +43,21 @@ describe('AuthorizationLinksService', () => {
     const saved = repo.save.mock.calls[0][0] as AuthorizationLink;
     expect(saved.tokenHash).toBe(hashLinkToken(token));
     expect(JSON.stringify(saved)).not.toContain(token);
+  });
+
+  it('logs the new link for the company without its token', async () => {
+    const { service, activity } = setup(null);
+    const { url } = await service.create(1, 7);
+    expect(activity.record).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        action: ActivityAction.AuthorizationLinkCreated,
+        companyId: 7,
+      }),
+    );
+    expect(JSON.stringify(activity.record.mock.calls)).not.toContain(
+      url.split('/').pop(),
+    );
   });
 
   it('accepts an unused, unexpired link', async () => {

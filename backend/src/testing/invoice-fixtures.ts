@@ -3,7 +3,7 @@ import { computeInvoice } from '../invoices/helpers/invoice-calc.js';
 import type {
   InvoiceLineInput,
   InvoiceParty,
-} from '../invoices/invoice.types.js';
+} from '../invoices/dto/invoice.types.js';
 import {
   VatCategory,
   Currency,

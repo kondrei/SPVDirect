@@ -5,6 +5,8 @@ import type { AnafCompanyAccessService } from '../../anaf/services/anaf-company-
 import type { Company } from '../company.entity.js';
 import type { AnafCompanyLookupService } from './anaf-company-lookup.service.js';
 import { CompaniesService } from './companies.service.js';
+import type { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
+import { fakeActivityLogs } from '../../testing/activity-logs.js';
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]);
 
@@ -27,13 +29,15 @@ function setup({
     update: vi.fn().mockResolvedValue({}),
     createQueryBuilder: vi.fn().mockReturnValue(builder),
   };
+  const activity = fakeActivityLogs();
   const service = new CompaniesService(
     companies as unknown as Repository<Company>,
     {} as Repository<AnafConnection>,
     {} as AnafCompanyLookupService,
     {} as AnafCompanyAccessService,
+    activity as unknown as ActivityLogsService,
   );
-  return { service, companies, builder };
+  return { service, companies, builder, activity };
 }
 
 describe('CompaniesService.update invoicing details', () => {

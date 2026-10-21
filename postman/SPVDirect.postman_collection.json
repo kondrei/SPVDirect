@@ -1500,6 +1500,158 @@
       ]
     },
     {
+      "name": "Activity",
+      "description": "The activity log shown on Panou: operations done in the app (companies, invoices, e-Factura, SPV, certificates, profile, login), stored in `api_logs` with `service` `ACTIVITY`. The accountant name is joined from `accountants`. Run after the Companies folder so there is activity to list.",
+      "item": [
+        {
+          "name": "List activity",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Page shape', () => {",
+                  "  const p = pm.response.json();",
+                  "  pm.expect(p.items).to.be.an('array');",
+                  "  pm.expect(p.total).to.be.a('number');",
+                  "  pm.expect(p.page).to.eql(1);",
+                  "  pm.expect(p.pageSize).to.eql(20);",
+                  "});",
+                  "pm.test('Newest first, with the accountant name', () => {",
+                  "  const items = pm.response.json().items;",
+                  "  items.forEach((i) => {",
+                  "    pm.expect(i).to.have.keys('id', 'action', 'companyId', 'description', 'details', 'accountantName', 'createdAt');",
+                  "    pm.expect(i.accountantName).to.be.a('string').and.not.empty;",
+                  "  });",
+                  "  for (let k = 1; k < items.length; k++) {",
+                  "    pm.expect(new Date(items[k - 1].createdAt) >= new Date(items[k].createdAt)).to.be.true;",
+                  "  }",
+                  "});",
+                  "pm.test('Logs the company created earlier in the run', () => {",
+                  "  const actions = pm.response.json().items.map((i) => i.action);",
+                  "  if (pm.collectionVariables.get('companyId')) pm.expect(actions).to.include('company.created');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/activity",
+            "description": "Query: `page` (default 1), `pageSize` (default 20, max 100), `companyId`, `action` (e.g. `invoice.issued`, `invoice.storno`, `company.created`, `company.deleted`, `efactura.uploaded`, `efactura.validated`, `efactura.messages_loaded`). Returns `{ items, total, page, pageSize }`, newest first; every item has `accountantName` from the profile."
+          }
+        },
+        {
+          "name": "List activity of a company",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('companyId')) {",
+                  "  console.log('No company yet: run the Companies folder first.');",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Only that company', () => {",
+                  "  const id = Number(pm.collectionVariables.get('companyId'));",
+                  "  pm.response.json().items.forEach((i) => pm.expect(i.companyId).to.eql(id));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/activity?companyId={{companyId}}&pageSize=100"
+          }
+        },
+        {
+          "name": "List activity - unknown action (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/activity?action=page.loaded"
+          }
+        },
+        {
+          "name": "List activity - page size too large (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/activity?pageSize=101"
+          }
+        },
+        {
+          "name": "List activity - other accountant (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/2147483647/activity"
+          }
+        },
+        {
+          "name": "List activity - invalid accountant id (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/abc/activity"
+          }
+        }
+      ]
+    },
+    {
       "name": "Cleanup",
       "description": "Destructive requests, run last.",
       "item": [

@@ -1,20 +1,8 @@
 import type { Invoice } from '../invoice.entity.js';
-import type { Unit } from '../invoice.types.js';
-import { VatCategory, Currency } from '../dto/invoice.enums.js';
+import type { LineSuggestion } from '../dto/invoice.types.js';
 
 export const SUGGESTION_INVOICE_LIMIT = 50;
 export const MAX_LINE_SUGGESTIONS = 50;
-
-export interface LineSuggestion {
-  description: string;
-  quantity: number;
-  unit: Unit;
-  unitPrice: number;
-  vatRate: number;
-  vatCategory: VatCategory;
-  currency: Currency;
-  issueDate: string;
-}
 
 export function distinctLineSuggestions(
   invoices: Pick<Invoice, 'lines' | 'currency' | 'issueDate'>[],

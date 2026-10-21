@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Invoice } from '../invoice.entity.js';
-import type { InvoiceLine } from '../invoice.types.js';
+import type { InvoiceLine } from '../dto/invoice.types.js';
 import {
   distinctLineSuggestions,
   MAX_LINE_SUGGESTIONS,

@@ -5,6 +5,9 @@ import type { AnafCompanyAccessService } from '../../anaf/services/anaf-company-
 import type { AnafCompanyLookupService } from './anaf-company-lookup.service.js';
 import { CompaniesService } from './companies.service.js';
 import type { Company } from '../company.entity.js';
+import type { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
+import { ActivityAction } from '../../api-logs/dto/api-log.enums.js';
+import { fakeActivityLogs } from '../../testing/activity-logs.js';
 
 function setup({
   current = null,
@@ -26,13 +29,15 @@ function setup({
   };
   const connections = { existsBy: vi.fn().mockResolvedValue(known) };
   const access = { assertAccess: vi.fn(assertAccess) };
+  const activity = fakeActivityLogs();
   const service = new CompaniesService(
     companies as unknown as Repository<Company>,
     connections as unknown as Repository<AnafConnection>,
     {} as AnafCompanyLookupService,
     access as unknown as AnafCompanyAccessService,
+    activity as unknown as ActivityLogsService,
   );
-  return { service, companies, connections, access };
+  return { service, companies, connections, access, activity };
 }
 
 describe('CompaniesService.update certificate link', () => {
@@ -52,17 +57,17 @@ describe('CompaniesService.update certificate link', () => {
     const { service, companies } = setup({
       assertAccess: () => Promise.reject(refused),
     });
-    await expect(
-      service.update(2, 6, { anafConnectionId: 7 }),
-    ).rejects.toBe(refused);
+    await expect(service.update(2, 6, { anafConnectionId: 7 })).rejects.toBe(
+      refused,
+    );
     expect(companies.save).not.toHaveBeenCalled();
   });
 
   it('rejects a certificate of another accountant without asking ANAF', async () => {
     const { service, access } = setup({ known: false });
-    await expect(
-      service.update(2, 6, { anafConnectionId: 8 }),
-    ).rejects.toEqual(new BadRequestException('Certificat ANAF necunoscut'));
+    await expect(service.update(2, 6, { anafConnectionId: 8 })).rejects.toEqual(
+      new BadRequestException('Certificat ANAF necunoscut'),
+    );
     expect(access.assertAccess).not.toHaveBeenCalled();
   });
 
@@ -78,5 +83,26 @@ describe('CompaniesService.update certificate link', () => {
     const company = await service.update(2, 6, { anafConnectionId: null });
     expect(access.assertAccess).not.toHaveBeenCalled();
     expect(company.anafConnectionId).toBeNull();
+  });
+
+  it('logs the fields that really changed', async () => {
+    const { service, activity } = setup({ current: 7 });
+    await service.update(2, 6, { anafConnectionId: null, phone: '0700' });
+    expect(activity.record).toHaveBeenCalledWith(
+      2,
+      expect.objectContaining({
+        action: ActivityAction.CompanyUpdated,
+        companyId: 6,
+        details: expect.objectContaining({
+          fields: ['phone', 'anafConnectionId'],
+        }),
+      }),
+    );
+  });
+
+  it('logs nothing when the update changes nothing', async () => {
+    const { service, activity } = setup({ current: 7 });
+    await service.update(2, 6, { anafConnectionId: 7 });
+    expect(activity.record).not.toHaveBeenCalled();
   });
 });

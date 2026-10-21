@@ -14,10 +14,8 @@ import {
   remainingQuantities,
 } from '../helpers/invoice-storno.js';
 import { Invoice } from '../invoice.entity.js';
-import {
-  InvoiceDeliveryService,
-  type CreatedInvoice,
-} from './invoice-delivery.service.js';
+import { InvoiceDeliveryService } from './invoice-delivery.service.js';
+import type { CreatedInvoice } from '../dto/invoice.types.js';
 import { INVOICE_NOT_FOUND } from './invoice-lookup.js';
 import { InvoiceNumbering } from './invoice-numbering.service.js';
 

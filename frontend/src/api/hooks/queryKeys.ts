@@ -11,6 +11,7 @@ export const keys = {
   efactura: ['efactura'] as const,
   publicStats: ['public-stats'] as const,
   spvArchive: ['spv-archive'] as const,
+  activity: ['activity'] as const,
 };
 
 export function removeAccountData(qc: QueryClient): void {

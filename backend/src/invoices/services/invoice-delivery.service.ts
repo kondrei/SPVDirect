@@ -7,31 +7,30 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import type { DownloadFile } from '../../common/download-file.js';
+import {
+  invoiceIssued,
+  invoiceSent,
+  invoiceStored,
+} from '../../api-logs/activity-entries.js';
+import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
+
 import { CompaniesService } from '../../companies/services/companies.service.js';
-import { renderInvoicePdf, type InvoiceLogo } from '../builders/invoice-pdf.js';
+import { renderInvoicePdf } from '../builders/invoice-pdf.js';
+import type { InvoiceLogo } from '../dto/invoice.types.js';
 import { renderInvoiceXml } from '../builders/invoice-xml.js';
 import { invoiceFilename } from '../helpers/invoice-format.js';
 import { Invoice } from '../invoice.entity.js';
 import { InvoiceFileStore } from './invoice-file-store.service.js';
 import { findOwnedInvoice } from './invoice-lookup.js';
 import { InvoiceMailer } from './invoice-mailer.service.js';
+import type {
+  InvoiceFile,
+  DeliveryOptions,
+  CreatedInvoice,
+} from '../dto/invoice.types.js';
 
 export const STORAGE_NOT_CONFIGURED =
   'Salvarea în Supabase Storage nu este configurată (SUPABASE_URL și SUPABASE_SERVICE_KEY).';
-
-export type InvoiceFile = DownloadFile;
-
-export interface DeliveryOptions {
-  saveToStorage?: boolean;
-  sendToEmail?: string | null;
-}
-
-export interface CreatedInvoice {
-  invoice: Invoice;
-  storageError: string | null;
-  emailError: string | null;
-}
 
 @Injectable()
 export class InvoiceDeliveryService {
@@ -43,6 +42,7 @@ export class InvoiceDeliveryService {
     private readonly companies: CompaniesService,
     private readonly store: InvoiceFileStore,
     private readonly mailer: InvoiceMailer,
+    private readonly activity: ActivityLogsService,
   ) {}
 
   assertCanDeliver(options: DeliveryOptions): void {
@@ -73,6 +73,14 @@ export class InvoiceDeliveryService {
         );
       }
     }
+    await this.activity.record(
+      invoice.accountantId,
+      invoiceIssued(invoice, {
+        emailedTo:
+          options.sendToEmail && !emailError ? options.sendToEmail : null,
+        stored: !!options.saveToStorage && !storageError,
+      }),
+    );
     return { invoice, storageError, emailError };
   }
 
@@ -101,6 +109,7 @@ export class InvoiceDeliveryService {
     this.assertCanDeliver({ saveToStorage: true });
     const invoice = await findOwnedInvoice(this.invoices, accountantId, id);
     await this.putInStorage(invoice, await this.renderPdf(invoice));
+    await this.activity.record(accountantId, invoiceStored(invoice));
     return invoice;
   }
 
@@ -124,6 +133,7 @@ export class InvoiceDeliveryService {
         'Emailul nu a putut fi trimis. Verificați adresa și reîncercați.',
       );
     }
+    await this.activity.record(accountantId, invoiceSent(invoice, recipient));
     return invoice;
   }
 

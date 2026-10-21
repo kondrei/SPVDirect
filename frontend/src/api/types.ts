@@ -1,4 +1,4 @@
-import { BulkCreateStatus, AnafConnectionStatus, AnafConnectionSource, ProfessionalTitle, VatCategory, Currency, PaymentMethod, BuyerSource, UploadStatus, EfacturaStandard, AnafEnvironment } from './enums';
+import { BulkCreateStatus, AnafConnectionStatus, AnafConnectionSource, ProfessionalTitle, VatCategory, Currency, PaymentMethod, BuyerSource, UploadStatus, EfacturaStandard, AnafEnvironment, ActivityAction, MessageFilter } from './enums';
 export interface Accountant {
   id: number;
   email: string;
@@ -419,6 +419,12 @@ export interface EfacturaMessage {
   createdAtRaw: string | null;
 }
 
+export interface MessagesQuery {
+  companyId: number | undefined;
+  filtru?: MessageFilter;
+  zile: number;
+}
+
 export interface EfacturaMessageList {
   title: string | null;
   messages: EfacturaMessage[];
@@ -451,4 +457,26 @@ export interface PublicStats {
   spvMessages: number;
   anafConnections: number;
   updatedAt: string;
+}
+
+export interface ActivityItem {
+  id: number;
+  action: ActivityAction;
+  companyId: number | null;
+  description: string;
+  details: Record<string, unknown>;
+  accountantName: string;
+  createdAt: string;
+}
+
+export interface ActivityQuery {
+  companyId?: number;
+  page: number;
+}
+
+export interface ActivityPage {
+  items: ActivityItem[];
+  total: number;
+  page: number;
+  pageSize: number;
 }

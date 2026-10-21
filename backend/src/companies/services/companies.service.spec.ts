@@ -10,6 +10,9 @@ import { anafTvaRecord } from '../../testing/anaf-tva-record.js';
 import type { AnafCompanyLookupService } from './anaf-company-lookup.service.js';
 import { CompaniesService } from './companies.service.js';
 import type { Company } from '../company.entity.js';
+import type { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
+import { ActivityAction } from '../../api-logs/dto/api-log.enums.js';
+import { fakeActivityLogs } from '../../testing/activity-logs.js';
 
 function setup({
   save = (c: unknown) => Promise.resolve(c),
@@ -37,13 +40,15 @@ function setup({
     save: vi.fn(save),
   };
   const anaf = { lookup: vi.fn(lookup), lookupMany: vi.fn(lookupMany) };
+  const activity = fakeActivityLogs();
   const service = new CompaniesService(
     companies as unknown as Repository<Company>,
     {} as Repository<AnafConnection>,
     anaf as unknown as AnafCompanyLookupService,
     {} as AnafCompanyAccessService,
+    activity as unknown as ActivityLogsService,
   );
-  return { service, companies, anaf };
+  return { service, companies, anaf, activity };
 }
 
 describe('CompaniesService.findByCui', () => {
@@ -147,6 +152,42 @@ describe('CompaniesService.create', () => {
     await expect(service.create(1, { cui: '12345678' })).rejects.toThrow(
       'connection lost',
     );
+  });
+});
+
+describe('CompaniesService activity', () => {
+  it('logs a created company with its name and CUI', async () => {
+    const { service, activity } = setup({
+      save: (c) => Promise.resolve({ ...(c as object), id: 5 }),
+    });
+    await service.create(1, { cui: '12345678' });
+    expect(activity.record).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        action: ActivityAction.CompanyCreated,
+        companyId: 5,
+        details: { companyName: 'AGRO VEST SRL', cui: '12345678' },
+      }),
+    );
+  });
+
+  it('logs nothing when ANAF does not know the CUI', async () => {
+    const { service, activity } = setup({
+      lookup: () => Promise.resolve(null),
+    });
+    await expect(service.create(1, { cui: '12345678' })).rejects.toThrow();
+    expect(activity.record).not.toHaveBeenCalled();
+  });
+
+  it('logs only the companies a bulk add created, in one write', async () => {
+    const { service, activity } = setup({ existing: ['11'] });
+    await service.createMany(1, { cuis: ['11', '22', '33'] });
+    expect(activity.recordMany).toHaveBeenCalledOnce();
+    const [accountantId, entries] = activity.recordMany.mock.calls[0];
+    expect(accountantId).toBe(1);
+    expect(
+      (entries as { details: { cui: string } }[]).map((e) => e.details.cui),
+    ).toEqual(['22', '33']);
   });
 });
 

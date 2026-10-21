@@ -2,10 +2,13 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import type { ActivityDetails } from './dto/api-log.types.js';
 
 @Entity('api_logs')
+@Index('idx_api_logs_activity', { synchronize: false })
 export class ApiLog {
   @PrimaryGeneratedColumn('identity', {
     type: 'integer',
@@ -35,11 +38,17 @@ export class ApiLog {
   @Column({ name: 'status_code', type: 'int', nullable: true })
   statusCode: number | null;
 
-  @Column({ name: 'response_time_ms', type: 'int' })
-  responseTimeMs: number;
+  @Column({ name: 'response_time_ms', type: 'int', nullable: true })
+  responseTimeMs: number | null;
 
   @Column({ type: 'text', nullable: true })
   error: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  description: string | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  details: ActivityDetails | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

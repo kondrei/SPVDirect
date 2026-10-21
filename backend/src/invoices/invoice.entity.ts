@@ -12,7 +12,7 @@ import type {
   InvoiceLine,
   InvoiceParty,
   VatBreakdownRow,
-} from './invoice.types.js';
+} from './dto/invoice.types.js';
 import { Currency, PaymentMethod } from './dto/invoice.enums.js';
 
 @Entity('invoices')

@@ -6,6 +6,7 @@ import {
   remainingQuantities,
 } from '../helpers/invoice-storno.js';
 import type { Invoice } from '../invoice.entity.js';
+import { ActivityAction } from '../../api-logs/dto/api-log.enums.js';
 import { buildInvoiceServices } from '../../testing/invoice-services.js';
 import { VatCategory } from '../dto/invoice.enums.js';
 
@@ -45,16 +46,30 @@ function setup({
   };
   const mailer = { send: vi.fn().mockResolvedValue(undefined) };
   const companies = { getLogo: vi.fn().mockResolvedValue(null) };
-  const { service, lockedCompanies } = buildInvoiceServices({
+  const { service, lockedCompanies, activity } = buildInvoiceServices({
     invoices,
     companies,
     store,
     mailer,
   });
-  return { service, invoices, lockedCompanies, store, mailer };
+  return { service, invoices, lockedCompanies, store, mailer, activity };
 }
 
 describe('InvoiceStornoService.createStorno', () => {
+  it('logs the storno as a storno of the original invoice', async () => {
+    const { service, activity } = setup();
+    await service.createStorno(1, 3, { issueDate: '2026-10-10' });
+    expect(activity.record).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        action: ActivityAction.InvoiceStorno,
+        details: expect.objectContaining({
+          stornoOf: expect.stringContaining('000012'),
+        }),
+      }),
+    );
+  });
+
   it('locks the original before reading earlier stornos, in one transaction', async () => {
     const { service, invoices } = setup();
     await service.createStorno(1, 3, { issueDate: '2026-10-10' });

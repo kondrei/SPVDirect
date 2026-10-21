@@ -8,6 +8,9 @@ import {
   AuthorizationOutcomeKind,
   LinkFailure,
 } from '../dto/anaf.enums.js';
+import type { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
+import { ActivityAction } from '../../api-logs/dto/api-log.enums.js';
+import { fakeActivityLogs } from '../../testing/activity-logs.js';
 
 const TOKENS = { accessToken: 'a', refreshToken: 'r', serial: 's' };
 
@@ -43,14 +46,52 @@ function setup({ claimed = true, linkOk = true } = {}) {
     release: vi.fn().mockResolvedValue(undefined),
   };
   const companies = { attachConnection: vi.fn().mockResolvedValue(undefined) };
+  const activity = fakeActivityLogs();
   const service = new AnafAuthorizationService(
     tokens as unknown as AnafTokenClient,
     oauth as unknown as AnafOAuthService,
     links as unknown as AuthorizationLinksService,
     companies as unknown as CompaniesService,
+    activity as unknown as ActivityLogsService,
   );
-  return { service, oauth, links, companies, calls };
+  return { service, oauth, links, companies, calls, activity };
 }
+
+describe('AnafAuthorizationService.complete activity', () => {
+  it('logs the accountant’s own certificate', async () => {
+    const { service, activity, oauth } = setup();
+    oauth.saveConnection.mockResolvedValue({
+      id: 7,
+      label: 'Token',
+      certSerial: 'AB12',
+    } as never);
+    await service.complete(
+      { state: 's', mode: AnafConnectionSource.Self, accountantId: 5 },
+      'code',
+    );
+    expect(activity.record).toHaveBeenCalledWith(5, {
+      action: ActivityAction.CertificateConnected,
+      companyId: null,
+      description: 'Certificatul ANAF AB12 a fost conectat',
+      details: { connectionId: 7, label: 'Token', certSerial: 'AB12' },
+    });
+  });
+
+  it('logs a link authorization for the link owner and the company', async () => {
+    const { service, activity } = setup();
+    await service.complete(
+      { state: 's', mode: AnafConnectionSource.Link, linkId: 3 },
+      'code',
+    );
+    expect(activity.record).toHaveBeenCalledWith(
+      3,
+      expect.objectContaining({
+        action: ActivityAction.CertificateConnected,
+        companyId: 7,
+      }),
+    );
+  });
+});
 
 describe('AnafAuthorizationService.complete', () => {
   it('saves the accountant’s own certificate', async () => {

@@ -1,4 +1,5 @@
-import type { InvoiceParty } from '../invoice.types.js';
+import type { InvoiceParty } from '../dto/invoice.types.js';
+import type { StornoFields } from '../dto/invoice.types.js';
 
 const numberFormat = new Intl.NumberFormat('ro-RO', {
   minimumFractionDigits: 2,
@@ -43,12 +44,6 @@ const bucharestDate = new Intl.DateTimeFormat('en-CA', {
 
 export function bucharestToday(now: Date = new Date()): string {
   return bucharestDate.format(now);
-}
-
-export interface StornoFields {
-  stornoOfSeries: string | null;
-  stornoOfNumber: number | null;
-  stornoOfIssueDate: string | null;
 }
 
 export function stornoReference(invoice: StornoFields): string | null {

@@ -19,6 +19,7 @@ import { IntegerUuidIds1791900000000 } from './1791900000000-IntegerUuidIds.js';
 import { CompanySoftDelete1792000000000 } from './1792000000000-CompanySoftDelete.js';
 import { AccountantSoftDelete1792100000000 } from './1792100000000-AccountantSoftDelete.js';
 import { AccountantDeletedStatus1792200000000 } from './1792200000000-AccountantDeletedStatus.js';
+import { ApiLogActivity1792300000000 } from './1792300000000-ApiLogActivity.js';
 
 export const migrations = [
   InitialSchema1790200000000,
@@ -42,4 +43,5 @@ export const migrations = [
   CompanySoftDelete1792000000000,
   AccountantSoftDelete1792100000000,
   AccountantDeletedStatus1792200000000,
+  ApiLogActivity1792300000000,
 ];

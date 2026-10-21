@@ -2,8 +2,12 @@ import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { In, IsNull, Not, type DataSource } from 'typeorm';
 import { Accountant } from '../../accountants/accountant.entity.js';
+import { companyDeleted } from '../../api-logs/activity-entries.js';
+import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import { AuthorizationLink } from '../../anaf/authorization-links/authorization-link.entity.js';
 import { AnafConnectionsService } from '../../anaf/services/anaf-connections.service.js';
+import { ApiLog } from '../../api-logs/api-log.entity.js';
+import { ApiLogService } from '../../api-logs/dto/api-log.enums.js';
 import { SpvFileStore } from '../../anaf/spv/services/spv-file-store.service.js';
 import { SpvMessage } from '../../anaf/spv/spv-message.entity.js';
 import { EfacturaUpload } from '../../efactura/efactura-upload.entity.js';
@@ -26,6 +30,7 @@ export class CompanyDeletionService {
     private readonly invoiceFiles: InvoiceFileStore,
     private readonly spvFiles: SpvFileStore,
     private readonly connections: AnafConnectionsService,
+    private readonly activity: ActivityLogsService,
   ) {}
 
   async softDelete(accountantId: number, id: number): Promise<void> {
@@ -63,6 +68,7 @@ export class CompanyDeletionService {
       });
       await manager.softDelete(Company, { id });
     });
+    await this.activity.record(accountantId, companyDeleted(company));
   }
 
   async purge(companyId: number): Promise<void> {
@@ -91,6 +97,10 @@ export class CompanyDeletionService {
       });
       await manager.delete(Invoice, { companyId });
       await manager.delete(SpvMessage, { companyId });
+      await manager.delete(ApiLog, {
+        companyId,
+        service: ApiLogService.Activity,
+      });
       await manager.delete(Company, { id: companyId });
     });
   }

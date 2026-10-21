@@ -4,6 +4,7 @@ import { useConnections, useConnectUrl } from '../api/hooks/connections';
 import { useInvoiceStats } from '../api/hooks/invoices';
 import { useMe } from '../api/hooks/auth';
 import type { AnafConnection } from '../api/types';
+import { ActivityCard } from '../components/ActivityCard';
 import { EmptyState } from '../components/EmptyState';
 import { PageHead } from '../components/PageHead';
 import { QueryError } from '../components/QueryError';
@@ -364,6 +365,8 @@ export function DashboardPage() {
           ) : null}
         </Card>
       </div>
+
+      <ActivityCard companies={list} />
     </>
   );
 }

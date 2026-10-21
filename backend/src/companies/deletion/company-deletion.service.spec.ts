@@ -8,12 +8,19 @@ import { EfacturaUpload } from '../../efactura/efactura-upload.entity.js';
 import { Invoice } from '../../invoices/invoice.entity.js';
 import type { InvoiceFileStore } from '../../invoices/services/invoice-file-store.service.js';
 import { Accountant } from '../../accountants/accountant.entity.js';
+import { ApiLog } from '../../api-logs/api-log.entity.js';
+import {
+  ActivityAction,
+  ApiLogService,
+} from '../../api-logs/dto/api-log.enums.js';
 import { Company } from '../company.entity.js';
 import type { CompaniesService } from '../services/companies.service.js';
 import {
   CompanyDeletionService,
   UPLOAD_IN_PROGRESS,
 } from './company-deletion.service.js';
+import type { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
+import { fakeActivityLogs } from '../../testing/activity-logs.js';
 
 const COMPANY = { id: 7, accountantId: 1, cui: '123' } as Company;
 
@@ -74,14 +81,17 @@ function setup({
   const invoiceFiles = { remove: vi.fn().mockResolvedValue(undefined) };
   const spvFiles = { remove: vi.fn().mockResolvedValue(undefined) };
   const connections = { removeAll: vi.fn().mockResolvedValue([]) };
+  const activity = fakeActivityLogs();
   const service = new CompanyDeletionService(
     dataSource as unknown as DataSource,
     companies as unknown as CompaniesService,
     invoiceFiles as unknown as InvoiceFileStore,
     spvFiles as unknown as SpvFileStore,
     connections as unknown as AnafConnectionsService,
+    activity as unknown as ActivityLogsService,
   );
   return {
+    activity,
     service,
     calls,
     manager,
@@ -169,6 +179,28 @@ describe('CompanyDeletionService.softDelete', () => {
   });
 });
 
+describe('CompanyDeletionService.softDelete activity', () => {
+  it('logs the deletion with the company name and CUI after the transaction', async () => {
+    const { service, activity, dataSource } = setup();
+    await service.softDelete(1, 7);
+    expect(dataSource.transaction).toHaveBeenCalledOnce();
+    expect(activity.record).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        action: ActivityAction.CompanyDeleted,
+        companyId: 7,
+      }),
+    );
+  });
+
+  it('logs nothing when the deletion is refused', async () => {
+    const { service, activity, dataSource } = setup();
+    dataSource.transaction.mockRejectedValueOnce(new Error('409'));
+    await expect(service.softDelete(1, 7)).rejects.toThrow('409');
+    expect(activity.record).not.toHaveBeenCalled();
+  });
+});
+
 describe('CompanyDeletionService.purge', () => {
   it('removes stored files, then deletes rows children first', async () => {
     const { service, calls, invoiceFiles, spvFiles } = setup({
@@ -185,6 +217,7 @@ describe('CompanyDeletionService.purge', () => {
       ['delete', Invoice, { companyId: 7, stornoOfInvoiceId: Not(IsNull()) }],
       ['delete', Invoice, { companyId: 7 }],
       ['delete', SpvMessage, { companyId: 7 }],
+      ['delete', ApiLog, { companyId: 7, service: ApiLogService.Activity }],
       ['delete', Company, { id: 7 }],
     ]);
   });

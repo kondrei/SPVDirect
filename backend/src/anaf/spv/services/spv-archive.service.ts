@@ -8,6 +8,11 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Repository } from 'typeorm';
+import {
+  spvDocumentSaved,
+  spvImported,
+} from '../../../api-logs/activity-entries.js';
+import { ActivityLogsService } from '../../../api-logs/activity-logs.service.js';
 import { Company } from '../../../companies/company.entity.js';
 import { parseAnafDateTime } from '../spv-date.js';
 import { parseSpvExport, validateSpvPdf } from '../spv-import.js';
@@ -18,6 +23,13 @@ import {
   type SpvDocument,
   type SpvMessage as AnafSpvMessage,
 } from './spv.service.js';
+import type {
+  ImportSummary,
+  SyncSummary,
+  ArchiveFilter,
+  ArchivedMessage,
+  ArchivePage,
+} from '../dto/spv.types.js';
 
 export const MAX_DOWNLOADS_PER_SYNC = 100;
 export const INSERT_CHUNK = 200;
@@ -25,55 +37,7 @@ export const DEFAULT_SYNC_DAYS = 60;
 export const NOT_STORED =
   'Documentul nu este salvat în SPVDirect. Deschideți-l la ANAF și încărcați PDF-ul.';
 
-export interface ImportSummary {
-  fetched: number;
-  added: number;
-  title: string | null;
-  certSerial: string | null;
-  notice: string | null;
-  rights: number;
-  unknownCuis: string[];
-}
-
 const MAX_CUI_DIGITS = 10;
-
-export interface SyncSummary {
-  fetched: number;
-  added: number;
-  downloaded: number;
-  failed: number;
-  pending: number;
-}
-
-export interface ArchiveFilter {
-  cif?: string;
-  type?: string;
-  companyId?: number;
-  page: number;
-  pageSize: number;
-}
-
-export interface ArchivedMessage {
-  id: number;
-  anafMessageId: string;
-  cif: string | null;
-  type: string | null;
-  details: string | null;
-  requestId: string | null;
-  createdAt: string | null;
-  createdAtRaw: string | null;
-  companyId: number | null;
-  stored: boolean;
-  sizeBytes: number | null;
-  downloadedAt: string | null;
-}
-
-export interface ArchivePage {
-  items: ArchivedMessage[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
 
 export function normalizeCif(value: string | null): string | null {
   const cleaned = value?.replace(/\s+/g, '').replace(/^RO/i, '') ?? '';
@@ -108,6 +72,7 @@ export class SpvArchiveService {
     @InjectRepository(Company)
     private readonly companies: Repository<Company>,
     private readonly store: SpvFileStore,
+    private readonly activity: ActivityLogsService,
   ) {}
 
   async sync(
@@ -238,6 +203,14 @@ export class SpvArchiveService {
   ): Promise<ImportSummary> {
     const list = parseSpvExport(content);
     const added = await this.saveMetadata(accountantId, null, list.messages);
+    await this.activity.record(
+      accountantId,
+      spvImported({
+        fetched: list.messages.length,
+        added,
+        certSerial: list.certSerial,
+      }),
+    );
     return {
       fetched: list.messages.length,
       added,
@@ -278,6 +251,7 @@ export class SpvArchiveService {
     });
     const saved = await this.messages.findOneBy({ id, accountantId });
     if (!saved) throw new NotFoundException('Mesajul nu a fost găsit');
+    await this.activity.record(accountantId, spvDocumentSaved(saved));
     return toArchived(saved);
   }
 

@@ -9,6 +9,9 @@ import { CAEN_CSV } from '../../testing/caen-csv.js';
 import type { Accountant } from '../accountant.entity.js';
 import { AccountantsService } from './accountants.service.js';
 import { ProfessionalTitle, AccountStatus } from '../dto/accountant.enums.js';
+import type { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
+import { ActivityAction } from '../../api-logs/dto/api-log.enums.js';
+import { fakeActivityLogs } from '../../testing/activity-logs.js';
 
 function accountant(overrides: Partial<Accountant> = {}): Accountant {
   return {
@@ -60,12 +63,14 @@ function setup(
       Promise.resolve(describeCaen(table, c)),
     ),
   };
+  const activity = fakeActivityLogs();
   const service = new AccountantsService(
     repo as unknown as Repository<Accountant>,
     anaf as unknown as AnafCompanyLookupService,
     caen as unknown as CaenService,
+    activity as unknown as ActivityLogsService,
   );
-  return { service, repo, qb, anaf, caen };
+  return { service, repo, qb, anaf, caen, activity };
 }
 
 describe('AccountantsService.lookupFirm', () => {
@@ -122,6 +127,22 @@ describe('AccountantsService.updateProfile', () => {
     const profile = await service.updateProfile(1, { name: 'Ana Pop' });
     expect(profile).toMatchObject({ name: 'Ana Pop', phone: '0722000000' });
     expect(repo.save).toHaveBeenCalledOnce();
+  });
+
+  it('logs the profile fields that changed', async () => {
+    const { service, activity } = setup(accountant({ phone: '0722000000' }));
+    await service.updateProfile(1, { name: 'Ana Pop', phone: '0722000000' });
+    expect(activity.record).toHaveBeenCalledWith(1, {
+      action: ActivityAction.ProfileUpdated,
+      description: 'Datele profilului au fost actualizate',
+      details: { fields: ['name'] },
+    });
+  });
+
+  it('logs nothing when the profile did not change', async () => {
+    const { service, activity } = setup(accountant({ phone: '0722000000' }));
+    await service.updateProfile(1, { phone: '0722000000' });
+    expect(activity.record).not.toHaveBeenCalled();
   });
 
   it('stores the firm CAEN code and returns its name', async () => {
@@ -239,6 +260,21 @@ describe('AccountantsService.changePassword', () => {
     expect(data.passwordChangedAt.getTime()).toBeGreaterThanOrEqual(before);
   });
 
+  it('logs the password change but never the password', async () => {
+    const { service, activity } = await withPassword();
+    await service.changePassword(1, {
+      currentPassword: current,
+      newPassword: 'new-password-456',
+    });
+    expect(activity.record).toHaveBeenCalledWith(1, {
+      action: ActivityAction.PasswordChanged,
+      description: 'Parola contului a fost schimbată',
+    });
+    expect(JSON.stringify(activity.record.mock.calls)).not.toContain(
+      'password-',
+    );
+  });
+
   it('rejects a wrong current password', async () => {
     const { service, repo } = await withPassword();
     await expect(
@@ -279,6 +315,7 @@ describe('AccountantsService.findSessionState', () => {
       { findOne } as unknown as Repository<Accountant>,
       {} as AnafCompanyLookupService,
       {} as CaenService,
+      fakeActivityLogs() as unknown as ActivityLogsService,
     );
     await expect(service.findSessionState(1)).resolves.toMatchObject({
       status: 'active',

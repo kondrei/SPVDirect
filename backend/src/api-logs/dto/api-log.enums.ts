@@ -4,6 +4,7 @@ export enum ApiLogService {
   Smtp = 'SMTP',
   TestOAuth = 'TestOAuth',
   PlatitorTva = 'PlatitorTva',
+  Activity = 'ACTIVITY',
 }
 
 export enum ApiLogMethod {
@@ -12,4 +13,35 @@ export enum ApiLogMethod {
   Put = 'PUT',
   Delete = 'DELETE',
   Send = 'SEND',
+  Log = 'LOG',
+}
+
+export enum ActivityAction {
+  LoggedIn = 'account.logged_in',
+  ProfileUpdated = 'account.profile_updated',
+  PasswordChanged = 'account.password_changed',
+  AccountExported = 'account.exported',
+  CompanyCreated = 'company.created',
+  CompanyUpdated = 'company.updated',
+  CompanyAnafRefreshed = 'company.anaf_refreshed',
+  CompanyLogoChanged = 'company.logo_changed',
+  CompanyExported = 'company.exported',
+  CompanyDeleted = 'company.deleted',
+  InvoiceIssued = 'invoice.issued',
+  InvoiceStorno = 'invoice.storno',
+  InvoiceSent = 'invoice.sent',
+  InvoiceStored = 'invoice.stored',
+  EfacturaUploaded = 'efactura.uploaded',
+  EfacturaStatusChecked = 'efactura.status_checked',
+  EfacturaDownloaded = 'efactura.downloaded',
+  EfacturaMessagesLoaded = 'efactura.messages_loaded',
+  EfacturaValidated = 'efactura.validated',
+  EfacturaTransformed = 'efactura.transformed',
+  SpvImported = 'spv.imported',
+  SpvDocumentSaved = 'spv.document_saved',
+  CertificateConnected = 'certificate.connected',
+  CertificateRenamed = 'certificate.renamed',
+  CertificateRemoved = 'certificate.removed',
+  CertificateTested = 'certificate.tested',
+  AuthorizationLinkCreated = 'authorization_link.created',
 }
