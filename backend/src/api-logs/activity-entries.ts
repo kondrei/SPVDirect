@@ -1,3 +1,4 @@
+import { HttpException } from '@nestjs/common';
 import { COMPANY_FIELD_LABELS } from '../companies/dto/company.constants.js';
 import type { CompanyField } from '../companies/dto/company.types.js';
 import { DIRECTION_LABELS } from '../efactura/dto/efactura.constants.js';
@@ -30,6 +31,7 @@ import type {
 import {
   JOB_LABELS,
   MAX_JOB_ERROR_LENGTH,
+  UNEXPECTED_JOB_ERROR,
   UPLOAD_STATUS_LABELS,
 } from './dto/api-log.constants.js';
 import {
@@ -317,7 +319,32 @@ export function efacturaArchiveImported(
     action: ActivityAction.EfacturaArchiveImported,
     companyId: company.id,
     description: `${verb} în arhiva e-Factura a firmei ${firm(company)} ${plural(counts.imported, 'factură', 'facturi')}${notes}`,
-    details: { ...companyDetails(company), ...counts, automatic },
+    details: {
+      ...companyDetails(company),
+      ...counts,
+      automatic,
+      ...(automatic ? { job: ScheduledJob.EfacturaArchiveSync } : {}),
+    },
+  };
+}
+
+export function efacturaArchiveSyncFailed(
+  company: CompanyRef,
+  err: unknown,
+): ActivityEntry {
+  const message =
+    err instanceof HttpException
+      ? err.message.slice(0, MAX_JOB_ERROR_LENGTH)
+      : UNEXPECTED_JOB_ERROR;
+  return {
+    action: ActivityAction.EfacturaArchiveSyncFailed,
+    companyId: company.id,
+    description: `Importul automat în arhiva e-Factura a firmei ${firm(company)} a eșuat: ${message}`,
+    details: {
+      ...companyDetails(company),
+      job: ScheduledJob.EfacturaArchiveSync,
+      error: message,
+    },
   };
 }
 
@@ -460,6 +487,18 @@ export function purgeCompleted(counts: PurgeCounts): JobEntry {
     `${plural(counts.companies, 'firmă', 'firme')} și ${plural(counts.accountants, 'cont', 'conturi')} șterse definitiv`,
     { ...counts },
   );
+}
+
+export function companiesPurged(
+  count: number,
+  graceDays: number,
+): ActivityEntry {
+  const verb = count === 1 ? 'a fost eliminată' : 'au fost eliminate';
+  return {
+    action: ActivityAction.CompaniesPurged,
+    description: `${plural(count, 'firmă ștearsă', 'firme șterse')} acum peste ${graceDays} de zile ${verb} definitiv, cu facturile, fișierele e-Factura și mesajele SPV`,
+    details: { job: ScheduledJob.Purge, companies: count },
+  };
 }
 
 export function adminApprovalRetryCompleted(

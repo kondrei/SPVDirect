@@ -1,7 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import type { Repository } from 'typeorm';
 import type { Accountant } from '../../../accountants/accountant.entity.js';
-import type { ApiLogsService } from '../../../api-logs/api-logs.service.js';
+import { MailKind } from '../../../common/dto/common.enums.js';
 import type { MailService } from '../../../common/mail/mail.service.js';
 import { RegistrationMailer } from './registration-mailer.service.js';
 
@@ -14,7 +14,6 @@ const request = {
 
 function setup() {
   const send = vi.fn().mockResolvedValue(250);
-  const record = vi.fn().mockResolvedValue(undefined);
   const update = vi.fn().mockResolvedValue({ affected: 1 });
   const mailer = new RegistrationMailer(
     new ConfigService({
@@ -23,10 +22,9 @@ function setup() {
       ADMIN_EMAIL: 'admin@example.com',
     }),
     { send } as unknown as MailService,
-    { record } as unknown as ApiLogsService,
     { update } as unknown as Repository<Accountant>,
   );
-  return { mailer, send, record, update };
+  return { mailer, send, update };
 }
 
 const smtpAuthError = Object.assign(
@@ -56,46 +54,32 @@ describe('RegistrationMailer.notifyAdmin', () => {
     expect(mail.html).not.toContain('<Pop>');
   });
 
-  it('marks the request as notified and logs the send in api_logs', async () => {
-    const { mailer, update, record } = setup();
+  it('marks the request as notified and sends it as an admin-approval mail', async () => {
+    const { mailer, send, update } = setup();
     await mailer.notifyAdmin(request);
     expect(update).toHaveBeenCalledWith(
       { id: 7 },
       { adminNotifiedAt: expect.any(Date) },
     );
-    expect(record).toHaveBeenCalledWith({
+    expect(send.mock.calls[0][1]).toEqual({
+      kind: MailKind.AdminApproval,
       accountantId: 7,
-      anafConnectionId: null,
       companyId: null,
-      service: 'SMTP',
-      method: 'SEND',
-      endpoint: 'admin-approval',
-      statusCode: 250,
-      responseTimeMs: expect.any(Number),
-      error: null,
     });
   });
 
-  it('logs a failed send with the SMTP code and leaves the request unnotified', async () => {
-    const { mailer, send, update, record } = setup();
+  it('leaves the request unnotified when the send fails', async () => {
+    const { mailer, send, update } = setup();
     send.mockRejectedValue(smtpAuthError);
     await expect(mailer.notifyAdmin(request)).resolves.toBe(false);
     expect(update).not.toHaveBeenCalled();
-    expect(record).toHaveBeenCalledWith(
-      expect.objectContaining({
-        accountantId: 7,
-        endpoint: 'admin-approval',
-        statusCode: 530,
-        error: smtpAuthError.message,
-      }),
-    );
   });
 
-  it('never writes the approval token into api_logs', async () => {
-    const { mailer, send, record } = setup();
-    send.mockRejectedValue(smtpAuthError);
+  it('keeps the approval token out of the subject, which goes into api_logs', async () => {
+    const { mailer, send } = setup();
     await mailer.notifyAdmin({ ...request, approvalToken: 'secret-token' });
-    expect(JSON.stringify(record.mock.calls)).not.toContain('secret-token');
+    const mail = send.mock.calls[0][0] as { subject: string };
+    expect(mail.subject).not.toContain('secret-token');
   });
 
   it('still reports the email as sent when marking it fails', async () => {
@@ -106,33 +90,27 @@ describe('RegistrationMailer.notifyAdmin', () => {
 });
 
 describe('RegistrationMailer.notifyApproved', () => {
-  it('sends the login link and logs it as approval-notice', async () => {
-    const { mailer, send, record } = setup();
+  it('sends the login link as an approval-notice mail', async () => {
+    const { mailer, send } = setup();
     await expect(mailer.notifyApproved(7, 'new@example.com')).resolves.toBe(
       true,
     );
-    expect(send).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: 'new@example.com',
-        text: expect.stringContaining('https://app.example.com/login'),
-      }),
-    );
-    expect(record).toHaveBeenCalledWith(
-      expect.objectContaining({ endpoint: 'approval-notice', statusCode: 250 }),
-    );
+    expect(send.mock.calls[0][0]).toMatchObject({
+      to: 'new@example.com',
+      text: expect.stringContaining('https://app.example.com/login'),
+    });
+    expect(send.mock.calls[0][1]).toEqual({
+      kind: MailKind.ApprovalNotice,
+      accountantId: 7,
+      companyId: null,
+    });
   });
 
-  it('logs a connection failure without an SMTP code', async () => {
-    const { mailer, send, record } = setup();
+  it('reports a failed send as false', async () => {
+    const { mailer, send } = setup();
     send.mockRejectedValue(new Error('connect ECONNREFUSED'));
     await expect(mailer.notifyApproved(7, 'new@example.com')).resolves.toBe(
       false,
-    );
-    expect(record).toHaveBeenCalledWith(
-      expect.objectContaining({
-        statusCode: null,
-        error: 'connect ECONNREFUSED',
-      }),
     );
   });
 });

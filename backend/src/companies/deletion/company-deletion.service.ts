@@ -113,7 +113,7 @@ export class CompanyDeletionService {
       await manager.delete(SpvMessage, { companyId });
       await manager.delete(ApiLog, {
         companyId,
-        service: ApiLogService.Activity,
+        service: In([ApiLogService.Activity, ApiLogService.Smtp]),
       });
       await manager.delete(Company, { id: companyId });
     });

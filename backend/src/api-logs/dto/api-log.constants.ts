@@ -14,6 +14,10 @@ export const UPLOAD_STATUS_LABELS: Record<UploadStatus, string> = {
 
 export const MAX_JOB_ERROR_LENGTH = 500;
 
+export const SYSTEM_ACTOR_NAME = 'Sistem';
+
+export const UNEXPECTED_JOB_ERROR = 'eroare neașteptată';
+
 export const JOB_LABELS: Record<ScheduledJob, string> = {
   [ScheduledJob.Purge]: 'Ștergerea definitivă a datelor șterse',
   [ScheduledJob.AdminApprovalRetry]:

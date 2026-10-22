@@ -1,29 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ApiLogsService } from '../../api-logs/api-logs.service.js';
-import { trackApiCall } from '../../api-logs/track-api-call.js';
+import { MailKind } from '../../common/dto/common.enums.js';
 import { escapeHtml } from '../../common/html.js';
 import {
   MailService,
-  smtpErrorCode,
   type MailAttachment,
   type MailMessage,
 } from '../../common/mail/mail.service.js';
-import {
-  ApiLogService,
-  ApiLogMethod,
-} from '../../api-logs/dto/api-log.enums.js';
 import { formatAmount } from '../../invoices/helpers/invoice-format.js';
-import { ARCHIVE_MAIL_LOG_ENDPOINT } from '../dto/efactura.constants.js';
 import type { EfacturaInvoice } from '../efactura-invoice.entity.js';
 
 @Injectable()
 export class EfacturaArchiveMailer {
   private readonly logger = new Logger(EfacturaArchiveMailer.name);
 
-  constructor(
-    private readonly mail: MailService,
-    private readonly apiLogs: ApiLogsService,
-  ) {}
+  constructor(private readonly mail: MailService) {}
 
   async send(
     invoice: EfacturaInvoice,
@@ -31,31 +21,18 @@ export class EfacturaArchiveMailer {
     note: string | undefined,
     attachments: MailAttachment[],
   ): Promise<void> {
-    await trackApiCall(
-      this.apiLogs,
-      {
+    try {
+      await this.mail.send(this.message(invoice, to, note, attachments), {
+        kind: MailKind.EfacturaArchive,
         accountantId: invoice.accountantId,
-        anafConnectionId: null,
         companyId: invoice.companyId,
-        service: ApiLogService.Smtp,
-        method: ApiLogMethod.Send,
-        endpoint: ARCHIVE_MAIL_LOG_ENDPOINT,
-      },
-      async (outcome) => {
-        try {
-          outcome.statusCode = await this.mail.send(
-            this.message(invoice, to, note, attachments),
-          );
-        } catch (err) {
-          outcome.statusCode = smtpErrorCode(err);
-          outcome.error = (err as Error).message;
-          this.logger.error(
-            `Archived e-Factura ${invoice.id} email failed (accountant ${invoice.accountantId}): ${outcome.error}`,
-          );
-          throw err;
-        }
-      },
-    );
+      });
+    } catch (err) {
+      this.logger.error(
+        `Archived e-Factura ${invoice.id} email failed (accountant ${invoice.accountantId}): ${(err as Error).message}`,
+      );
+      throw err;
+    }
   }
 
   message(

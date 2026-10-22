@@ -33,7 +33,6 @@ export const MAX_ARCHIVE_PAGE_SIZE = 100;
 export const MAX_ARCHIVE_SEARCH = 100;
 export const MAX_EMAIL_MESSAGE = 2000;
 
-export const ARCHIVE_MAIL_LOG_ENDPOINT = 'efactura-archive';
 export const ARCHIVE_SYNC_BATCH = 100;
 
 export const NOT_AN_INVOICE = 'Mesajul nu conține o factură';

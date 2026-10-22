@@ -3,20 +3,13 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Accountant } from '../../../accountants/accountant.entity.js';
-import { ApiLogsService } from '../../../api-logs/api-logs.service.js';
-import { trackApiCall } from '../../../api-logs/track-api-call.js';
+import { MailKind } from '../../../common/dto/common.enums.js';
 import { escapeHtml } from '../../../common/html.js';
 import {
   MailService,
-  smtpErrorCode,
   type MailMessage,
 } from '../../../common/mail/mail.service.js';
 import type { Env } from '../../../config/env.validation.js';
-import { RegistrationMail } from '../../dto/auth.enums.js';
-import {
-  ApiLogService,
-  ApiLogMethod,
-} from '../../../api-logs/dto/api-log.enums.js';
 
 export interface AdminApprovalRequest {
   accountantId: number;
@@ -32,7 +25,6 @@ export class RegistrationMailer {
   constructor(
     private readonly config: ConfigService<Env, true>,
     private readonly mail: MailService,
-    private readonly apiLogs: ApiLogsService,
     @InjectRepository(Accountant)
     private readonly accountants: Repository<Accountant>,
   ) {}
@@ -40,7 +32,7 @@ export class RegistrationMailer {
   async notifyAdmin(request: AdminApprovalRequest): Promise<boolean> {
     const sent = await this.send(
       request.accountantId,
-      RegistrationMail.AdminApproval,
+      MailKind.AdminApproval,
       this.adminMessage(request),
     );
     if (!sent) return false;
@@ -59,7 +51,7 @@ export class RegistrationMailer {
 
   notifyApproved(accountantId: number, email: string): Promise<boolean> {
     const loginUrl = `${this.config.get('FRONTEND_URL', { infer: true })}/login`;
-    return this.send(accountantId, RegistrationMail.ApprovalNotice, {
+    return this.send(accountantId, MailKind.ApprovalNotice, {
       to: email,
       subject: 'Contul SPVDirect a fost aprobat',
       text: `Contul dvs. SPVDirect a fost aprobat. Vă puteți autentifica la ${loginUrl}`,
@@ -70,33 +62,18 @@ export class RegistrationMailer {
 
   private async send(
     accountantId: number,
-    kind: RegistrationMail,
+    kind: MailKind,
     message: MailMessage,
   ): Promise<boolean> {
-    return trackApiCall(
-      this.apiLogs,
-      {
-        accountantId,
-        anafConnectionId: null,
-        companyId: null,
-        service: ApiLogService.Smtp,
-        method: ApiLogMethod.Send,
-        endpoint: kind,
-      },
-      async (outcome) => {
-        try {
-          outcome.statusCode = await this.mail.send(message);
-          return true;
-        } catch (err) {
-          outcome.statusCode = smtpErrorCode(err);
-          outcome.error = (err as Error).message;
-          this.logger.error(
-            `Email ${kind} for accountant ${accountantId} failed: ${outcome.error}`,
-          );
-          return false;
-        }
-      },
-    );
+    try {
+      await this.mail.send(message, { kind, accountantId, companyId: null });
+      return true;
+    } catch (err) {
+      this.logger.error(
+        `Email ${kind} for accountant ${accountantId} failed: ${(err as Error).message}`,
+      );
+      return false;
+    }
   }
 
   private adminMessage(request: AdminApprovalRequest): MailMessage {

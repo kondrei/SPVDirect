@@ -4,11 +4,14 @@ import {
   ValidateStandard,
 } from '../efactura/dto/efactura.enums.js';
 import type { Invoice } from '../invoices/invoice.entity.js';
+import { ServiceUnavailableException } from '@nestjs/common';
 import {
+  companiesPurged,
   companyUpdated,
   efacturaArchiveEmailed,
   efacturaArchiveImported,
   efacturaArchiveSyncCompleted,
+  efacturaArchiveSyncFailed,
   efacturaMessagesLoaded,
   efacturaUploaded,
   efacturaValidated,
@@ -188,6 +191,43 @@ describe('activity entries', () => {
     ).toBe(
       'Importul automat a adăugat în arhiva e-Factura a firmei ALFA SRL (CUI 123) 1 factură',
     );
+    expect(
+      efacturaArchiveImported(
+        COMPANY,
+        { imported: 1, already: 0, skipped: 0, failed: 0 },
+        true,
+      ).details,
+    ).toMatchObject({ automatic: true, job: ScheduledJob.EfacturaArchiveSync });
+  });
+
+  it('describes a purge for one accountant by count only, never by company name', () => {
+    expect(companiesPurged(1, 30)).toEqual({
+      action: ActivityAction.CompaniesPurged,
+      description:
+        '1 firmă ștearsă acum peste 30 de zile a fost eliminată definitiv, cu facturile, fișierele e-Factura și mesajele SPV',
+      details: { job: ScheduledJob.Purge, companies: 1 },
+    });
+    expect(companiesPurged(21, 30).description).toMatch(
+      /^21 de firme șterse .* au fost eliminate/,
+    );
+  });
+
+  it('shows the accountant an automatic import failure, keeping only HTTP messages', () => {
+    const shown = efacturaArchiveSyncFailed(
+      COMPANY,
+      new ServiceUnavailableException('ANAF nu răspunde'),
+    );
+    expect(shown).toMatchObject({
+      action: ActivityAction.EfacturaArchiveSyncFailed,
+      companyId: 7,
+      description:
+        'Importul automat în arhiva e-Factura a firmei ALFA SRL (CUI 123) a eșuat: ANAF nu răspunde',
+      details: { job: ScheduledJob.EfacturaArchiveSync },
+    });
+    expect(
+      efacturaArchiveSyncFailed(COMPANY, new Error('relation does not exist'))
+        .details?.error,
+    ).toBe('eroare neașteptată');
   });
 
   it('logs an archived invoice sent by email with its partner', () => {

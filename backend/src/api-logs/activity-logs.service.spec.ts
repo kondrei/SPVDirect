@@ -4,6 +4,7 @@ import { paramPipes } from '../testing/param-pipes.js';
 import { ActivityLogsController } from './activity-logs.controller.js';
 import { ActivityLogsService } from './activity-logs.service.js';
 import type { ApiLog } from './api-log.entity.js';
+import { SYSTEM_ACTOR_NAME } from './dto/api-log.constants.js';
 import {
   ActivityAction,
   ApiLogMethod,
@@ -207,6 +208,14 @@ describe('ActivityLogsService.list', () => {
       details: {},
       accountantName: '',
     });
+  });
+
+  it('names the system, not the accountant, on rows a scheduled job wrote', async () => {
+    const { service } = setup([
+      { ...ROW, details: { job: ScheduledJob.Purge, companies: 2 } },
+    ]);
+    const [item] = (await service.list(1, { page: 1, pageSize: 20 })).items;
+    expect(item.accountantName).toBe(SYSTEM_ACTOR_NAME);
   });
 });
 

@@ -2,6 +2,7 @@ import type { DataSource, Repository } from 'typeorm';
 import type { Accountant } from '../../accountants/accountant.entity.js';
 import type { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import {
+  ActivityAction,
   JobActivityAction,
   ScheduledJob,
 } from '../../api-logs/dto/api-log.enums.js';
@@ -16,7 +17,9 @@ function setup(
 ) {
   const find = vi.fn();
   for (const ids of batches) {
-    find.mockResolvedValueOnce(ids.map((id) => ({ id })));
+    find.mockResolvedValueOnce(
+      ids.map((id) => ({ id, accountantId: id % 2 ? 11 : 12 })),
+    );
   }
   find.mockResolvedValue([]);
   const findAccountants = vi.fn();
@@ -34,12 +37,13 @@ function setup(
   };
   const dataSource = { createQueryRunner: vi.fn(() => runner) };
   const recordJob = vi.fn().mockResolvedValue(undefined);
+  const record = vi.fn().mockResolvedValue(undefined);
   const job = new PurgeJob(
     { find } as unknown as Repository<Company>,
     { find: findAccountants } as unknown as Repository<Accountant>,
     { purge, purgeAccountant } as unknown as CompanyDeletionService,
     dataSource as unknown as DataSource,
-    { recordJob } as unknown as ActivityLogsService,
+    { recordJob, record } as unknown as ActivityLogsService,
   );
   return {
     job,
@@ -49,6 +53,7 @@ function setup(
     purgeAccountant,
     runner,
     recordJob,
+    record,
   };
 }
 
@@ -188,6 +193,46 @@ describe('PurgeJob', () => {
         failed: 1,
       },
     });
+  });
+
+  it('tells each accountant how many of their own companies were purged, without names', async () => {
+    const { job, purge, purgeAccountant, record } = setup(
+      [[3, 5, 6, 7]],
+      [[8]],
+    );
+    purge.mockImplementation((id: number) =>
+      id === 7 ? Promise.reject(new Error('storage down')) : Promise.resolve(),
+    );
+    await job.run();
+    expect(record.mock.calls).toEqual([
+      [
+        11,
+        {
+          action: ActivityAction.CompaniesPurged,
+          description:
+            '2 firme șterse acum peste 30 de zile au fost eliminate definitiv, cu facturile, fișierele e-Factura și mesajele SPV',
+          details: { job: ScheduledJob.Purge, companies: 2 },
+        },
+      ],
+      [
+        12,
+        {
+          action: ActivityAction.CompaniesPurged,
+          description:
+            '1 firmă ștearsă acum peste 30 de zile a fost eliminată definitiv, cu facturile, fișierele e-Factura și mesajele SPV',
+          details: { job: ScheduledJob.Purge, companies: 1 },
+        },
+      ],
+    ]);
+    expect(record.mock.invocationCallOrder[1]).toBeLessThan(
+      purgeAccountant.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('records nothing for accountants when no company was purged', async () => {
+    const { job, record } = setup([], [[8]]);
+    await job.run();
+    expect(record).not.toHaveBeenCalled();
   });
 
   it('logs a failed run with the error', async () => {

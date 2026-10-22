@@ -1,4 +1,4 @@
-import type { ApiLogsService } from '../../api-logs/api-logs.service.js';
+import { MailKind } from '../../common/dto/common.enums.js';
 import type { MailService } from '../../common/mail/mail.service.js';
 import { EfacturaDirection } from '../dto/efactura.enums.js';
 import type { EfacturaInvoice } from '../efactura-invoice.entity.js';
@@ -28,12 +28,8 @@ const ATTACHMENTS = [
 
 function setup() {
   const mail = { send: vi.fn().mockResolvedValue(250) };
-  const apiLogs = { record: vi.fn().mockResolvedValue(undefined) };
-  const mailer = new EfacturaArchiveMailer(
-    mail as unknown as MailService,
-    apiLogs as unknown as ApiLogsService,
-  );
-  return { mailer, mail, apiLogs };
+  const mailer = new EfacturaArchiveMailer(mail as unknown as MailService);
+  return { mailer, mail };
 }
 
 describe('EfacturaArchiveMailer', () => {
@@ -55,31 +51,21 @@ describe('EfacturaArchiveMailer', () => {
     expect(message.attachments).toBe(ATTACHMENTS);
   });
 
-  it('writes the attempt to api_logs with the SMTP code', async () => {
-    const { mailer, apiLogs } = setup();
+  it('sends it as an e-Factura archive mail for the company, so MailService logs it', async () => {
+    const { mailer, mail } = setup();
     await mailer.send(INVOICE, 'client@example.com', undefined, ATTACHMENTS);
-    expect(apiLogs.record).toHaveBeenCalledWith(
-      expect.objectContaining({
-        accountantId: 1,
-        companyId: 7,
-        service: 'SMTP',
-        method: 'SEND',
-        endpoint: 'efactura-archive',
-        statusCode: 250,
-      }),
-    );
+    expect(mail.send.mock.calls[0][1]).toEqual({
+      kind: MailKind.EfacturaArchive,
+      accountantId: 1,
+      companyId: 7,
+    });
   });
 
-  it('logs a failed attempt and rethrows', async () => {
-    const { mailer, mail, apiLogs } = setup();
-    mail.send.mockRejectedValue(
-      Object.assign(new Error('rejected'), { responseCode: 550 }),
-    );
+  it('rethrows a failed send', async () => {
+    const { mailer, mail } = setup();
+    mail.send.mockRejectedValue(new Error('rejected'));
     await expect(
       mailer.send(INVOICE, 'client@example.com', undefined, ATTACHMENTS),
     ).rejects.toThrow('rejected');
-    expect(apiLogs.record).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 550, error: 'rejected' }),
-    );
   });
 });

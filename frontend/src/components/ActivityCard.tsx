@@ -109,7 +109,7 @@ export function ActivityCard({ companies }: Readonly<{ companies: Company[] }>) 
   return (
     <Card
       title="Activitate"
-      subtitle="Operațiunile făcute în cont: firme, facturi, e-Factura, SPV, certificate"
+      subtitle="Operațiunile din cont, inclusiv cele făcute automat: firme, facturi, e-Factura, SPV, certificate"
     >
       <div className="stack">
         <div className="form-row">

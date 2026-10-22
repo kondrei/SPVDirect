@@ -6,6 +6,7 @@ import { MoreThan, Not, IsNull, Repository, type DataSource } from 'typeorm';
 import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import {
   efacturaArchiveSyncCompleted,
+  efacturaArchiveSyncFailed,
   jobFailed,
 } from '../../api-logs/activity-entries.js';
 import { ScheduledJob } from '../../api-logs/dto/api-log.enums.js';
@@ -86,7 +87,7 @@ export class EfacturaArchiveSyncJob {
     let lastId = 0;
     for (;;) {
       const companies = await this.companies.find({
-        select: { id: true, accountantId: true },
+        select: { id: true, accountantId: true, name: true, cui: true },
         where: { id: MoreThan(lastId), anafConnectionId: Not(IsNull()) },
         order: { id: 'ASC' },
         take: ARCHIVE_SYNC_BATCH,
@@ -103,7 +104,7 @@ export class EfacturaArchiveSyncJob {
   }
 
   private async syncCompany(
-    company: Pick<Company, 'id' | 'accountantId'>,
+    company: Pick<Company, 'id' | 'accountantId' | 'name' | 'cui'>,
   ): Promise<CompanySyncResult> {
     let imported = 0;
     try {
@@ -123,6 +124,10 @@ export class EfacturaArchiveSyncJob {
     } catch (err) {
       this.logger.warn(
         `e-Factura archive sync of company ${company.id} failed: ${(err as Error).message}`,
+      );
+      await this.activity.record(
+        company.accountantId,
+        efacturaArchiveSyncFailed(company, err),
       );
       return { imported, failed: true };
     }

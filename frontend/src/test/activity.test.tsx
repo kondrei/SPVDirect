@@ -74,6 +74,50 @@ describe('Activitate pe panou', () => {
     expect(screen.getByText(/Pagina 1 din 1 · 2 operațiuni/)).toBeInTheDocument();
   });
 
+  it('shows the entries of scheduled jobs with their own labels and the system as user', async () => {
+    renderApp(
+      '/accountants/1',
+      routes(() => ({
+        status: 200,
+        body: {
+          items: [
+            {
+              id: 4,
+              action: ActivityAction.EfacturaArchiveSyncFailed,
+              companyId: 7,
+              description:
+                'Importul automat în arhiva e-Factura a firmei ALFA SRL (CUI 12345678) a eșuat: ANAF nu răspunde',
+              details: { job: 'efactura_archive_sync' },
+              accountantName: 'Sistem (automat)',
+              createdAt: '2026-10-21T04:00:00Z',
+            },
+            {
+              id: 3,
+              action: ActivityAction.CompaniesPurged,
+              companyId: null,
+              description:
+                '1 firmă ștearsă acum peste 30 de zile a fost eliminată definitiv, cu facturile, fișierele e-Factura și mesajele SPV',
+              details: { job: 'purge', companies: 1 },
+              accountantName: 'Sistem (automat)',
+              createdAt: '2026-10-01T00:00:00Z',
+            },
+          ],
+          total: 2,
+          page: 1,
+          pageSize: 20,
+        },
+      })),
+    );
+    const table = await screen.findByRole('table', { name: 'Activitate' });
+    const rows = within(table).getAllByRole('row');
+    expect(within(rows[1]).getByText('Import automat eșuat')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('Sistem (automat)')).toBeInTheDocument();
+    expect(
+      within(rows[2]).getByText('Date eliminate definitiv'),
+    ).toBeInTheDocument();
+    expect(within(rows[2]).getByText('—')).toBeInTheDocument();
+  });
+
   it('filters by company and pages through older operations', async () => {
     const { calls } = renderApp(
       '/accountants/1',
