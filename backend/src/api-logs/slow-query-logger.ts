@@ -51,7 +51,11 @@ export class SlowQueryLogger extends AbstractLogger {
       message: `${ApiLogService.Database} ${ApiLogMethod.Query} slow (${row.responseTimeMs} ms)`,
       ...row,
     });
-    if (!queryRunner || API_LOG_INSERT.test(query) || !this.claimSave()) {
+    if (
+      !queryRunner?.dataSource.isInitialized ||
+      API_LOG_INSERT.test(query) ||
+      !this.claimSave()
+    ) {
       return;
     }
     queryRunner.dataSource
