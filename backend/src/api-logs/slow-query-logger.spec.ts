@@ -13,10 +13,12 @@ import { SlowQueryLogger, slowQueryText } from './slow-query-logger.js';
 const QUERY = `SELECT "c"."id" FROM "companies" "c"
   WHERE "c"."accountant_id" = $1`;
 
-function setup(now = () => 0) {
+function setup(now = () => 0, isInitialized = true) {
   const insert = vi.fn().mockResolvedValue(undefined);
   const getRepository = vi.fn().mockReturnValue({ insert });
-  const runner = { dataSource: { getRepository } } as unknown as QueryRunner;
+  const runner = {
+    dataSource: { isInitialized, getRepository },
+  } as unknown as QueryRunner;
   const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
   const error = vi
     .spyOn(Logger.prototype, 'error')
@@ -93,6 +95,15 @@ describe('SlowQueryLogger', () => {
     await vi.waitFor(() =>
       expect(error).toHaveBeenCalledWith('Could not save slow query: db down'),
     );
+  });
+
+  it('only logs a slow query while the DataSource is still initializing', () => {
+    const { logger, runner, getRepository, warn } = setup(() => 0, false);
+    expect(() =>
+      logger.logQuerySlow(1500, 'SELECT version()', [], runner),
+    ).not.toThrow();
+    expect(warn).toHaveBeenCalledOnce();
+    expect(getRepository).not.toHaveBeenCalled();
   });
 
   it('only logs when there is no query runner', () => {
