@@ -33,6 +33,7 @@ import { PublicStatsModule } from './public-stats/public-stats.module.js';
         buildTypeOrmOptions({
           DATABASE_URL: config.get('DATABASE_URL', { infer: true }),
           DATABASE_SSL: config.get('DATABASE_SSL', { infer: true }),
+          DB_SLOW_QUERY_MS: config.get('DB_SLOW_QUERY_MS', { infer: true }),
         }),
     }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),

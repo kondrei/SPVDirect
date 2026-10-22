@@ -4,6 +4,7 @@ import { AnafConnection } from '../anaf/anaf-connection.entity.js';
 import { AuthorizationLink } from '../anaf/authorization-links/authorization-link.entity.js';
 import { SpvMessage } from '../anaf/spv/spv-message.entity.js';
 import { ApiLog } from '../api-logs/api-log.entity.js';
+import { SlowQueryLogger } from '../api-logs/slow-query-logger.js';
 import { BannedEmail } from '../auth/banned-email.entity.js';
 import { Company } from '../companies/company.entity.js';
 import { EfacturaUpload } from '../efactura/efactura-upload.entity.js';
@@ -27,8 +28,10 @@ export const entities = [
 export function buildTypeOrmOptions(env: {
   DATABASE_URL: string;
   DATABASE_SSL: boolean | string;
+  DB_SLOW_QUERY_MS?: number;
 }): DataSourceOptions {
   const ssl = env.DATABASE_SSL === true || env.DATABASE_SSL === 'true';
+  const slowQueryMs = env.DB_SLOW_QUERY_MS ?? 0;
   return {
     type: 'postgres',
     url: env.DATABASE_URL,
@@ -37,5 +40,8 @@ export function buildTypeOrmOptions(env: {
     migrations,
     synchronize: false,
     migrationsRun: false,
+    ...(slowQueryMs > 0
+      ? { maxQueryExecutionTime: slowQueryMs, logger: new SlowQueryLogger() }
+      : {}),
   };
 }

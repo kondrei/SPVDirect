@@ -19,6 +19,25 @@ function validate(env: Record<string, unknown>) {
   return envValidationSchema.validate(env);
 }
 
+describe('envValidationSchema: logging', () => {
+  it('defaults LOG_LEVEL to info', () => {
+    expect(validate(base).value.LOG_LEVEL).toBe('info');
+  });
+
+  it('defaults DB_SLOW_QUERY_MS to 1000 and rejects a negative value', () => {
+    expect(validate(base).value.DB_SLOW_QUERY_MS).toBe(1000);
+    expect(validate({ ...base, DB_SLOW_QUERY_MS: -1 }).error?.message).toMatch(
+      /DB_SLOW_QUERY_MS/,
+    );
+  });
+
+  it('rejects an unknown LOG_LEVEL', () => {
+    expect(validate({ ...base, LOG_LEVEL: 'loud' }).error?.message).toMatch(
+      /LOG_LEVEL/,
+    );
+  });
+});
+
 describe('envValidationSchema: registration and mail', () => {
   it('applies the reCAPTCHA and SMTP defaults', () => {
     const { value, error } = validate(base);

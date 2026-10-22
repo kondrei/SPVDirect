@@ -1,5 +1,6 @@
 import type { ActivityAction, JobActivityAction } from './api-log.enums.js';
 import type { AnafConnection } from '../../anaf/anaf-connection.entity.js';
+import type { ApiLog } from '../api-log.entity.js';
 import type { Company } from '../../companies/company.entity.js';
 import type { EfacturaInvoice } from '../../efactura/efactura-invoice.entity.js';
 import type { EfacturaUpload } from '../../efactura/efactura-upload.entity.js';
@@ -9,6 +10,12 @@ export type ActivityDetails = Record<
   string,
   string | number | boolean | null | string[]
 >;
+
+export type ApiLogRow = Omit<
+  ApiLog,
+  'id' | 'createdAt' | 'description' | 'details'
+> &
+  Partial<Pick<ApiLog, 'description' | 'details'>>;
 
 export interface ActivityEntry {
   action: ActivityAction;

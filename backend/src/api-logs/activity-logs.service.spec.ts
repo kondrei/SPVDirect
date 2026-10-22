@@ -3,6 +3,7 @@ import { ParseIdPipe } from '../common/parse-id.pipe.js';
 import { paramPipes } from '../testing/param-pipes.js';
 import { ActivityLogsController } from './activity-logs.controller.js';
 import { ActivityLogsService } from './activity-logs.service.js';
+import type { ApiLogStream } from './api-log-stream.js';
 import type { ApiLog } from './api-log.entity.js';
 import { SYSTEM_ACTOR_NAME } from './dto/api-log.constants.js';
 import {
@@ -31,10 +32,12 @@ function setup(rows: object[] = [], total = rows.length) {
     insert: vi.fn().mockResolvedValue(undefined),
     createQueryBuilder: vi.fn().mockReturnValue(qb),
   };
+  const stream = { write: vi.fn() };
   const service = new ActivityLogsService(
     repo as unknown as Repository<ApiLog>,
+    stream as unknown as ApiLogStream,
   );
-  return { service, repo, qb };
+  return { service, repo, qb, stream };
 }
 
 const ROW = {
@@ -133,8 +136,24 @@ describe('ActivityLogsService.record', () => {
     expect(repo.insert.mock.calls[0][0]).toHaveLength(2);
   });
 
-  it('never fails the operation when the log cannot be written', async () => {
-    const { service, repo } = setup();
+  it('writes every stored row to the log stream too', async () => {
+    const { service, repo, stream } = setup();
+    await service.recordMany(1, [
+      { action: ActivityAction.CompanyCreated, description: 'a' },
+      { action: ActivityAction.CompanyCreated, description: 'b' },
+    ]);
+    const rows = repo.insert.mock.calls[0][0] as object[];
+    expect(stream.write.mock.calls).toEqual(rows.map((row) => [row]));
+  });
+
+  it('streams nothing for an empty list', async () => {
+    const { service, stream } = setup();
+    await service.recordMany(1, []);
+    expect(stream.write).not.toHaveBeenCalled();
+  });
+
+  it('never fails the operation when the log cannot be written, and still streams it', async () => {
+    const { service, repo, stream } = setup();
     repo.insert.mockRejectedValue(new Error('db down'));
     await expect(
       service.record(1, {
@@ -142,6 +161,12 @@ describe('ActivityLogsService.record', () => {
         description: 'Autentificare în cont',
       }),
     ).resolves.toBeUndefined();
+    expect(stream.write).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accountantId: 1,
+        endpoint: ActivityAction.LoggedIn,
+      }),
+    );
   });
 });
 

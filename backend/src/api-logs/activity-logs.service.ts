@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, type SelectQueryBuilder } from 'typeorm';
 import { Accountant } from '../accountants/accountant.entity.js';
+import { ApiLogStream } from './api-log-stream.js';
 import { ApiLog } from './api-log.entity.js';
 import { SYSTEM_ACTOR_NAME } from './dto/api-log.constants.js';
 import { ApiLogMethod, ApiLogService } from './dto/api-log.enums.js';
@@ -11,6 +12,7 @@ import type {
   ActivityItem,
   ActivityPage,
   ActivityRow,
+  ApiLogRow,
   JobEntry,
 } from './dto/api-log.types.js';
 
@@ -20,6 +22,7 @@ export class ActivityLogsService {
 
   constructor(
     @InjectRepository(ApiLog) private readonly logs: Repository<ApiLog>,
+    private readonly stream: ApiLogStream,
   ) {}
 
   record(accountantId: number, entry: ActivityEntry): Promise<void> {
@@ -39,22 +42,22 @@ export class ActivityLogsService {
     entries: (ActivityEntry | JobEntry)[],
   ): Promise<void> {
     if (!entries.length) return;
+    const rows: ApiLogRow[] = entries.map((entry) => ({
+      accountantId,
+      anafConnectionId: null,
+      companyId: 'companyId' in entry ? (entry.companyId ?? null) : null,
+      service: ApiLogService.Activity,
+      method: ApiLogMethod.Log,
+      endpoint: entry.action,
+      statusCode: null,
+      responseTimeMs: null,
+      error: 'error' in entry ? (entry.error ?? null) : null,
+      description: entry.description,
+      details: entry.details ?? {},
+    }));
+    for (const row of rows) this.stream.write(row);
     try {
-      await this.logs.insert(
-        entries.map((entry) => ({
-          accountantId,
-          anafConnectionId: null,
-          companyId: 'companyId' in entry ? (entry.companyId ?? null) : null,
-          service: ApiLogService.Activity,
-          method: ApiLogMethod.Log,
-          endpoint: entry.action,
-          statusCode: null,
-          responseTimeMs: null,
-          error: 'error' in entry ? (entry.error ?? null) : null,
-          description: entry.description,
-          details: entry.details ?? {},
-        })),
-      );
+      await this.logs.insert(rows);
     } catch (err) {
       this.logger.error(
         `Could not write activity to api_logs (${entries.map((e) => e.action).join(', ')}): ${String(err)}`,

@@ -2,6 +2,10 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import type { NextFunction, Request, Response } from 'express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
+import {
+  ErrorCaptureFilter,
+  requestLog,
+} from './common/logging/request-log.js';
 
 export interface AppSecurityOptions {
   frontendUrl: string;
@@ -17,6 +21,8 @@ export function configureApp(
   app: INestApplication,
   { frontendUrl, production }: AppSecurityOptions,
 ): void {
+  app.use(requestLog);
+  app.useGlobalFilters(new ErrorCaptureFilter(app.getHttpAdapter()));
   app.use(helmet({ strictTransportSecurity: production }));
   app.use(noStore);
   app.use(cookieParser());
