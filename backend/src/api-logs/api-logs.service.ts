@@ -14,7 +14,8 @@ export type ApiLogEntry = Pick<
   | 'statusCode'
   | 'responseTimeMs'
   | 'error'
->;
+> &
+  Partial<Pick<ApiLog, 'details'>>;
 
 @Injectable()
 export class ApiLogsService {

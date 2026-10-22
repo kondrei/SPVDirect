@@ -1,7 +1,6 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import type { ApiLogsService } from '../../api-logs/api-logs.service.js';
 import type { MailService } from '../../common/mail/mail.service.js';
 import { line, sampleInvoice } from '../../testing/invoice-fixtures.js';
 import { CreateStornoDto } from '../dto/invoice.dto.js';
@@ -110,7 +109,7 @@ describe('storno XML', () => {
 
 describe('storno email', () => {
   it('says it is a storno invoice', () => {
-    const mailer = new InvoiceMailer({} as MailService, {} as ApiLogsService);
+    const mailer = new InvoiceMailer({} as MailService);
     const message = mailer.message(storno(), 'a@b.ro', Buffer.alloc(0));
     expect(message.subject).toBe(
       'Factura de stornare FCT 000013 de la AGRO VEST SRL',

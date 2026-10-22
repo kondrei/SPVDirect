@@ -230,7 +230,14 @@ describe('CompanyDeletionService.purge', () => {
       ['delete', Invoice, { companyId: 7, stornoOfInvoiceId: Not(IsNull()) }],
       ['delete', Invoice, { companyId: 7 }],
       ['delete', SpvMessage, { companyId: 7 }],
-      ['delete', ApiLog, { companyId: 7, service: ApiLogService.Activity }],
+      [
+        'delete',
+        ApiLog,
+        {
+          companyId: 7,
+          service: In([ApiLogService.Activity, ApiLogService.Smtp]),
+        },
+      ],
       ['delete', Company, { id: 7 }],
     ]);
   });

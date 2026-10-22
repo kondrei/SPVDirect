@@ -33,7 +33,7 @@ SPVDirect/
 
 ### Scheduled jobs
 
-Some work runs on its own, on a fixed schedule (Romania time, Europe/Bucharest). When several servers run the app, only one of them does each job. Every run is written to the activity log as a system entry, but these entries don't show on Panou or in exports.
+Some work runs on its own, on a fixed schedule (Romania time, Europe/Bucharest). When several servers run the app, only one of them does each job. What a job does for an accountant shows on their Panou, with **Sistem (automat)** as the user: invoices imported into the archive, an import that failed for one of their companies, and how many of their deleted companies were erased (a count only, no names). Each accountant sees only their own entries. The overall summary of each run covers every account, so it is kept for the administrator and never shows on Panou or in exports.
 
 | Job | When | What it does |
 |---|---|---|
@@ -149,7 +149,7 @@ The schema is managed by TypeORM migrations in `backend/src/database/migrations`
 | `invoices` | Issued invoices, unique on company + series + number. Seller and buyer are stored as they were on the issue date (jsonb), with lines, VAT breakdown and totals; `storage_path` points to the PDF in the private bucket `SUPABASE_INVOICE_BUCKET` when the user chose to save it; `emailed_to` / `emailed_at` record the last send. A storno invoice points to the invoice it reverses (`storno_of_*`). Rows of a deleted company carry `deleted_at` until the monthly purge |
 | `efactura_invoices` | The e-Factura archive: one row per imported ANAF message (unique per company, environment and message among live rows), direction `received`/`sent`, the header read from the XML, the signed ZIP and the cached PDF (bytea or Supabase Storage, `EFACTURA_STORAGE`), `invoice_id` when it is one of our own uploads |
 | `efactura_uploads` | One row per upload to ANAF e-Factura: index, environment it was sent to, status (`sending` while the request is in flight, then `processing`, `ok`, `nok` or `rejected`), download id. A partial unique index allows one `sending`/`processing`/`ok` upload per invoice; a `sending` row older than 5 minutes is treated as an interrupted send and can be taken over |
-| `api_logs` | Audit of every api.anaf.ro call and every VAT-registry lookup (service, endpoint, status, latency) |
+| `api_logs` | Audit of every api.anaf.ro call, every VAT-registry lookup (service, endpoint, status, latency) and every email SPVDirect sends: admin approval requests, account approval notices, invoices and archived e-Factura invoices (`service` `SMTP`, with the recipient, subject, attachment names and SMTP reply code, never the body). Also holds the activity log shown on Panou |
 
 ---
 

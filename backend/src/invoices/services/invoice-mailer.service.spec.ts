@@ -1,16 +1,12 @@
-import type { ApiLogsService } from '../../api-logs/api-logs.service.js';
+import { MailKind } from '../../common/dto/common.enums.js';
 import type { MailService } from '../../common/mail/mail.service.js';
 import { party, sampleInvoice } from '../../testing/invoice-fixtures.js';
 import { InvoiceMailer } from './invoice-mailer.service.js';
 
 function setup() {
   const mail = { send: vi.fn().mockResolvedValue(250) };
-  const apiLogs = { record: vi.fn().mockResolvedValue(undefined) };
-  const mailer = new InvoiceMailer(
-    mail as unknown as MailService,
-    apiLogs as unknown as ApiLogsService,
-  );
-  return { mailer, mail, apiLogs };
+  const mailer = new InvoiceMailer(mail as unknown as MailService);
+  return { mailer, mail };
 }
 
 describe('InvoiceMailer', () => {
@@ -56,35 +52,21 @@ describe('InvoiceMailer', () => {
     expect(message.replyTo).toBeUndefined();
   });
 
-  it('writes the attempt to api_logs with the SMTP code', async () => {
-    const { mailer, apiLogs } = setup();
+  it('sends it as an invoice mail for the company, so MailService logs it', async () => {
+    const { mailer, mail } = setup();
     await mailer.send(sampleInvoice(), 'a@b.ro', Buffer.alloc(0));
-    expect(apiLogs.record).toHaveBeenCalledWith(
-      expect.objectContaining({
-        accountantId: 1,
-        companyId: 7,
-        service: 'SMTP',
-        method: 'SEND',
-        endpoint: 'invoice',
-        statusCode: 250,
-        error: null,
-      }),
-    );
+    expect(mail.send.mock.calls[0][1]).toEqual({
+      kind: MailKind.Invoice,
+      accountantId: 1,
+      companyId: 7,
+    });
   });
 
-  it('logs a failed attempt and rethrows', async () => {
-    const { mailer, mail, apiLogs } = setup();
-    mail.send.mockRejectedValue(
-      Object.assign(new Error('mailbox unavailable'), { responseCode: 550 }),
-    );
+  it('rethrows a failed send', async () => {
+    const { mailer, mail } = setup();
+    mail.send.mockRejectedValue(new Error('mailbox unavailable'));
     await expect(
       mailer.send(sampleInvoice(), 'a@b.ro', Buffer.alloc(0)),
     ).rejects.toThrow('mailbox unavailable');
-    expect(apiLogs.record).toHaveBeenCalledWith(
-      expect.objectContaining({
-        statusCode: 550,
-        error: 'mailbox unavailable',
-      }),
-    );
   });
 });

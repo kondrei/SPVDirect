@@ -4,6 +4,7 @@ import type { DataSource, Repository } from 'typeorm';
 import type { Company } from '../../companies/company.entity.js';
 import type { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import {
+  ActivityAction,
   JobActivityAction,
   ScheduledJob,
 } from '../../api-logs/dto/api-log.enums.js';
@@ -32,12 +33,13 @@ function setup({ enabled = true, locked = true } = {}) {
   };
   const dataSource = { createQueryRunner: vi.fn(() => runner) };
   const recordJob = vi.fn().mockResolvedValue(undefined);
+  const record = vi.fn().mockResolvedValue(undefined);
   const companies = {
     find: vi
       .fn()
       .mockResolvedValueOnce([
-        { id: 7, accountantId: 1 },
-        { id: 8, accountantId: 2 },
+        { id: 7, accountantId: 1, name: 'Alfa SRL', cui: '123' },
+        { id: 8, accountantId: 2, name: 'Beta SRL', cui: '456' },
       ])
       .mockResolvedValue([]),
   };
@@ -47,9 +49,9 @@ function setup({ enabled = true, locked = true } = {}) {
     archive as unknown as EfacturaArchiveService,
     companies as unknown as Repository<Company>,
     dataSource as unknown as DataSource,
-    { recordJob } as unknown as ActivityLogsService,
+    { recordJob, record } as unknown as ActivityLogsService,
   );
-  return { job, runner, companies, archive, dataSource, recordJob };
+  return { job, runner, companies, archive, dataSource, recordJob, record };
 }
 
 describe('EfacturaArchiveSyncJob', () => {
@@ -106,6 +108,42 @@ describe('EfacturaArchiveSyncJob', () => {
       .mockResolvedValueOnce(imported(1, 0));
     await job.run();
     expect(archive.importPeriod).toHaveBeenLastCalledWith(2, 8, 60, true);
+  });
+
+  it('tells only the company owner that its automatic import failed', async () => {
+    const { job, archive, record } = setup();
+    archive.importPeriod
+      .mockRejectedValueOnce(new BadRequestException('fără certificat'))
+      .mockResolvedValueOnce(imported(1, 0));
+    await job.run();
+    expect(record).toHaveBeenCalledTimes(1);
+    expect(record).toHaveBeenCalledWith(1, {
+      action: ActivityAction.EfacturaArchiveSyncFailed,
+      companyId: 7,
+      description:
+        'Importul automat în arhiva e-Factura a firmei Alfa SRL (CUI 123) a eșuat: fără certificat',
+      details: {
+        companyName: 'Alfa SRL',
+        cui: '123',
+        job: ScheduledJob.EfacturaArchiveSync,
+        error: 'fără certificat',
+      },
+    });
+  });
+
+  it('hides unexpected error details from the accountant', async () => {
+    const { job, archive, record } = setup();
+    archive.importPeriod.mockRejectedValueOnce(
+      new Error('duplicate key value violates unique constraint'),
+    );
+    await job.run();
+    expect(record).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        description:
+          'Importul automat în arhiva e-Factura a firmei Alfa SRL (CUI 123) a eșuat: eroare neașteptată',
+      }),
+    );
   });
 
   it('logs each run with the companies, imported invoices and failures', async () => {

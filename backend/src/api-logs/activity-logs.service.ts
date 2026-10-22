@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, type SelectQueryBuilder } from 'typeorm';
 import { Accountant } from '../accountants/accountant.entity.js';
 import { ApiLog } from './api-log.entity.js';
+import { SYSTEM_ACTOR_NAME } from './dto/api-log.constants.js';
 import { ApiLogMethod, ApiLogService } from './dto/api-log.enums.js';
 import type {
   ActivityEntry,
@@ -128,7 +129,9 @@ function toItem(row: ActivityRow): ActivityItem {
     companyId: row.companyId === null ? null : Number(row.companyId),
     description: row.description ?? '',
     details: row.details ?? {},
-    accountantName: row.accountantName ?? '',
+    accountantName: row.details?.job
+      ? SYSTEM_ACTOR_NAME
+      : (row.accountantName ?? ''),
     createdAt: new Date(row.createdAt),
   };
 }

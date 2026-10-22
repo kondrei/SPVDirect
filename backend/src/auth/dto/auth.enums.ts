@@ -8,8 +8,3 @@ export enum ResendResult {
   Failed = 'failed',
   Skipped = 'skipped',
 }
-
-export enum RegistrationMail {
-  AdminApproval = 'admin-approval',
-  ApprovalNotice = 'approval-notice',
-}

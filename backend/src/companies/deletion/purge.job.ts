@@ -12,7 +12,11 @@ import {
 } from 'typeorm';
 import { Accountant } from '../../accountants/accountant.entity.js';
 import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
-import { jobFailed, purgeCompleted } from '../../api-logs/activity-entries.js';
+import {
+  companiesPurged,
+  jobFailed,
+  purgeCompleted,
+} from '../../api-logs/activity-entries.js';
 import { ScheduledJob } from '../../api-logs/dto/api-log.enums.js';
 import {
   CRON_OPTIONS,
@@ -56,17 +60,32 @@ export class PurgeJob {
       locked = row?.locked === true;
       if (!locked) return;
       const cutoff = new Date(Date.now() - PURGE_GRACE_DAYS * DAY_MS);
+      const purgedPerAccountant = new Map<number, number>();
       const companies = await this.purgeAll(
         this.companies,
         cutoff,
         'company',
-        (id) => this.deletion.purge(id),
+        { id: true, accountantId: true },
+        async ({ id, accountantId }) => {
+          await this.deletion.purge(id);
+          purgedPerAccountant.set(
+            accountantId,
+            (purgedPerAccountant.get(accountantId) ?? 0) + 1,
+          );
+        },
       );
+      for (const [accountantId, count] of purgedPerAccountant) {
+        await this.activity.record(
+          accountantId,
+          companiesPurged(count, PURGE_GRACE_DAYS),
+        );
+      }
       const accountants = await this.purgeAll(
         this.accountants,
         cutoff,
         'account',
-        (id) => this.deletion.purgeAccountant(id),
+        { id: true },
+        ({ id }) => this.deletion.purgeAccountant(id),
       );
       if (companies.purged || accountants.purged) {
         this.logger.log(
@@ -100,13 +119,14 @@ export class PurgeJob {
     repo: Repository<T>,
     cutoff: Date,
     label: string,
-    purge: (id: number) => Promise<void>,
+    select: FindOptionsSelect<T>,
+    purge: (row: T) => Promise<void>,
   ): Promise<PurgeTally> {
     const result: PurgeTally = { purged: 0, failed: 0 };
     let lastId = 0;
     for (;;) {
       const due = await repo.find({
-        select: { id: true } as FindOptionsSelect<T>,
+        select,
         where: {
           id: MoreThan(lastId),
           deletedAt: LessThan(cutoff),
@@ -115,10 +135,11 @@ export class PurgeJob {
         order: { id: 'ASC' } as FindOptionsOrder<T>,
         take: PURGE_BATCH,
       });
-      for (const { id } of due) {
+      for (const row of due) {
+        const { id } = row;
         lastId = id;
         try {
-          await purge(id);
+          await purge(row);
           result.purged++;
         } catch (err) {
           result.failed++;

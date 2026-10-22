@@ -1,10 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ApiLogsService } from '../../api-logs/api-logs.service.js';
-import { trackApiCall } from '../../api-logs/track-api-call.js';
+import { MailKind } from '../../common/dto/common.enums.js';
 import { escapeHtml } from '../../common/html.js';
 import {
   MailService,
-  smtpErrorCode,
   type MailMessage,
 } from '../../common/mail/mail.service.js';
 import type { Invoice } from '../invoice.entity.js';
@@ -15,48 +13,26 @@ import {
   stornoReference,
   invoiceNumber,
 } from '../helpers/invoice-format.js';
-import {
-  ApiLogService,
-  ApiLogMethod,
-} from '../../api-logs/dto/api-log.enums.js';
-
-export const INVOICE_MAIL_LOG_ENDPOINT = 'invoice';
 
 @Injectable()
 export class InvoiceMailer {
   private readonly logger = new Logger(InvoiceMailer.name);
 
-  constructor(
-    private readonly mail: MailService,
-    private readonly apiLogs: ApiLogsService,
-  ) {}
+  constructor(private readonly mail: MailService) {}
 
   async send(invoice: Invoice, to: string, pdf: Buffer): Promise<void> {
-    await trackApiCall(
-      this.apiLogs,
-      {
+    try {
+      await this.mail.send(this.message(invoice, to, pdf), {
+        kind: MailKind.Invoice,
         accountantId: invoice.accountantId,
-        anafConnectionId: null,
         companyId: invoice.companyId,
-        service: ApiLogService.Smtp,
-        method: ApiLogMethod.Send,
-        endpoint: INVOICE_MAIL_LOG_ENDPOINT,
-      },
-      async (outcome) => {
-        try {
-          outcome.statusCode = await this.mail.send(
-            this.message(invoice, to, pdf),
-          );
-        } catch (err) {
-          outcome.statusCode = smtpErrorCode(err);
-          outcome.error = (err as Error).message;
-          this.logger.error(
-            `Invoice ${invoice.id} email failed (accountant ${invoice.accountantId}): ${outcome.error}`,
-          );
-          throw err;
-        }
-      },
-    );
+      });
+    } catch (err) {
+      this.logger.error(
+        `Invoice ${invoice.id} email failed (accountant ${invoice.accountantId}): ${(err as Error).message}`,
+      );
+      throw err;
+    }
   }
 
   message(invoice: Invoice, to: string, pdf: Buffer): MailMessage {
