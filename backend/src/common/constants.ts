@@ -36,3 +36,27 @@ export const SPV_SYNC_SCHEDULE = '0 3 * * 1,3,5'; // 03:00 Europe/Bucharest on M
 export const EFACTURA_ARCHIVE_SYNC_SCHEDULE = '0 7 * * 1,3,5'; // 07:00 Europe/Bucharest on Mon, Wed, Fri
 export const PURGE_LOCK_KEY = 7_400_001;
 export const EFACTURA_ARCHIVE_SYNC_LOCK_KEY = 7_400_002;
+
+export const HEALTH_PATH = '/health';
+export const ACCOUNTANT_PATH = /^\/accountants\/(\d+)(?:[/?]|$)/;
+export const REDACTED = '[redacted]';
+export const DROPPED_LOG_KEYS = new Set(['description']);
+export const REDACTED_LOG_KEYS = new Set([
+  'to',
+  'replyTo',
+  'emailedTo',
+  'subject',
+  'attachments',
+  'email',
+  'name',
+  'companyName',
+  'buyerName',
+  'supplierName',
+  'customerName',
+  'label',
+]);
+export const LOG_TEXT_MASKS: readonly [RegExp, string][] = [
+  [/eyJ[\w-]+\.[\w-]+\.[\w-]*/g, '[token]'],
+  [/(?<![\w.+-])[\w.+-]+@[\w.-]+/g, '[email]'],
+  [/\b[1-9]\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{6}\b/g, '[cnp]'],
+];

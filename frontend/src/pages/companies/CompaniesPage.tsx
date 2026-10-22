@@ -394,10 +394,12 @@ function CompaniesTable({
       caption="Firme"
       rowKey={(r) => r.id}
       rows={rows}
+      stack
       columns={[
         {
           key: 'name',
           header: 'Firmă',
+          wide: true,
           render: (r) => (
             <>
               <Link className="row-link" to={appPath(`/companies/${r.id}`)}>

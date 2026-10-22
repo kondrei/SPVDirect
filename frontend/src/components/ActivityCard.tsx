@@ -73,6 +73,7 @@ export function ActivityCard({ companies }: Readonly<{ companies: Company[] }>) 
             {
               key: 'description',
               header: 'Detalii',
+              wide: true,
               render: (r) => r.description,
             },
             {

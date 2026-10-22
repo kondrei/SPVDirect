@@ -5,6 +5,7 @@ export interface Column<R> {
   header: ReactNode;
   align?: 'num';
   mono?: boolean;
+  wide?: boolean;
   render?: (row: R) => ReactNode;
 }
 
@@ -18,9 +19,15 @@ export interface DataTableProps<R> {
   onRowClick?: (row: R) => void;
 }
 
-function cellClass(column: Pick<Column<unknown>, 'align' | 'mono'>): string | undefined {
-  if (column.align === 'num') return 'spv-num';
-  return column.mono ? 'spv-mono' : undefined;
+function cellClass(
+  column: Pick<Column<unknown>, 'align' | 'mono' | 'wide'>,
+): string | undefined {
+  const classes = [
+    column.align === 'num' ? 'spv-num' : null,
+    column.align !== 'num' && column.mono ? 'spv-mono' : null,
+    column.wide ? 'spv-cell-wide' : null,
+  ].filter(Boolean);
+  return classes.length ? classes.join(' ') : undefined;
 }
 
 export function DataTable<R>({

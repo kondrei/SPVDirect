@@ -19,7 +19,7 @@ a { color: var(--link); }
 }
 
 .spv-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-.spv-table-wrap { overflow-x: auto; }
+.spv-table-wrap { overflow-x: auto; container-type: inline-size; }
 .spv-wordmark { font-weight: 600; font-size: 16px; letter-spacing: -0.01em; color: var(--ink); }
 .spv-wordmark b { color: var(--brand); font-weight: 600; }
 
@@ -109,7 +109,7 @@ select.spv-input { appearance: none; padding-right: 32px; cursor: pointer;
 .invoice-actions { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: var(--space-2); }
 .spv-row-note > td { padding: var(--space-3) var(--space-5); background: var(--surface); }
 .spv-row-note .stack { gap: var(--space-3); }
-@media (max-width: 700px) {
+@container (max-width: 760px) {
   .spv-table-stack, .spv-table-stack tbody { display: block; }
   .spv-table-stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .spv-table-stack tbody tr:not(.spv-row-note) { display: block; margin-top: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md) var(--radius-md) 0 0; background: var(--surface-raised); }
@@ -120,6 +120,10 @@ select.spv-input { appearance: none; padding-right: 32px; cursor: pointer;
   .spv-table-stack td:not([data-label]) { display: block; }
   .spv-table-stack tr.spv-row-note { display: block; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 var(--radius-md) var(--radius-md); overflow: hidden; }
   .spv-table-stack tr.spv-row-note > td { display: block; padding: var(--space-3) var(--space-4) !important; text-align: left; border-bottom: 0; }
+  .spv-table-stack td.spv-cell-wide { flex-direction: column; align-items: stretch; gap: var(--space-1); text-align: left; }
+  .spv-table-stack td.spv-cell-wide .spv-row { justify-content: flex-start; }
+}
+@media (max-width: 700px) {
   .invoice-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .invoice-actions > .spv-btn { width: 100%; }

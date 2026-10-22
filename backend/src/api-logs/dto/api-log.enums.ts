@@ -5,6 +5,7 @@ export enum ApiLogService {
   TestOAuth = 'TestOAuth',
   PlatitorTva = 'PlatitorTva',
   Activity = 'ACTIVITY',
+  Database = 'DB',
 }
 
 export enum ApiLogMethod {
@@ -14,6 +15,7 @@ export enum ApiLogMethod {
   Delete = 'DELETE',
   Send = 'SEND',
   Log = 'LOG',
+  Query = 'QUERY',
 }
 
 export enum ActivityAction {

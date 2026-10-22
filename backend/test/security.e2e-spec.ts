@@ -1,4 +1,4 @@
-import { Module, type INestApplication } from '@nestjs/common';
+import { Logger, Module, type INestApplication } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
@@ -103,6 +103,31 @@ describe('API security (e2e)', () => {
       .set('X-Forwarded-For', '203.0.113.200')
       .expect(429);
     expect(res.headers['retry-after']).toBeDefined();
+  });
+
+  it('logs every request by route pattern, with the error, never the token', async () => {
+    const log = vi.spyOn(Logger.prototype, 'log');
+    const warn = vi.spyOn(Logger.prototype, 'warn');
+    const server = app.getHttpServer();
+    await request(server).get('/public/stats').expect(200);
+    await request(server).get('/auth/registrations/t0k3n/approve').expect(400);
+    const closed = () =>
+      [...log.mock.calls, ...warn.mock.calls].filter(
+        ([entry]) => typeof entry === 'object' && 'route' in entry,
+      ).length;
+    await vi.waitFor(() => expect(closed()).toBe(2));
+    expect(log).toHaveBeenCalledWith(
+      expect.objectContaining({ route: '/public/stats', statusCode: 200 }),
+    );
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        route: '/auth/registrations/:token/approve',
+        statusCode: 400,
+        error: expect.any(String),
+      }),
+    );
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('t0k3n');
+    vi.restoreAllMocks();
   });
 
   it('rate-limits guessing of registration approval tokens', async () => {

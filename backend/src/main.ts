@@ -4,12 +4,15 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module.js';
 import { configureApp } from './app.setup.js';
 import { isProduction } from './common/environment.js';
+import { createAppLogger } from './common/logging/app-logger.js';
 import { loadHttpsOptions } from './config/https.js';
 
 async function bootstrap() {
   await ConfigModule.envVariablesLoaded;
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     httpsOptions: loadHttpsOptions(process.env),
+    bufferLogs: true,
+    logger: createAppLogger(process.env),
   });
   const config = app.get(ConfigService);
 

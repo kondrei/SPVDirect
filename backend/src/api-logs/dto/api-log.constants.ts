@@ -14,6 +14,11 @@ export const UPLOAD_STATUS_LABELS: Record<UploadStatus, string> = {
 
 export const MAX_JOB_ERROR_LENGTH = 500;
 
+export const MAX_SLOW_QUERY_LENGTH = 2000;
+export const SLOW_QUERY_SAVE_LIMIT = 30;
+export const SLOW_QUERY_SAVE_WINDOW_MS = 60_000;
+export const API_LOG_INSERT = /^\s*INSERT INTO "api_logs"/i;
+
 export const SYSTEM_ACTOR_NAME = 'Sistem';
 
 export const UNEXPECTED_JOB_ERROR = 'eroare neașteptată';

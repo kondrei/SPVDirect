@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import { NodeEnv, FileStorage } from './dto/env.enums.js';
+import { NodeEnv, FileStorage, LogLevel } from './dto/env.enums.js';
 import { AnafEnvironment } from '../anaf/dto/anaf.enums.js';
 
 export const envValidationSchema = Joi.object({
@@ -7,6 +7,9 @@ export const envValidationSchema = Joi.object({
     .valid(...Object.values(NodeEnv))
     .default(NodeEnv.Development),
   PORT: Joi.number().port().default(3000),
+  LOG_LEVEL: Joi.string()
+    .valid(...Object.values(LogLevel))
+    .default(LogLevel.Info),
   API_URL: Joi.string().uri().required(),
   FRONTEND_URL: Joi.string().uri().required(),
 
@@ -14,6 +17,7 @@ export const envValidationSchema = Joi.object({
     .uri({ scheme: ['postgres', 'postgresql'] })
     .required(),
   DATABASE_SSL: Joi.boolean().default(true),
+  DB_SLOW_QUERY_MS: Joi.number().integer().min(0).default(1000),
 
   JWT_SECRET: Joi.string().min(32).required(),
   TOKEN_ENCRYPTION_KEY: Joi.string().base64().required(),
@@ -101,10 +105,12 @@ export const envValidationSchema = Joi.object({
 export interface Env {
   NODE_ENV: NodeEnv;
   PORT: number;
+  LOG_LEVEL: LogLevel;
   API_URL: string;
   FRONTEND_URL: string;
   DATABASE_URL: string;
   DATABASE_SSL: boolean;
+  DB_SLOW_QUERY_MS: number;
   JWT_SECRET: string;
   TOKEN_ENCRYPTION_KEY: string;
   ANAF_CLIENT_ID: string;
