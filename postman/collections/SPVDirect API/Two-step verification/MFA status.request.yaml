@@ -1,0 +1,18 @@
+$kind: http-request
+description: "Whether two-step verification is on, since when, and whether an unused recovery code is left. Never returns the secret or the code."
+url: "{{baseUrl}}/accountants/{{accountantId}}/mfa"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status 200', () => pm.response.to.have.status(200));
+      const s = pm.response.json();
+      pm.test('Status shape', () => {
+        pm.expect(s.enabled).to.be.a('boolean');
+        pm.expect(s).to.have.property('appEnabledAt');
+        pm.expect(s).to.have.property('emailEnabledAt');
+        pm.expect(s.recoveryCodeAvailable).to.be.a('boolean');
+        pm.expect(s).to.not.have.any.keys('secret', 'mfaSecret', 'recoveryCode', 'mfaRecoveryHash');
+      });
+    language: text/javascript
+order: 1000

@@ -84,7 +84,7 @@ export class AnafCompanyLookupService {
           if (res.status !== 200 || !Array.isArray(res.data?.found)) {
             outcome.error = `HTTP ${res.status}`;
             throw new BadGatewayException(
-              `Serviciul ANAF de verificare a CUI a răspuns cu ${res.status}. Reîncercați în câteva momente.`,
+              `Serviciul ANAF de verificare a CUI a răspuns cu ${res.status}: ${res.status == 404 ? 'CUI negăsit' : 'Reîncercați în câteva momente'}`,
             );
           }
           const wanted = new Set(cuis.map(Number));

@@ -20,6 +20,7 @@ SPVDirect/
 ## Features
 
 - **Accountant account**: sign up with email and password; an administrator approves each new account before it can be used.
+- **Two-step verification (optional)**: turn it on in Profil to ask for a code at every login, from an authenticator app (Google Authenticator, Microsoft Authenticator), by email, or both (you choose at login). You get a 5-digit recovery code for a lost phone or mailbox, and you can mark a browser as trusted for 30 days.
 - **Professional profile**: name, phone, CECCAR membership, CCF card and your own practice (filled in from ANAF by CUI).
 - **Client companies**: add a company by its CUI, one at a time or up to 500 at once. Name, address, VAT status and CAEN activity come from ANAF automatically and can be refreshed anytime.
 - **ANAF certificates**: connect your digital certificate (USB token or cloud) once, then work without plugging it in again. Several certificates per account, each with a name you choose, and a quick connection test.
@@ -124,13 +125,20 @@ Your certificate and PIN are only ever used on ANAF's own login page. Everything
 | GET | `/public/stats` | none | Landing-page counters: active accountants, companies, invoices, invoices accepted in e-Factura, SPV messages, ANAF certificates. Aggregates only, 30 requests/min per IP. Cached on the server until a counted table changes (5 min at most); browsers must revalidate (`no-cache`) |
 | POST | `/auth/register` | none | Request an account (reCAPTCHA v3 `captchaToken`). Answers 202; the account stays pending and `ADMIN_EMAIL` gets approve/reject links |
 | GET · POST | `/auth/registrations/:token/approve` · `/reject` | link | Admin links from the email. GET shows a confirmation page, POST acts. Reject deletes the request and adds the email to `banned_emails` |
-| POST | `/auth/login` | none | Log in (sets cookie). 403 while the account is pending |
+| POST | `/auth/login` | none | Log in (sets cookie). 403 while the account is pending. With two-step verification on and no valid `spv_mfa_trust` cookie it answers `{ "mfaRequired": true, "methods": ["app", "email"] }` (the methods that are on), sets only `spv_mfa_pending` (10 min) and no session |
+| POST | `/auth/login/mfa` | pending cookie | Second login step: body `{ "code", "method", "rememberDevice" }`; `method` is `app`, `email` or `recovery` (when left out, 5 digits mean the recovery code and 6 the app). Sets the session; `rememberDevice` also sets `spv_mfa_trust` (30 days). 401 for a wrong code, 403 after 5 wrong codes (15 min lock) or once the recovery code is blocked after 10 wrong tries |
 | POST | `/auth/logout` | none | Clear cookie |
 | GET | `/auth/me` | session | Current accountant |
 | GET/PATCH | `/accountants/:accountantId/profile` | session | Read / update name, phone, CECCAR membership (title, card number, branch), CCF card number, practice name, CUI and CAEN code (response includes the CAEN name) |
 | GET | `/accountants/:accountantId/profile/firm-lookup/:cui` | session | Read the practice's name and CAEN code from ANAF's VAT registry (nothing is saved) |
 | GET | `/caen/:code` | session | CAEN class name (Rev. 3 first, Rev. 2 fallback), 404 if unknown |
 | POST | `/accountants/:accountantId/password` | session | Change password (needs the current one; 400 if it is wrong). Ends every other session and re-issues the cookie |
+| POST | `/auth/login/mfa/email` | pending cookie | Email a 6-digit login code (valid 10 min) when the email method is on; answers `{ sentTo }` with the masked address. 429 within a minute of the last code, 503 if the email fails |
+| GET | `/accountants/:accountantId/mfa` | session | Two-step verification status: `enabled` (any method), `appEnabledAt`, `emailEnabledAt`, `recoveryCodeAvailable` |
+| POST | `/accountants/:accountantId/mfa/app/setup` · `/app/setup/confirm` | session | Turn the authenticator app on. `setup` takes `{ "password" }` and returns `{ secret, otpauthUri }`; `setup/confirm` takes `{ "code" }` from the app and returns `{ recoveryCode }`: the 5-digit code once when this is the first method, otherwise `null` |
+| POST | `/accountants/:accountantId/mfa/email/setup` · `/email/setup/confirm` | session | Turn the email code on. `setup` takes `{ "password" }`, emails a 6-digit code and returns `{ sentTo }`; `setup/confirm` takes `{ "code" }` and returns `{ recoveryCode }` like the app |
+| POST | `/accountants/:accountantId/mfa/recovery-code` | session | New recovery code (`{ "password" }`); the old one stops working |
+| DELETE | `/accountants/:accountantId/mfa/app` · `/mfa/email` · `/mfa` | session | Turn one method or all of them off (`{ "password" }`); the recovery code goes with the last method. Each MFA change emails the accountant, ends every other session and trusted device, and re-issues the cookie |
 | GET | `/accountants/:accountantId/export` | session | ZIP of the whole account: profile, ANAF certificates (no tokens), companies list, the activity log (`activitate.csv`), a `firme/<cui>/` folder per company (same content as the company export) and SPV messages that match no company. 5 requests/min |
 | GET | `/accountants/:accountantId/activity?companyId=&action=&page=&pageSize=` | session | Activity log shown on Panou, newest first: every operation done in the app (login, profile and password, companies created, edited, exported or deleted, invoices issued, stornoed, emailed or stored, e-Factura uploads, status checks, downloads, message lists, validations and XML to PDF, SPV imports and PDFs, certificates connected, renamed, tested or removed, authorization links). Rows live in `api_logs` (`service` `ACTIVITY`, the action in `endpoint`, plus `description` and `details`); `accountantName` is joined from `accountants`. Page size 20 by default, at most 100 |
 | DELETE | `/accountants/:accountantId` | session | Delete the account: body `{ "password" }` (400 if wrong). Soft delete of the account, its companies and all their data; ANAF certificates are revoked and removed; the session cookie is cleared and every other session ends. 409 while an invoice is being sent to ANAF. The email can register again right away; `PurgeJob` erases the data 30 days later |
@@ -197,7 +205,8 @@ The schema is managed by TypeORM migrations in `backend/src/database/migrations`
 
 | Table | Purpose |
 |---|---|
-| `accountants` | SPVDirect users (integer id from 1, email is citext and unique among live accounts, scrypt password hash) and their professional profile (CECCAR membership, CCF, practice). `deleted_at` and `status = 'deleted'` mark a deleted account until the monthly purge |
+| `accountants` | SPVDirect users (integer id from 1, email is citext and unique among live accounts, scrypt password hash) and their professional profile (CECCAR membership, CCF, practice). `deleted_at` and `status = 'deleted'` mark a deleted account until the monthly purge. `mfa_changed_at` ends sessions and trusted devices older than the last two-step verification change |
+| `accountant_mfa` | Optional two-step verification, one row per accountant who started a setup (primary key and FK `accountant_id`, deleted with the account): the TOTP secret (AES-256-GCM) and when the app was turned on, when the email code was turned on and the scrypt hash, expiry and send time of the last emailed code, the scrypt hash of the 5-digit recovery code, the last accepted time step (no replay), the failure counters and lock. The secret and the hashes are `select: false` |
 | `anaf_connections` | One per authorized certificate per accountant (unique on `accountant_id` + `cert_serial`): encrypted tokens, `cert_serial`, `roles`, expiries, status |
 | `companies` | Client CUIs per accountant (integer id from 1), the connection used for each, and ANAF VAT-registry data (typed columns + full record in `anaf_data` jsonb). `deleted_at` marks a deleted company; the CUI is unique among live rows only, so it can be added again |
 | `authorization_links` | Delegated-authorization links (only the SHA-256 of the token is stored) |
@@ -251,6 +260,16 @@ curl -k -b jar https://localhost:3000/auth/me
 ```
 Register from the React app (the **Cont nou** tab on the landing page, `/?auth=register`), since it needs a reCAPTCHA token, then approve the account from the email sent to `ADMIN_EMAIL`.
 Then open `https://localhost:3000/accountants/<your id>/anaf/connect` in the browser where you're logged in (the id is in the `/auth/me` response; accept the self-signed certificate warning once), pick the certificate, and call `GET /accountants/<your id>/anaf/connections/:id/test`. You should see a response starting with `Hello, SPVDirect`.
+
+### Resetting two-step verification for a locked-out accountant
+When an accountant has lost access to every method they turned on and to the recovery code, an administrator who has confirmed who they are can turn it off in the database:
+```sql
+BEGIN;
+DELETE FROM accountant_mfa WHERE accountant_id = <accountant id>;
+UPDATE accountants SET mfa_changed_at = now() WHERE id = <accountant id>;
+COMMIT;
+```
+Setting `mfa_changed_at` ends the accountant's open sessions and trusted devices. They log in with the password and can turn two-step verification on again from Profil.
 
 ---
 

@@ -135,6 +135,31 @@ describe('AuthService.isSessionValid', () => {
     await expect(service.isSessionValid(1, undefined)).resolves.toBe(false);
   });
 
+  it('rejects a session issued before the last MFA change', async () => {
+    const service = withState({
+      status: 'active',
+      passwordChangedAt: null,
+      mfaChangedAt: changedAt,
+    });
+    await expect(service.isSessionValid(1, changedAtSeconds - 1)).resolves.toBe(
+      false,
+    );
+    await expect(service.isSessionValid(1, changedAtSeconds)).resolves.toBe(
+      true,
+    );
+  });
+
+  it('uses the later of the password and MFA changes', async () => {
+    const service = withState({
+      status: 'active',
+      passwordChangedAt: changedAt,
+      mfaChangedAt: new Date(changedAt.getTime() - 60_000),
+    });
+    await expect(
+      service.isSessionValid(1, changedAtSeconds - 30),
+    ).resolves.toBe(false);
+  });
+
   it('accepts a session issued in the same second as the change', async () => {
     const service = withState({
       status: 'active',

@@ -19,6 +19,8 @@ import {
   WRONG_PASSWORD,
 } from './account-deletion.service.js';
 import { AuthorizationLinkRepository } from '../../anaf/authorization-links/repositories/authorization-link.repository.js';
+import { AccountantMfa } from '../../auth/accountant-mfa.entity.js';
+import { AccountantMfaRepository } from '../../auth/repositories/accountant-mfa.repository.js';
 import { SpvMessageRepository } from '../../anaf/spv/repositories/spv-message.repository.js';
 import { CompanyRepository } from '../../companies/repositories/company.repository.js';
 import { EfacturaInvoiceRepository } from '../../efactura/repositories/efactura-invoice.repository.js';
@@ -69,6 +71,7 @@ async function setup({ sending = false, found = true } = {}) {
     new EfacturaInvoiceRepository({} as never),
     new SpvMessageRepository({} as never),
     new AuthorizationLinkRepository({} as never),
+    new AccountantMfaRepository({} as never),
   );
   return { service, calls, manager, dataSource, anaf };
 }
@@ -85,6 +88,7 @@ describe('AccountDeletionService.softDelete', () => {
       ['softDelete', SpvMessage, { accountantId: 1 }],
       ['softDelete', Company, { accountantId: 1 }],
       ['delete', AuthorizationLink, { accountantId: 1 }],
+      ['delete', AccountantMfa, { accountantId: 1 }],
       ['update', Accountant, { id: 1 }, { status: 'deleted' }],
       ['softDelete', Accountant, { id: 1 }],
     ]);

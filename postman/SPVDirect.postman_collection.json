@@ -275,7 +275,7 @@
                 }
               }
             },
-            "description": "Public, throttled (10/min). Returns 200 with the accountant, sets `spv_session` and saves `accountantId`."
+            "description": "Public, throttled (10/min). Returns 200 with the accountant, sets `spv_session` and saves `accountantId`. With two-step verification on (and no trusted-device cookie) it returns `{ mfaRequired: true, methods }` (`app`, `email`) instead, sets only `spv_mfa_pending` (10 min), and `POST /auth/login/mfa` finishes the login."
           }
         },
         {
@@ -304,6 +304,505 @@
             "method": "GET",
             "url": "{{baseUrl}}/auth/me",
             "description": "Requires session. Returns the current accountant."
+          }
+        },
+        {
+          "name": "Login MFA - no pending login (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errorMessage = () => {",
+                  "  const m = pm.response.json().message;",
+                  "  return Array.isArray(m) ? m.join(' | ') : m;",
+                  "};",
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Asks for the password again', () => pm.expect(errorMessage()).to.eql('Verificarea a expirat. Introduceți din nou emailul și parola.'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/login/mfa",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"123456\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Second login step when two-step verification is on. Without the short-lived `spv_mfa_pending` cookie that `POST /auth/login` sets for such an account, it answers 401."
+          }
+        },
+        {
+          "name": "Login MFA - invalid code (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/login/mfa",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"12ab\",\n  \"rememberDevice\": \"yes\",\n  \"method\": \"sms\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "The code is 6 digits (app or email) or 5 digits (recovery code); `method` is `app`, `email` or `recovery` (optional: 5 digits mean recovery, 6 the app); `rememberDevice` is a boolean."
+          }
+        },
+        {
+          "name": "Login MFA - email code without pending login (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/login/mfa/email",
+            "header": [],
+            "description": "Emails a 6-digit code (10 min) during a pending login when the email method is on; answers `{ sentTo }` with the masked address. 429 within a minute of the last code."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Two-step verification",
+      "description": "Optional two-step verification for the SPVDirect session: an authenticator app (TOTP, RFC 6238) and/or a code sent by email. The run account keeps it off, so the routes that change it are checked on their error paths; turning it on needs a code from an authenticator app. Run after Auth.",
+      "item": [
+        {
+          "name": "MFA status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const s = pm.response.json();",
+                  "pm.test('Status shape', () => {",
+                  "  pm.expect(s.enabled).to.be.a('boolean');",
+                  "  pm.expect(s).to.have.property('appEnabledAt');",
+                  "  pm.expect(s).to.have.property('emailEnabledAt');",
+                  "  pm.expect(s.recoveryCodeAvailable).to.be.a('boolean');",
+                  "  pm.expect(s).to.not.have.any.keys('secret', 'mfaSecret', 'recoveryCode', 'mfaRecoveryHash');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/mfa",
+            "header": [],
+            "description": "Whether two-step verification is on, since when, and whether an unused recovery code is left. Never returns the secret or the code."
+          }
+        },
+        {
+          "name": "MFA status - other accountant (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/2147483647/mfa",
+            "header": []
+          }
+        },
+        {
+          "name": "MFA status - invalid accountant id (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/accountants/abc/mfa",
+            "header": []
+          }
+        },
+        {
+          "name": "Start app setup - wrong password (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errorMessage = () => {",
+                  "  const m = pm.response.json().message;",
+                  "  return Array.isArray(m) ? m.join(' | ') : m;",
+                  "};",
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Romanian message', () => pm.expect(errorMessage()).to.eql('Parola este incorectă'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/mfa/app/setup",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"parola-gresita-000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "With the right password it answers 200 with `{ secret, otpauthUri }` for the authenticator app; MFA stays off until `setup/confirm`. Throttled (10/min)."
+          }
+        },
+        {
+          "name": "Start app setup - invalid body (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/mfa/app/setup",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"\",\n  \"extra\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Confirm app setup - invalid code (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/mfa/app/setup/confirm",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"12\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "With the 6-digit code from the app it turns the app method on and answers 200 with `{ recoveryCode }`: 5 digits, shown once, when it is the first method, otherwise null. The session cookie is re-issued and other sessions end."
+          }
+        },
+        {
+          "name": "Start email setup - wrong password (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errorMessage = () => {",
+                  "  const m = pm.response.json().message;",
+                  "  return Array.isArray(m) ? m.join(' | ') : m;",
+                  "};",
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Romanian message', () => pm.expect(errorMessage()).to.eql('Parola este incorectă'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/mfa/email/setup",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"parola-gresita-000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "With the right password it emails a 6-digit code to the account address and answers `{ sentTo }` (masked). 429 within a minute of the last code, 503 when the email fails."
+          }
+        },
+        {
+          "name": "Confirm email setup - no code sent (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/mfa/email/setup/confirm",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"123456\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "With the emailed code it turns the email method on and answers `{ recoveryCode }` like the app setup."
+          }
+        },
+        {
+          "name": "Disable app - method off (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errorMessage = () => {",
+                  "  const m = pm.response.json().message;",
+                  "  return Array.isArray(m) ? m.join(' | ') : m;",
+                  "};",
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Method is off', () => pm.expect(errorMessage()).to.eql('Metoda aleasă nu este activă pentru acest cont.'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/mfa/app",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Turns only the app method off (204). The recovery code is kept while email stays on. `DELETE mfa/email` does the same for email."
+          }
+        },
+        {
+          "name": "Disable email - method off (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errorMessage = () => {",
+                  "  const m = pm.response.json().message;",
+                  "  return Array.isArray(m) ? m.join(' | ') : m;",
+                  "};",
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Method is off', () => pm.expect(errorMessage()).to.eql('Metoda aleasă nu este activă pentru acest cont.'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/mfa/email",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "New recovery code - MFA off (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errorMessage = () => {",
+                  "  const m = pm.response.json().message;",
+                  "  return Array.isArray(m) ? m.join(' | ') : m;",
+                  "};",
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('MFA is off', () => pm.expect(errorMessage()).to.eql('Autentificarea în doi pași nu este activă.'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/mfa/recovery-code",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "With MFA on it answers 200 with a new `{ recoveryCode }`; the old one stops working."
+          }
+        },
+        {
+          "name": "Disable MFA - MFA off (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const errorMessage = () => {",
+                  "  const m = pm.response.json().message;",
+                  "  return Array.isArray(m) ? m.join(' | ') : m;",
+                  "};",
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('MFA is off', () => pm.expect(errorMessage()).to.eql('Autentificarea în doi pași nu este activă.'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/mfa",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Turns every method off (204), removes the secret, the email code and the recovery code, re-issues the session cookie and ends other sessions."
           }
         }
       ]

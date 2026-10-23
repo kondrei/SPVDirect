@@ -1,4 +1,4 @@
-import { BulkCreateStatus, AnafConnectionStatus, AnafConnectionSource, ProfessionalTitle, VatCategory, Currency, PaymentMethod, BuyerSource, UploadStatus, EfacturaStandard, AnafEnvironment, ActivityAction, MessageFilter, EfacturaDirection, ImportStatus } from './enums';
+import { BulkCreateStatus, AnafConnectionStatus, AnafConnectionSource, ProfessionalTitle, VatCategory, Currency, PaymentMethod, BuyerSource, UploadStatus, EfacturaStandard, AnafEnvironment, ActivityAction, MfaMethod, MessageFilter, EfacturaDirection, ImportStatus } from './enums';
 export interface Accountant {
   id: number;
   email: string;
@@ -137,6 +137,39 @@ export interface AccountantProfile {
   firmCaen: CaenInfo | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export type MfaFactor = MfaMethod.App | MfaMethod.Email;
+
+export interface MfaRequired {
+  mfaRequired: true;
+  methods: MfaFactor[];
+}
+
+export type LoginResult = Accountant | MfaRequired;
+
+export interface MfaStatus {
+  enabled: boolean;
+  appEnabledAt: string | null;
+  emailEnabledAt: string | null;
+  recoveryCodeAvailable: boolean;
+}
+
+export interface MfaEnabled {
+  recoveryCode: string | null;
+}
+
+export interface MfaEmailCodeSent {
+  sentTo: string;
+}
+
+export interface MfaSetup {
+  secret: string;
+  otpauthUri: string;
+}
+
+export interface MfaRecoveryCode {
+  recoveryCode: string;
 }
 
 export type ProfileUpdate = Partial<

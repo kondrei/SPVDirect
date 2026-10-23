@@ -22,6 +22,8 @@ import { AccountantDeletedStatus1792200000000 } from './1792200000000-Accountant
 import { ApiLogActivity1792300000000 } from './1792300000000-ApiLogActivity.js';
 import { EfacturaInvoices1792400000000 } from './1792400000000-EfacturaInvoices.js';
 import { ApiLogSystemJobs1792500000000 } from './1792500000000-ApiLogSystemJobs.js';
+import { AccountantMfa1792600000000 } from './1792600000000-AccountantMfa.js';
+import { AccountantMfaTable1792700000000 } from './1792700000000-AccountantMfaTable.js';
 
 export const migrations = [
   InitialSchema1790200000000,
@@ -48,4 +50,6 @@ export const migrations = [
   ApiLogActivity1792300000000,
   EfacturaInvoices1792400000000,
   ApiLogSystemJobs1792500000000,
+  AccountantMfa1792600000000,
+  AccountantMfaTable1792700000000,
 ];

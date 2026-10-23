@@ -6,6 +6,7 @@ import { AccountantParamGuard } from '../../auth/guards/accountant-param.guard.j
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard.js';
 import { AccountantsController } from './accountants.controller.js';
 import type { ConfigService } from '@nestjs/config';
+import type { JwtService } from '@nestjs/jwt';
 import type { Response } from 'express';
 import type { AuthService } from '../../auth/services/auth.service.js';
 import { SessionCookieService } from '../../auth/services/session-cookie.service.js';
@@ -17,6 +18,7 @@ function build(service: object, auth: object = {}) {
     service as AccountantsService,
     new SessionCookieService(
       auth as AuthService,
+      {} as JwtService,
       { get: () => 'development' } as unknown as ConfigService,
     ),
   );

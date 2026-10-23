@@ -8,4 +8,6 @@ export enum MailKind {
   ApprovalNotice = 'approval-notice',
   Invoice = 'invoice',
   EfacturaArchive = 'efactura-archive',
+  MfaChanged = 'mfa-changed',
+  MfaCode = 'mfa-code',
 }

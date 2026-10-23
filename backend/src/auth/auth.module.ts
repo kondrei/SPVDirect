@@ -5,6 +5,9 @@ import { JwtModule } from '@nestjs/jwt';
 import { AccountantsModule } from '../accountants/accountants.module.js';
 import { ApiLogsModule } from '../api-logs/api-logs.module.js';
 import { AuthController } from './controllers/auth.controller.js';
+import { MfaController } from './controllers/mfa.controller.js';
+import { MfaMailer } from './services/mfa-mailer.service.js';
+import { MfaService } from './services/mfa.service.js';
 import { AuthService } from './services/auth.service.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { RecaptchaService } from './services/recaptcha.service.js';
@@ -33,10 +36,12 @@ import { ResendAdminApprovalHandler } from './registrations/resend-admin-approva
       }),
     }),
   ],
-  controllers: [AuthController, RegistrationsController],
+  controllers: [AuthController, MfaController, RegistrationsController],
   providers: [
     AuthService,
     SessionCookieService,
+    MfaService,
+    MfaMailer,
     JwtAuthGuard,
     RecaptchaService,
     RegistrationsService,

@@ -1,5 +1,6 @@
 import type { DataSourceOptions } from 'typeorm';
 import { Accountant } from '../accountants/accountant.entity.js';
+import { AccountantMfa } from '../auth/accountant-mfa.entity.js';
 import { AnafConnection } from '../anaf/anaf-connection.entity.js';
 import { AuthorizationLink } from '../anaf/authorization-links/authorization-link.entity.js';
 import { SpvMessage } from '../anaf/spv/spv-message.entity.js';
@@ -14,6 +15,7 @@ import { migrations } from '../database/migrations/index.js';
 
 export const entities = [
   Accountant,
+  AccountantMfa,
   AnafConnection,
   AuthorizationLink,
   ApiLog,

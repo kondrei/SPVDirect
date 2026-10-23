@@ -33,6 +33,7 @@ function accountant(overrides: Partial<Accountant> = {}): Accountant {
     firmName: null,
     firmCui: null,
     firmCaenCode: null,
+    mfaChangedAt: null,
     createdAt: new Date('2026-09-01T00:00:00Z'),
     updatedAt: new Date('2026-09-01T00:00:00Z'),
     deletedAt: null,
@@ -325,7 +326,12 @@ describe('AccountantsService.findSessionState', () => {
     });
     expect(findOne).toHaveBeenCalledWith({
       where: { id: 1 },
-      select: { id: true, status: true, passwordChangedAt: true },
+      select: {
+        id: true,
+        status: true,
+        passwordChangedAt: true,
+        mfaChangedAt: true,
+      },
     });
   });
 });

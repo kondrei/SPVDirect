@@ -111,6 +111,7 @@ const SECURITY = [
   'Tokenurile emise de ANAF sunt stocate criptat (AES-256-GCM).',
   'Fiecare apel către ANAF este jurnalizat, fără tokenuri sau date de autentificare.',
   'Conturile noi sunt aprobate manual, iar sesiunile expiră la schimbarea parolei.',
+  'Autentificare în doi pași, la alegere: cod din aplicația de pe telefon sau primit pe email, plus un cod de recuperare.',
 ];
 
 function Counters() {

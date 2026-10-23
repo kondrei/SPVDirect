@@ -14,6 +14,7 @@ import { CompanyRepository } from '../../companies/repositories/company.reposito
 import { EfacturaInvoiceRepository } from '../../efactura/repositories/efactura-invoice.repository.js';
 import { EfacturaUploadRepository } from '../../efactura/repositories/efactura-upload.repository.js';
 import { InvoiceRepository } from '../../invoices/repositories/invoice.repository.js';
+import { AccountantMfaRepository } from '../../auth/repositories/accountant-mfa.repository.js';
 import { AccountantRepository } from '../repositories/accountant.repository.js';
 
 export const WRONG_PASSWORD = 'Parola este incorectă';
@@ -32,6 +33,7 @@ export class AccountDeletionService {
     private readonly efacturaInvoiceRepository: EfacturaInvoiceRepository,
     private readonly spvMessageRepository: SpvMessageRepository,
     private readonly authorizationLinkRepository: AuthorizationLinkRepository,
+    private readonly accountantMfaRepository: AccountantMfaRepository,
   ) {}
 
   async softDelete(accountantId: number, password: string): Promise<void> {
@@ -73,6 +75,10 @@ export class AccountDeletionService {
         accountantId,
       );
       await this.authorizationLinkRepository.deleteOfAccountant(
+        manager,
+        accountantId,
+      );
+      await this.accountantMfaRepository.deleteOfAccountant(
         manager,
         accountantId,
       );

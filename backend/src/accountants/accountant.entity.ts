@@ -84,6 +84,9 @@ export class Accountant {
   })
   firmCaenCode: string | null;
 
+  @Column({ name: 'mfa_changed_at', type: 'timestamptz', nullable: true })
+  mfaChangedAt: Date | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

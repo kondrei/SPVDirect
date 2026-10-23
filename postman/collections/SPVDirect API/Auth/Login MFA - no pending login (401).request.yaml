@@ -1,0 +1,23 @@
+$kind: http-request
+description: "Second login step when two-step verification is on. Without the short-lived `spv_mfa_pending` cookie that `POST /auth/login` sets for such an account, it answers 401."
+url: "{{baseUrl}}/auth/login/mfa"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "code": "123456"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      const errorMessage = () => {
+        const m = pm.response.json().message;
+        return Array.isArray(m) ? m.join(' | ') : m;
+      };
+      pm.test('Status 401', () => pm.response.to.have.status(401));
+      pm.test('Asks for the password again', () => pm.expect(errorMessage()).to.eql('Verificarea a expirat. Introduceți din nou emailul și parola.'));
+    language: text/javascript
+order: 6000

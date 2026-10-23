@@ -98,10 +98,20 @@ export enum MessageFilter {
   BuyerMessage = 'R',
 }
 
+export enum MfaMethod {
+  App = 'app',
+  Email = 'email',
+  Recovery = 'recovery',
+}
+
 export enum ActivityAction {
   LoggedIn = 'account.logged_in',
   ProfileUpdated = 'account.profile_updated',
   PasswordChanged = 'account.password_changed',
+  MfaEnabled = 'account.mfa_enabled',
+  MfaDisabled = 'account.mfa_disabled',
+  MfaRecoveryUsed = 'account.mfa_recovery_used',
+  MfaRecoveryRegenerated = 'account.mfa_recovery_regenerated',
   AccountExported = 'account.exported',
   CompanyCreated = 'company.created',
   CompanyUpdated = 'company.updated',
