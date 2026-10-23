@@ -37,10 +37,10 @@ import { InvoicesService } from '../services/invoices.service.js';
 @UseGuards(JwtAuthGuard, AccountantParamGuard)
 export class InvoicesController {
   constructor(
-    private readonly invoices: InvoicesService,
-    private readonly buyers: InvoiceBuyersService,
-    private readonly storno: InvoiceStornoService,
-    private readonly delivery: InvoiceDeliveryService,
+    private readonly invoicesService: InvoicesService,
+    private readonly invoiceBuyersService: InvoiceBuyersService,
+    private readonly invoiceStornoService: InvoiceStornoService,
+    private readonly invoiceDeliveryService: InvoiceDeliveryService,
   ) {}
 
   @Get()
@@ -49,7 +49,7 @@ export class InvoicesController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Query() query: ListInvoicesQuery,
   ) {
-    return this.invoices.list(accountantId, {
+    return this.invoicesService.list(accountantId, {
       companyId: query.companyId,
       page: query.page ?? 1,
       pageSize: query.pageSize ?? 25,
@@ -59,7 +59,7 @@ export class InvoicesController {
   @Get('stats')
   @Throttle(INVOICE_THROTTLE)
   stats(@Param('accountantId', ParseIdPipe) accountantId: number) {
-    return this.invoices.stats(accountantId);
+    return this.invoicesService.stats(accountantId);
   }
 
   @Get('buyer-lookup/:cui')
@@ -68,7 +68,7 @@ export class InvoicesController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('cui', ParseCuiPipe) cui: string,
   ) {
-    return this.buyers.lookupBuyer(accountantId, cui);
+    return this.invoiceBuyersService.lookupBuyer(accountantId, cui);
   }
 
   @Get('buyers/:cui')
@@ -77,7 +77,7 @@ export class InvoicesController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('cui', ParseCuiPipe) cui: string,
   ) {
-    return this.buyers.findBuyer(accountantId, cui);
+    return this.invoiceBuyersService.findBuyer(accountantId, cui);
   }
 
   @Get('next-number')
@@ -87,7 +87,7 @@ export class InvoicesController {
     @Query() query: NextNumberQuery,
   ) {
     return {
-      number: await this.invoices.nextNumber(
+      number: await this.invoicesService.nextNumber(
         accountantId,
         query.companyId,
         query.series,
@@ -101,7 +101,7 @@ export class InvoicesController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Query() query: LineSuggestionsQuery,
   ) {
-    return this.buyers.lineSuggestions(
+    return this.invoiceBuyersService.lineSuggestions(
       accountantId,
       query.companyId,
       query.buyerCui,
@@ -114,7 +114,7 @@ export class InvoicesController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Body() dto: CreateInvoiceDto,
   ) {
-    return this.invoices.create(accountantId, dto);
+    return this.invoicesService.create(accountantId, dto);
   }
 
   @Get(':id')
@@ -123,7 +123,7 @@ export class InvoicesController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseIdPipe) id: number,
   ) {
-    return this.invoices.detail(accountantId, id);
+    return this.invoicesService.detail(accountantId, id);
   }
 
   @Post(':id/storno')
@@ -133,7 +133,7 @@ export class InvoicesController {
     @Param('id', ParseIdPipe) id: number,
     @Body() dto: CreateStornoDto,
   ) {
-    return this.storno.createStorno(accountantId, id, dto);
+    return this.invoiceStornoService.createStorno(accountantId, id, dto);
   }
 
   @Get(':id/pdf')
@@ -143,7 +143,7 @@ export class InvoicesController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseIdPipe) id: number,
   ) {
-    return attachment(await this.delivery.pdf(accountantId, id));
+    return attachment(await this.invoiceDeliveryService.pdf(accountantId, id));
   }
 
   @Get(':id/xml')
@@ -153,7 +153,7 @@ export class InvoicesController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseIdPipe) id: number,
   ) {
-    return attachment(await this.delivery.xml(accountantId, id));
+    return attachment(await this.invoiceDeliveryService.xml(accountantId, id));
   }
 
   @Post(':id/store')
@@ -163,7 +163,7 @@ export class InvoicesController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseIdPipe) id: number,
   ) {
-    return this.delivery.saveToStorage(accountantId, id);
+    return this.invoiceDeliveryService.saveToStorage(accountantId, id);
   }
 
   @Post(':id/send')
@@ -174,6 +174,6 @@ export class InvoicesController {
     @Param('id', ParseIdPipe) id: number,
     @Body() dto: SendInvoiceDto,
   ) {
-    return this.delivery.send(accountantId, id, dto.to);
+    return this.invoiceDeliveryService.send(accountantId, id, dto.to);
   }
 }

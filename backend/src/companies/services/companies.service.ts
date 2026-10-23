@@ -4,8 +4,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
 import {
   companyAnafRefreshed,
   companyCreated,
@@ -15,7 +13,7 @@ import {
 import { EDITABLE_COMPANY_FIELDS } from '../dto/company.constants.js';
 import type { CompanyField, BulkCreateResult } from '../dto/company.types.js';
 import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
-import { AnafConnection } from '../../anaf/anaf-connection.entity.js';
+import { AnafConnectionRepository } from '../../anaf/repositories/anaf-connection.repository.js';
 import { AnafCompanyAccessService } from '../../anaf/services/anaf-company-access.service.js';
 import { isUniqueViolation } from '../../common/db-errors.js';
 import { validateLogo } from '../helpers/company-logo.js';
@@ -24,7 +22,8 @@ import {
   type AnafTvaRecord,
 } from '../helpers/anaf-company-info.js';
 import { AnafCompanyLookupService } from './anaf-company-lookup.service.js';
-import { Company } from '../company.entity.js';
+import type { Company } from '../company.entity.js';
+import { CompanyRepository } from '../repositories/company.repository.js';
 import {
   CreateCompaniesDto,
   CreateCompanyDto,
@@ -38,42 +37,40 @@ export const CUI_NOT_FOUND =
 @Injectable()
 export class CompaniesService {
   constructor(
-    @InjectRepository(Company)
-    private readonly companies: Repository<Company>,
-    @InjectRepository(AnafConnection)
-    private readonly connections: Repository<AnafConnection>,
-    private readonly anaf: AnafCompanyLookupService,
-    private readonly access: AnafCompanyAccessService,
-    private readonly activity: ActivityLogsService,
+    private readonly companyRepository: CompanyRepository,
+    private readonly anafConnectionRepository: AnafConnectionRepository,
+    private readonly anafCompanyLookupService: AnafCompanyLookupService,
+    private readonly anafCompanyAccessService: AnafCompanyAccessService,
+    private readonly activityLogsService: ActivityLogsService,
   ) {}
 
   list(accountantId: number): Promise<Company[]> {
-    return this.companies.find({
-      where: { accountantId },
-      order: { name: 'ASC' },
-    });
+    return this.companyRepository.listByName(accountantId);
   }
 
   async get(accountantId: number, id: number): Promise<Company> {
-    const company = await this.companies.findOneBy({ id, accountantId });
+    const company = await this.companyRepository.findOwned(accountantId, id);
     if (!company) throw new NotFoundException('Firma nu a fost găsită');
     return company;
   }
 
   findByCui(accountantId: number, cui: string): Promise<Company | null> {
-    return this.companies.findOneBy({ accountantId, cui });
+    return this.companyRepository.findByCui(accountantId, cui);
   }
 
   async create(accountantId: number, dto: CreateCompanyDto): Promise<Company> {
-    if (await this.companies.existsBy({ accountantId, cui: dto.cui })) {
+    if (await this.companyRepository.existsByCui(accountantId, dto.cui)) {
       throw new ConflictException('Firma cu acest CUI există deja');
     }
-    const record = await this.anaf.lookup(accountantId, dto.cui);
+    const record = await this.anafCompanyLookupService.lookup(
+      accountantId,
+      dto.cui,
+    );
     if (!record) throw new BadRequestException(CUI_NOT_FOUND);
     let company: Company;
     try {
-      company = await this.companies.save(
-        this.companies.create({
+      company = await this.companyRepository.save(
+        this.companyRepository.create({
           accountantId,
           cui: dto.cui,
           ...companyFieldsFromAnaf(record),
@@ -86,7 +83,10 @@ export class CompaniesService {
       }
       throw err;
     }
-    await this.activity.record(accountantId, companyCreated(company));
+    await this.activityLogsService.record(
+      accountantId,
+      companyCreated(company),
+    );
     return company;
   }
 
@@ -103,16 +103,13 @@ export class CompaniesService {
     });
 
     const existing = new Set(
-      (
-        await this.companies.find({
-          select: { cui: true },
-          where: { accountantId, cui: In(cuis) },
-        })
-      ).map((c) => c.cui),
+      (await this.companyRepository.existingCuis(accountantId, cuis)).map(
+        (c) => c.cui,
+      ),
     );
     const toLookup = cuis.filter((cui) => !existing.has(cui));
     const found = toLookup.length
-      ? await this.anaf.lookupMany(accountantId, toLookup)
+      ? await this.anafCompanyLookupService.lookupMany(accountantId, toLookup)
       : new Map<number, AnafTvaRecord>();
 
     const results: BulkCreateResult[] = [];
@@ -127,8 +124,8 @@ export class CompaniesService {
         continue;
       }
       try {
-        const company = await this.companies.save(
-          this.companies.create({
+        const company = await this.companyRepository.save(
+          this.companyRepository.create({
             accountantId,
             cui,
             ...companyFieldsFromAnaf(record),
@@ -141,7 +138,7 @@ export class CompaniesService {
         results.push({ cui, status: BulkCreateStatus.Exists });
       }
     }
-    await this.activity.recordMany(
+    await this.activityLogsService.recordMany(
       accountantId,
       results.flatMap((r) =>
         r.status === BulkCreateStatus.Created
@@ -154,14 +151,21 @@ export class CompaniesService {
 
   async refreshFromAnaf(accountantId: number, id: number): Promise<Company> {
     const company = await this.get(accountantId, id);
-    const record = await this.anaf.lookup(accountantId, company.cui, id);
+    const record = await this.anafCompanyLookupService.lookup(
+      accountantId,
+      company.cui,
+      id,
+    );
     if (!record) throw new BadRequestException(CUI_NOT_FOUND);
     Object.assign(company, companyFieldsFromAnaf(record), {
       name: company.name,
       anafSyncedAt: new Date(),
     });
-    const saved = await this.companies.save(company);
-    await this.activity.record(accountantId, companyAnafRefreshed(saved));
+    const saved = await this.companyRepository.save(company);
+    await this.activityLogsService.record(
+      accountantId,
+      companyAnafRefreshed(saved),
+    );
     return saved;
   }
 
@@ -184,14 +188,14 @@ export class CompaniesService {
     ) {
       if (dto.anafConnectionId !== null) {
         if (
-          !(await this.connections.existsBy({
-            id: dto.anafConnectionId,
+          !(await this.anafConnectionRepository.existsOwned(
             accountantId,
-          }))
+            dto.anafConnectionId,
+          ))
         ) {
           throw new BadRequestException('Certificat ANAF necunoscut');
         }
-        await this.access.assertAccess(
+        await this.anafCompanyAccessService.assertAccess(
           accountantId,
           dto.anafConnectionId,
           company.cui,
@@ -201,18 +205,20 @@ export class CompaniesService {
       company.anafConnectionId = dto.anafConnectionId;
       changed.push('anafConnectionId');
     }
-    const saved = await this.companies.save(company);
+    const saved = await this.companyRepository.save(company);
     if (changed.length) {
-      await this.activity.record(accountantId, companyUpdated(saved, changed));
+      await this.activityLogsService.record(
+        accountantId,
+        companyUpdated(saved, changed),
+      );
     }
     return saved;
   }
 
   async attachConnection(companyId: number, connectionId: number) {
-    await this.companies.update(
-      { id: companyId },
-      { anafConnectionId: connectionId },
-    );
+    await this.companyRepository.update(companyId, {
+      anafConnectionId: connectionId,
+    });
   }
 
   async setLogo(
@@ -222,12 +228,12 @@ export class CompaniesService {
   ): Promise<Company> {
     const logo = validateLogo(file);
     const company = await this.get(accountantId, id);
-    await this.companies.update(
-      { id: company.id },
-      { logo: logo.content, logoContentType: logo.contentType },
-    );
+    await this.companyRepository.update(company.id, {
+      logo: logo.content,
+      logoContentType: logo.contentType,
+    });
     company.logoContentType = logo.contentType;
-    await this.activity.record(
+    await this.activityLogsService.record(
       accountantId,
       companyLogoChanged(company, false),
     );
@@ -238,14 +244,7 @@ export class CompaniesService {
     accountantId: number,
     id: number,
   ): Promise<{ content: Buffer; contentType: string }> {
-    const company = await this.companies
-      .createQueryBuilder('c')
-      .addSelect('c.logo')
-      .where('c.id = :id AND c.accountantId = :accountantId', {
-        id,
-        accountantId,
-      })
-      .getOne();
+    const company = await this.companyRepository.findWithLogo(accountantId, id);
     if (!company) throw new NotFoundException('Firma nu a fost găsită');
     if (!company.logo || !company.logoContentType) {
       throw new NotFoundException('Firma nu are logo');
@@ -255,12 +254,15 @@ export class CompaniesService {
 
   async removeLogo(accountantId: number, id: number): Promise<Company> {
     const company = await this.get(accountantId, id);
-    await this.companies.update(
-      { id: company.id },
-      { logo: null, logoContentType: null },
-    );
+    await this.companyRepository.update(company.id, {
+      logo: null,
+      logoContentType: null,
+    });
     company.logoContentType = null;
-    await this.activity.record(accountantId, companyLogoChanged(company, true));
+    await this.activityLogsService.record(
+      accountantId,
+      companyLogoChanged(company, true),
+    );
     return company;
   }
 }

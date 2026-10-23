@@ -23,6 +23,14 @@ import {
 } from './company-deletion.service.js';
 import type { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import { fakeActivityLogs } from '../../testing/activity-logs.js';
+import { AccountantRepository } from '../../accountants/repositories/accountant.repository.js';
+import { AuthorizationLinkRepository } from '../../anaf/authorization-links/repositories/authorization-link.repository.js';
+import { SpvMessageRepository } from '../../anaf/spv/repositories/spv-message.repository.js';
+import { ApiLogRepository } from '../../api-logs/repositories/api-log.repository.js';
+import { EfacturaInvoiceRepository } from '../../efactura/repositories/efactura-invoice.repository.js';
+import { EfacturaUploadRepository } from '../../efactura/repositories/efactura-upload.repository.js';
+import { InvoiceRepository } from '../../invoices/repositories/invoice.repository.js';
+import { CompanyRepository } from '../repositories/company.repository.js';
 
 const COMPANY = { id: 7, accountantId: 1, cui: '123' } as Company;
 
@@ -77,6 +85,14 @@ function setup({
       },
     ],
   ]);
+  const lazy = (target: unknown) =>
+    new Proxy(
+      {},
+      {
+        get: (_, key) =>
+          (repositories.get(target) as Record<string | symbol, unknown>)[key],
+      },
+    ) as never;
   const dataSource = {
     transaction: vi.fn((work: (m: typeof manager) => Promise<unknown>) =>
       work(manager),
@@ -99,6 +115,14 @@ function setup({
     efacturaFiles as unknown as EfacturaFileStore,
     connections as unknown as AnafConnectionsService,
     activity as unknown as ActivityLogsService,
+    new CompanyRepository(lazy(Company)),
+    new AccountantRepository(lazy(Accountant)),
+    new InvoiceRepository(lazy(Invoice)),
+    new EfacturaUploadRepository(lazy(EfacturaUpload)),
+    new EfacturaInvoiceRepository(lazy(EfacturaInvoice)),
+    new SpvMessageRepository(lazy(SpvMessage)),
+    new AuthorizationLinkRepository(lazy(AuthorizationLink)),
+    new ApiLogRepository(lazy(ApiLog)),
   );
   return {
     activity,
@@ -291,10 +315,9 @@ describe('CompanyDeletionService.purge', () => {
   });
 
   it('purges an account: each of its companies, its other SPV files, then the account row', async () => {
-    const { service, dataSource, spvFiles, repositories, calls, connections } =
-      setup({
-        stored: { messages: [{ id: 2, storagePath: '1/900.pdf' }] },
-      });
+    const { service, spvFiles, repositories, calls, connections } = setup({
+      stored: { messages: [{ id: 2, storagePath: '1/900.pdf' }] },
+    });
     const accountantDelete = vi.fn().mockResolvedValue({});
     repositories.set(Company, {
       find: vi.fn().mockResolvedValue([{ id: 7 }]),
@@ -324,7 +347,6 @@ describe('CompanyDeletionService.purge', () => {
       accountantDelete.mock.invocationCallOrder[0],
     );
     expect(accountantDelete).toHaveBeenCalledWith({ id: 1 });
-    expect(dataSource.getRepository).toHaveBeenCalledWith(Accountant);
   });
 
   it('skips Storage when nothing was stored there', async () => {

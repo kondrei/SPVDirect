@@ -13,6 +13,8 @@ import type { Company } from '../company.entity.js';
 import type { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import { ActivityAction } from '../../api-logs/dto/api-log.enums.js';
 import { fakeActivityLogs } from '../../testing/activity-logs.js';
+import { AnafConnectionRepository } from '../../anaf/repositories/anaf-connection.repository.js';
+import { CompanyRepository } from '../repositories/company.repository.js';
 
 function setup({
   save = (c: unknown) => Promise.resolve(c),
@@ -42,8 +44,8 @@ function setup({
   const anaf = { lookup: vi.fn(lookup), lookupMany: vi.fn(lookupMany) };
   const activity = fakeActivityLogs();
   const service = new CompaniesService(
-    companies as unknown as Repository<Company>,
-    {} as Repository<AnafConnection>,
+    new CompanyRepository(companies as unknown as Repository<Company>),
+    new AnafConnectionRepository({} as Repository<AnafConnection>),
     anaf as unknown as AnafCompanyLookupService,
     {} as AnafCompanyAccessService,
     activity as unknown as ActivityLogsService,

@@ -1,8 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Accountant } from '../../../accountants/accountant.entity.js';
+import { AccountantRepository } from '../../../accountants/repositories/accountant.repository.js';
 import { MailKind } from '../../../common/dto/common.enums.js';
 import { escapeHtml } from '../../../common/html.js';
 import {
@@ -10,23 +8,16 @@ import {
   type MailMessage,
 } from '../../../common/mail/mail.service.js';
 import type { Env } from '../../../config/env.validation.js';
-
-export interface AdminApprovalRequest {
-  accountantId: number;
-  email: string;
-  name: string | null;
-  approvalToken: string;
-}
+import type { AdminApprovalRequest } from '../../dto/auth.types.js';
 
 @Injectable()
 export class RegistrationMailer {
   private readonly logger = new Logger(RegistrationMailer.name);
 
   constructor(
-    private readonly config: ConfigService<Env, true>,
-    private readonly mail: MailService,
-    @InjectRepository(Accountant)
-    private readonly accountants: Repository<Accountant>,
+    private readonly configService: ConfigService<Env, true>,
+    private readonly mailService: MailService,
+    private readonly accountantRepository: AccountantRepository,
   ) {}
 
   async notifyAdmin(request: AdminApprovalRequest): Promise<boolean> {
@@ -37,10 +28,7 @@ export class RegistrationMailer {
     );
     if (!sent) return false;
     try {
-      await this.accountants.update(
-        { id: request.accountantId },
-        { adminNotifiedAt: new Date() },
-      );
+      await this.accountantRepository.markAdminNotified(request.accountantId);
     } catch (err) {
       this.logger.error(
         `Could not mark accountant ${request.accountantId} as notified: ${(err as Error).message}`,
@@ -50,7 +38,7 @@ export class RegistrationMailer {
   }
 
   notifyApproved(accountantId: number, email: string): Promise<boolean> {
-    const loginUrl = `${this.config.get('FRONTEND_URL', { infer: true })}/login`;
+    const loginUrl = `${this.configService.get('FRONTEND_URL', { infer: true })}/login`;
     return this.send(accountantId, MailKind.ApprovalNotice, {
       to: email,
       subject: 'Contul SPVDirect a fost aprobat',
@@ -66,7 +54,11 @@ export class RegistrationMailer {
     message: MailMessage,
   ): Promise<boolean> {
     try {
-      await this.mail.send(message, { kind, accountantId, companyId: null });
+      await this.mailService.send(message, {
+        kind,
+        accountantId,
+        companyId: null,
+      });
       return true;
     } catch (err) {
       this.logger.error(
@@ -77,12 +69,12 @@ export class RegistrationMailer {
   }
 
   private adminMessage(request: AdminApprovalRequest): MailMessage {
-    const base = `${this.config.get('API_URL', { infer: true })}/auth/registrations/${request.approvalToken}`;
+    const base = `${this.configService.get('API_URL', { infer: true })}/auth/registrations/${request.approvalToken}`;
     const approveUrl = `${base}/approve`;
     const rejectUrl = `${base}/reject`;
     const name = request.name ?? '(fără nume)';
     return {
-      to: this.config.get('ADMIN_EMAIL', { infer: true }),
+      to: this.configService.get('ADMIN_EMAIL', { infer: true }),
       subject: `Cerere cont nou SPVDirect: ${request.email}`,
       text: [
         `${name} <${request.email}> dorește să creeze un cont SPVDirect.`,

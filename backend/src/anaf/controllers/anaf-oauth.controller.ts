@@ -49,12 +49,12 @@ export class AnafOAuthController {
   private readonly production: boolean;
 
   constructor(
-    private readonly authorization: AnafAuthorizationService,
-    private readonly links: AuthorizationLinksService,
-    private readonly jwt: JwtService,
-    private readonly config: ConfigService,
+    private readonly anafAuthorizationService: AnafAuthorizationService,
+    private readonly authorizationLinksService: AuthorizationLinksService,
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
   ) {
-    this.production = isProduction(config);
+    this.production = isProduction(configService);
   }
 
   @Get('accountants/:accountantId/anaf/connect')
@@ -75,7 +75,7 @@ export class AnafOAuthController {
     @Param('token', ParseLinkTokenPipe) token: string,
     @Res() res: Response,
   ) {
-    const lookup = await this.links.findByToken(token);
+    const lookup = await this.authorizationLinksService.findByToken(token);
     if (!lookup.ok) {
       return sendHtmlPage(res, 400, 'Link invalid', LINK_ERRORS[lookup.reason]);
     }
@@ -103,7 +103,7 @@ export class AnafOAuthController {
     @Param('token', ParseLinkTokenPipe) token: string,
     @Res() res: Response,
   ) {
-    const lookup = await this.links.findByToken(token);
+    const lookup = await this.authorizationLinksService.findByToken(token);
     if (!lookup.ok) {
       return sendHtmlPage(res, 400, 'Link invalid', LINK_ERRORS[lookup.reason]);
     }
@@ -144,7 +144,10 @@ export class AnafOAuthController {
     }
 
     try {
-      const outcome = await this.authorization.complete(payload, code);
+      const outcome = await this.anafAuthorizationService.complete(
+        payload,
+        code,
+      );
       switch (outcome.kind) {
         case AuthorizationOutcomeKind.Self:
           return res.redirect(
@@ -182,7 +185,7 @@ export class AnafOAuthController {
   ) {
     const state = randomBytes(24).toString('base64url');
     const payload: OAuthStatePayload = { ...flow, state };
-    const signed = await this.jwt.signAsync(payload, {
+    const signed = await this.jwtService.signAsync(payload, {
       expiresIn: OAUTH_STATE_TTL_SECONDS,
       audience: OAUTH_STATE_AUDIENCE,
     });
@@ -191,7 +194,7 @@ export class AnafOAuthController {
       signed,
       cookieOptions(OAUTH_STATE_TTL_SECONDS, this.production),
     );
-    res.redirect(this.authorization.authorizeUrl(state));
+    res.redirect(this.anafAuthorizationService.authorizeUrl(state));
   }
 
   private async readState(req: Request): Promise<OAuthStatePayload | null> {
@@ -200,9 +203,12 @@ export class AnafOAuthController {
     ];
     if (!raw) return null;
     try {
-      const payload = await this.jwt.verifyAsync<OAuthStatePayload>(raw, {
-        audience: OAUTH_STATE_AUDIENCE,
-      });
+      const payload = await this.jwtService.verifyAsync<OAuthStatePayload>(
+        raw,
+        {
+          audience: OAUTH_STATE_AUDIENCE,
+        },
+      );
       const id =
         payload.mode === AnafConnectionSource.Self
           ? payload.accountantId
@@ -227,7 +233,7 @@ export class AnafOAuthController {
   }
 
   private connectionsPage(accountantId: number, query: string): string {
-    const base = this.config.getOrThrow<string>('FRONTEND_URL');
+    const base = this.configService.getOrThrow<string>('FRONTEND_URL');
     return `${base}/accountants/${encodeURIComponent(accountantId)}/connections?${query}`;
   }
 }

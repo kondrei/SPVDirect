@@ -12,6 +12,8 @@ import { EFACTURA_ARCHIVE_SYNC_LOCK_KEY } from '../../common/constants.js';
 import { ImportStatus } from '../dto/efactura.enums.js';
 import type { EfacturaArchiveService } from '../services/efactura-archive.service.js';
 import { EfacturaArchiveSyncJob } from './efactura-archive-sync.job.js';
+import { CompanyRepository } from '../../companies/repositories/company.repository.js';
+import { AdvisoryLockRepository } from '../../database/repositories/advisory-lock.repository.js';
 
 function imported(count: number, remaining: number) {
   return {
@@ -47,8 +49,8 @@ function setup({ enabled = true, locked = true } = {}) {
   const job = new EfacturaArchiveSyncJob(
     new ConfigService({ EFACTURA_ARCHIVE_SYNC: enabled }),
     archive as unknown as EfacturaArchiveService,
-    companies as unknown as Repository<Company>,
-    dataSource as unknown as DataSource,
+    new CompanyRepository(companies as unknown as Repository<Company>),
+    new AdvisoryLockRepository(dataSource as unknown as DataSource),
     { recordJob, record } as unknown as ActivityLogsService,
   );
   return { job, runner, companies, archive, dataSource, recordJob, record };

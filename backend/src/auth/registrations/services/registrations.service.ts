@@ -1,73 +1,58 @@
 import { Injectable } from '@nestjs/common';
 import { EventBus } from '@nestjs/cqrs';
-import { InjectRepository } from '@nestjs/typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
 import { createHash } from 'node:crypto';
-import { Repository } from 'typeorm';
-import { Accountant } from '../../../accountants/accountant.entity.js';
-import { BannedEmail } from '../../banned-email.entity.js';
+import type { DataSource } from 'typeorm';
+import type { PendingRegistration } from '../../dto/auth.types.js';
+import { AccountantRepository } from '../../../accountants/repositories/accountant.repository.js';
+import { BannedEmailRepository } from '../../repositories/banned-email.repository.js';
 import { AccountantApprovedEvent } from '../registration.events.js';
-import { AccountStatus } from '../../../accountants/dto/accountant.enums.js';
 
 export function hashApprovalToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-export type PendingRegistration = Pick<
-  Accountant,
-  'id' | 'email' | 'name' | 'createdAt'
->;
-
 @Injectable()
 export class RegistrationsService {
   constructor(
-    private readonly events: EventBus,
-    @InjectRepository(Accountant)
-    private readonly accountants: Repository<Accountant>,
+    private readonly eventBus: EventBus,
+    @InjectDataSource() private readonly dataSource: DataSource,
+    private readonly accountantRepository: AccountantRepository,
+    private readonly bannedEmailRepository: BannedEmailRepository,
   ) {}
 
   async findPending(token: string): Promise<PendingRegistration | null> {
-    return this.accountants.findOne({
-      select: { id: true, email: true, name: true, createdAt: true },
-      where: {
-        approvalTokenHash: hashApprovalToken(token),
-        status: AccountStatus.Pending,
-      },
-    });
+    return this.accountantRepository.findPending(hashApprovalToken(token));
   }
 
   async approve(token: string): Promise<PendingRegistration | null> {
     const pending = await this.findPending(token);
     if (!pending) return null;
-    const result = await this.accountants.update(
-      {
-        id: pending.id,
-        approvalTokenHash: hashApprovalToken(token),
-        status: AccountStatus.Pending,
-      },
-      { status: AccountStatus.Active, approvalTokenHash: null },
+    if (
+      !(await this.accountantRepository.approve(
+        pending.id,
+        hashApprovalToken(token),
+      ))
+    ) {
+      return null;
+    }
+    this.eventBus.publish(
+      new AccountantApprovedEvent(pending.id, pending.email),
     );
-    if (!result.affected) return null;
-    this.events.publish(new AccountantApprovedEvent(pending.id, pending.email));
     return pending;
   }
 
   async reject(token: string): Promise<PendingRegistration | null> {
     const pending = await this.findPending(token);
     if (!pending) return null;
-    return this.accountants.manager.transaction(async (m) => {
-      const result = await m.delete(Accountant, {
-        id: pending.id,
-        approvalTokenHash: hashApprovalToken(token),
-        status: AccountStatus.Pending,
-      });
-      if (!result.affected) return null;
-      await m
-        .createQueryBuilder()
-        .insert()
-        .into(BannedEmail)
-        .values({ email: pending.email })
-        .orIgnore()
-        .execute();
+    return this.dataSource.transaction(async (m) => {
+      const deleted = await this.accountantRepository.deletePending(
+        m,
+        pending.id,
+        hashApprovalToken(token),
+      );
+      if (!deleted) return null;
+      await this.bannedEmailRepository.ban(m, pending.email);
       return pending;
     });
   }

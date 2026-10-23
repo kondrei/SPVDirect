@@ -18,11 +18,11 @@ import {
 export class InvoiceMailer {
   private readonly logger = new Logger(InvoiceMailer.name);
 
-  constructor(private readonly mail: MailService) {}
+  constructor(private readonly mailService: MailService) {}
 
   async send(invoice: Invoice, to: string, pdf: Buffer): Promise<void> {
     try {
-      await this.mail.send(this.message(invoice, to, pdf), {
+      await this.mailService.send(this.message(invoice, to, pdf), {
         kind: MailKind.Invoice,
         accountantId: invoice.accountantId,
         companyId: invoice.companyId,

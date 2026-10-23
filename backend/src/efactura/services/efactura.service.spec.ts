@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import type { HttpService } from '@nestjs/axios';
 import type { ConfigService } from '@nestjs/config';
-import type { Repository } from 'typeorm';
+import type { DataSource, Repository } from 'typeorm';
 import type { AnafApiService } from '../../anaf/services/anaf-api.service.js';
 import type { ApiLogsService } from '../../api-logs/api-logs.service.js';
 import { Company } from '../../companies/company.entity.js';
@@ -30,6 +30,10 @@ import { AnafEnvironment } from '../../anaf/dto/anaf.enums.js';
 import type { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import { ActivityAction } from '../../api-logs/dto/api-log.enums.js';
 import { fakeActivityLogs } from '../../testing/activity-logs.js';
+import { EfacturaInvoiceRepository } from '../repositories/efactura-invoice.repository.js';
+import { EfacturaUploadRepository } from '../repositories/efactura-upload.repository.js';
+import { CompanyRepository } from '../../companies/repositories/company.repository.js';
+import { InvoiceRepository } from '../../invoices/repositories/invoice.repository.js';
 
 const CONNECTION = 7;
 const COMPANY = {
@@ -127,9 +131,16 @@ function setup({ company = COMPANY }: { company?: Company } = {}) {
     validator,
     companies as unknown as CompaniesService,
     invoices as unknown as InvoicesService,
-    uploads as unknown as Repository<EfacturaUpload>,
+    new EfacturaUploadRepository(
+      uploads as unknown as Repository<EfacturaUpload>,
+    ),
     activity as unknown as ActivityLogsService,
-    archive as unknown as Repository<EfacturaInvoice>,
+    new EfacturaInvoiceRepository(
+      archive as unknown as Repository<EfacturaInvoice>,
+    ),
+    (uploads as unknown as { manager: DataSource }).manager,
+    new CompanyRepository({} as never),
+    new InvoiceRepository({} as never),
   );
   return {
     archive,

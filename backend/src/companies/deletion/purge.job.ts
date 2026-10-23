@@ -1,16 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import {
-  LessThan,
-  MoreThan,
-  Repository,
-  type DataSource,
-  type FindOptionsOrder,
-  type FindOptionsSelect,
-  type FindOptionsWhere,
-} from 'typeorm';
-import { Accountant } from '../../accountants/accountant.entity.js';
+import { AccountantRepository } from '../../accountants/repositories/accountant.repository.js';
 import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import {
   companiesPurged,
@@ -23,8 +13,9 @@ import {
   PURGE_LOCK_KEY,
   PURGE_SCHEDULE,
 } from '../../common/constants.js';
-import { Company } from '../company.entity.js';
+import { AdvisoryLockRepository } from '../../database/repositories/advisory-lock.repository.js';
 import type { PurgeTally } from '../dto/company.types.js';
+import { CompanyRepository } from '../repositories/company.repository.js';
 import { CompanyDeletionService } from './company-deletion.service.js';
 
 export const PURGE_GRACE_DAYS = 30;
@@ -37,105 +28,84 @@ export class PurgeJob {
   private running = false;
 
   constructor(
-    @InjectRepository(Company)
-    private readonly companies: Repository<Company>,
-    @InjectRepository(Accountant)
-    private readonly accountants: Repository<Accountant>,
-    private readonly deletion: CompanyDeletionService,
-    @InjectDataSource() private readonly dataSource: DataSource,
-    private readonly activity: ActivityLogsService,
+    private readonly companyRepository: CompanyRepository,
+    private readonly accountantRepository: AccountantRepository,
+    private readonly companyDeletionService: CompanyDeletionService,
+    private readonly advisoryLockRepository: AdvisoryLockRepository,
+    private readonly activityLogsService: ActivityLogsService,
   ) {}
 
   @Cron(PURGE_SCHEDULE, CRON_OPTIONS)
   async run(): Promise<void> {
     if (this.running) return;
     this.running = true;
-    const runner = this.dataSource.createQueryRunner();
-    let locked = false;
     try {
-      const [row] = (await runner.query(
-        'SELECT pg_try_advisory_lock($1) AS locked',
-        [PURGE_LOCK_KEY],
-      )) as { locked: boolean }[];
-      locked = row?.locked === true;
-      if (!locked) return;
-      const cutoff = new Date(Date.now() - PURGE_GRACE_DAYS * DAY_MS);
-      const purgedPerAccountant = new Map<number, number>();
-      const companies = await this.purgeAll(
-        this.companies,
-        cutoff,
-        'company',
-        { id: true, accountantId: true },
-        async ({ id, accountantId }) => {
-          await this.deletion.purge(id);
-          purgedPerAccountant.set(
-            accountantId,
-            (purgedPerAccountant.get(accountantId) ?? 0) + 1,
-          );
-        },
-      );
-      for (const [accountantId, count] of purgedPerAccountant) {
-        await this.activity.record(
-          accountantId,
-          companiesPurged(count, PURGE_GRACE_DAYS),
-        );
-      }
-      const accountants = await this.purgeAll(
-        this.accountants,
-        cutoff,
-        'account',
-        { id: true },
-        ({ id }) => this.deletion.purgeAccountant(id),
-      );
-      if (companies.purged || accountants.purged) {
-        this.logger.log(
-          `Purged ${companies.purged} deleted companies and ${accountants.purged} deleted accounts`,
-        );
-      }
-      await this.activity.recordJob(
-        purgeCompleted({
-          companies: companies.purged,
-          accountants: accountants.purged,
-          failed: companies.failed + accountants.failed,
-        }),
+      await this.advisoryLockRepository.runExclusive(PURGE_LOCK_KEY, () =>
+        this.purge(),
       );
     } catch (err) {
       this.logger.error(
         `Purging deleted data failed: ${(err as Error).message}`,
       );
-      await this.activity.recordJob(jobFailed(ScheduledJob.Purge, err));
+      await this.activityLogsService.recordJob(
+        jobFailed(ScheduledJob.Purge, err),
+      );
     } finally {
-      if (locked) {
-        await runner
-          .query('SELECT pg_advisory_unlock($1)', [PURGE_LOCK_KEY])
-          .catch(() => undefined);
-      }
-      await runner.release();
       this.running = false;
     }
   }
 
-  private async purgeAll<T extends Company | Accountant>(
-    repo: Repository<T>,
-    cutoff: Date,
+  private async purge(): Promise<void> {
+    const cutoff = new Date(Date.now() - PURGE_GRACE_DAYS * DAY_MS);
+    const purgedPerAccountant = new Map<number, number>();
+    const companies = await this.purgeAll(
+      (afterId) =>
+        this.companyRepository.deletedBefore(cutoff, afterId, PURGE_BATCH),
+      'company',
+      async ({ id, accountantId }) => {
+        await this.companyDeletionService.purge(id);
+        purgedPerAccountant.set(
+          accountantId,
+          (purgedPerAccountant.get(accountantId) ?? 0) + 1,
+        );
+      },
+    );
+    for (const [accountantId, count] of purgedPerAccountant) {
+      await this.activityLogsService.record(
+        accountantId,
+        companiesPurged(count, PURGE_GRACE_DAYS),
+      );
+    }
+    const accountants = await this.purgeAll(
+      (afterId) =>
+        this.accountantRepository.deletedBefore(cutoff, afterId, PURGE_BATCH),
+      'account',
+      ({ id }) => this.companyDeletionService.purgeAccountant(id),
+    );
+    if (companies.purged || accountants.purged) {
+      this.logger.log(
+        `Purged ${companies.purged} deleted companies and ${accountants.purged} deleted accounts`,
+      );
+    }
+    await this.activityLogsService.recordJob(
+      purgeCompleted({
+        companies: companies.purged,
+        accountants: accountants.purged,
+        failed: companies.failed + accountants.failed,
+      }),
+    );
+  }
+
+  private async purgeAll<T extends { id: number }>(
+    due: (afterId: number) => Promise<T[]>,
     label: string,
-    select: FindOptionsSelect<T>,
     purge: (row: T) => Promise<void>,
   ): Promise<PurgeTally> {
     const result: PurgeTally = { purged: 0, failed: 0 };
     let lastId = 0;
     for (;;) {
-      const due = await repo.find({
-        select,
-        where: {
-          id: MoreThan(lastId),
-          deletedAt: LessThan(cutoff),
-        } as FindOptionsWhere<T>,
-        withDeleted: true,
-        order: { id: 'ASC' } as FindOptionsOrder<T>,
-        take: PURGE_BATCH,
-      });
-      for (const row of due) {
+      const rows = await due(lastId);
+      for (const row of rows) {
         const { id } = row;
         lastId = id;
         try {
@@ -148,7 +118,7 @@ export class PurgeJob {
           );
         }
       }
-      if (due.length < PURGE_BATCH) return result;
+      if (rows.length < PURGE_BATCH) return result;
     }
   }
 }

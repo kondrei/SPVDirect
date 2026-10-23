@@ -1,11 +1,13 @@
 import type { EventBus } from '@nestjs/cqrs';
-import type { Repository } from 'typeorm';
+import type { DataSource, Repository } from 'typeorm';
 import type { Accountant } from '../../../accountants/accountant.entity.js';
 import { AccountantApprovedEvent } from '../registration.events.js';
 import {
   hashApprovalToken,
   RegistrationsService,
 } from './registrations.service.js';
+import { AccountantRepository } from '../../../accountants/repositories/accountant.repository.js';
+import { BannedEmailRepository } from '../../repositories/banned-email.repository.js';
 
 const pending = {
   id: 7,
@@ -37,7 +39,9 @@ function setup() {
   };
   const service = new RegistrationsService(
     { publish } as unknown as EventBus,
-    accountants as unknown as Repository<Accountant>,
+    accountants.manager as unknown as DataSource,
+    new AccountantRepository(accountants as unknown as Repository<Accountant>),
+    new BannedEmailRepository(),
   );
   return { service, publish, accountants, manager, qb, execute };
 }

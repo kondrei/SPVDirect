@@ -8,6 +8,7 @@ import {
 } from './anaf-api.service.js';
 import type { AnafConnection } from '../anaf-connection.entity.js';
 import type { AnafOAuthService } from './anaf-oauth.service.js';
+import { AnafConnectionRepository } from '../repositories/anaf-connection.repository.js';
 
 function setup() {
   const request = vi.fn().mockResolvedValue({ status: 200, data: {} });
@@ -35,7 +36,9 @@ function setup() {
       {
         record: vi.fn().mockResolvedValue(undefined),
       } as unknown as ApiLogsService,
-      connections as unknown as Repository<AnafConnection>,
+      new AnafConnectionRepository(
+        connections as unknown as Repository<AnafConnection>,
+      ),
     );
   return {
     service: instance(),

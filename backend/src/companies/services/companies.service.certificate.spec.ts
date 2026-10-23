@@ -8,6 +8,8 @@ import type { Company } from '../company.entity.js';
 import type { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import { ActivityAction } from '../../api-logs/dto/api-log.enums.js';
 import { fakeActivityLogs } from '../../testing/activity-logs.js';
+import { AnafConnectionRepository } from '../../anaf/repositories/anaf-connection.repository.js';
+import { CompanyRepository } from '../repositories/company.repository.js';
 
 function setup({
   current = null,
@@ -31,8 +33,10 @@ function setup({
   const access = { assertAccess: vi.fn(assertAccess) };
   const activity = fakeActivityLogs();
   const service = new CompaniesService(
-    companies as unknown as Repository<Company>,
-    connections as unknown as Repository<AnafConnection>,
+    new CompanyRepository(companies as unknown as Repository<Company>),
+    new AnafConnectionRepository(
+      connections as unknown as Repository<AnafConnection>,
+    ),
     {} as AnafCompanyLookupService,
     access as unknown as AnafCompanyAccessService,
     activity as unknown as ActivityLogsService,

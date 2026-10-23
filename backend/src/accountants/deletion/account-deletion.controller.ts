@@ -24,15 +24,15 @@ import { AccountExportService } from './account-export.service.js';
 @UseGuards(JwtAuthGuard, AccountantParamGuard)
 export class AccountDeletionController {
   constructor(
-    private readonly deletion: AccountDeletionService,
-    private readonly exports: AccountExportService,
-    private readonly session: SessionCookieService,
+    private readonly accountDeletionService: AccountDeletionService,
+    private readonly accountExportService: AccountExportService,
+    private readonly sessionCookieService: SessionCookieService,
   ) {}
 
   @Get('export')
   @Throttle(EXPORT_THROTTLE)
   async export(@Param('accountantId', ParseIdPipe) accountantId: number) {
-    return attachment(await this.exports.export(accountantId));
+    return attachment(await this.accountExportService.export(accountantId));
   }
 
   @Delete()
@@ -43,7 +43,7 @@ export class AccountDeletionController {
     @Body() dto: DeleteAccountDto,
     @Res({ passthrough: true }) res: Response,
   ): Promise<void> {
-    await this.deletion.softDelete(accountantId, dto.password);
-    this.session.clear(res);
+    await this.accountDeletionService.softDelete(accountantId, dto.password);
+    this.sessionCookieService.clear(res);
   }
 }

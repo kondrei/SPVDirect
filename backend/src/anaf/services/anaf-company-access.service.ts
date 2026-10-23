@@ -21,7 +21,7 @@ export const noSpvRight = (cui: string): string =>
 
 @Injectable()
 export class AnafCompanyAccessService {
-  constructor(private readonly api: AnafApiService) {}
+  constructor(private readonly anafApiService: AnafApiService) {}
 
   async assertAccess(
     accountantId: number,
@@ -31,12 +31,12 @@ export class AnafCompanyAccessService {
   ): Promise<void> {
     let res: AxiosResponse<unknown>;
     try {
-      res = await this.api.request<unknown>({
+      res = await this.anafApiService.request<unknown>({
         accountantId,
         connectionId,
         companyId,
         service: ApiLogService.Efactura,
-        path: this.api.envPath('/FCTEL/rest/listaMesajeFactura'),
+        path: this.anafApiService.envPath('/FCTEL/rest/listaMesajeFactura'),
         params: { zile: 1, cif: cui },
         responseType: 'text',
         allowStatuses: [400],

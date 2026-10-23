@@ -4,6 +4,11 @@
 
 SPVDirect is an accountant portal for ANAF SPV services: **e-Factura**, **e-Transport** and related tax documents.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="frontend/public/screenshots/panou-dark.webp">
+  <img alt="SPVDirect dashboard (Panou) on desktop and mobile, with sample data" src="frontend/public/screenshots/panou-light.webp">
+</picture>
+
 ```
 SPVDirect/
   backend/    NestJS API (this phase)
@@ -41,6 +46,57 @@ Some work runs on its own, on a fixed schedule (Romania time, Europe/Bucharest).
 | Account approval reminder (`AdminApprovalRetryJob`) | Every day at 08:00 | Sends the approve/reject email to the administrator again for sign-up requests whose first email failed |
 | Purge of deleted data (`PurgeJob`) | The 1st of every month at 03:00 | Erases for good the companies and accounts deleted more than 30 days ago, with their invoices, e-Factura files, SPV messages and stored PDFs. Any ANAF certificate still connected to a purged account is revoked first |
 | SPV inbox sync (`SpvSyncJob`) | Monday, Wednesday and Friday at 03:00 (when enabled) | Would pull SPV messages and their PDFs from ANAF. **Not active:** ANAF does not accept application access to the SPV inbox yet (see `docs/adr/0001-no-spv-inbox-over-oauth.md`), so the job is not registered |
+
+---
+
+## Screenshots
+
+Desktop and mobile views of the main pages, with sample data. Run `npm run screenshots` in `frontend/` to regenerate them from the real app (see `frontend/README.md`).
+
+### Companies (Firme)
+
+Client companies with their ANAF data and the certificate used for each.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="frontend/public/screenshots/firme-dark.webp">
+  <img alt="Companies (Firme) page on desktop and mobile, with sample data" src="frontend/public/screenshots/firme-light.webp">
+</picture>
+
+### Invoices (Facturi)
+
+Issued invoices with their e-Factura status, PDF, XML and email.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="frontend/public/screenshots/facturi-dark.webp">
+  <img alt="Invoices (Facturi) page on desktop and mobile, with sample data" src="frontend/public/screenshots/facturi-light.webp">
+</picture>
+
+### e-Factura archive (Arhivă e-Factura)
+
+Received and sent invoices kept after ANAF deletes them.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="frontend/public/screenshots/arhiva-dark.webp">
+  <img alt="e-Factura archive (Arhivă e-Factura) page on desktop and mobile, with sample data" src="frontend/public/screenshots/arhiva-light.webp">
+</picture>
+
+### SPV messages (Mesaje SPV)
+
+Import of the SPV inbox and the saved messages.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="frontend/public/screenshots/spv-dark.webp">
+  <img alt="SPV messages (Mesaje SPV) page on desktop and mobile, with sample data" src="frontend/public/screenshots/spv-light.webp">
+</picture>
+
+### ANAF certificates (Certificate ANAF)
+
+Connected certificates, their roles and expiry dates.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="frontend/public/screenshots/certificate-dark.webp">
+  <img alt="ANAF certificates (Certificate ANAF) page on desktop and mobile, with sample data" src="frontend/public/screenshots/certificate-light.webp">
+</picture>
 
 ---
 

@@ -11,11 +11,11 @@ export class EfacturaFileStore {
   private readonly storage: SupabaseStorage;
 
   constructor(
-    private readonly config: ConfigService,
+    private readonly configService: ConfigService,
     http: HttpService,
   ) {
     this.storage = new SupabaseStorage(
-      config,
+      configService,
       http,
       'SUPABASE_EFACTURA_BUCKET',
     );
@@ -27,7 +27,8 @@ export class EfacturaFileStore {
 
   get enabled(): boolean {
     return (
-      this.config.get<FileStorage>('EFACTURA_STORAGE') === FileStorage.Supabase
+      this.configService.get<FileStorage>('EFACTURA_STORAGE') ===
+      FileStorage.Supabase
     );
   }
 

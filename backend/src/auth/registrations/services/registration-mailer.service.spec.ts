@@ -4,6 +4,7 @@ import type { Accountant } from '../../../accountants/accountant.entity.js';
 import { MailKind } from '../../../common/dto/common.enums.js';
 import type { MailService } from '../../../common/mail/mail.service.js';
 import { RegistrationMailer } from './registration-mailer.service.js';
+import { AccountantRepository } from '../../../accountants/repositories/accountant.repository.js';
 
 const request = {
   accountantId: 7,
@@ -22,7 +23,7 @@ function setup() {
       ADMIN_EMAIL: 'admin@example.com',
     }),
     { send } as unknown as MailService,
-    { update } as unknown as Repository<Accountant>,
+    new AccountantRepository({ update } as unknown as Repository<Accountant>),
   );
   return { mailer, send, update };
 }

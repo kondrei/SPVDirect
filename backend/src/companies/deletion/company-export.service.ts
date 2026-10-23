@@ -1,20 +1,19 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-
-import { Repository } from 'typeorm';
 import { companyExported } from '../../api-logs/activity-entries.js';
 import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import { SpvArchiveService } from '../../anaf/spv/services/spv-archive.service.js';
-import { SpvMessage } from '../../anaf/spv/spv-message.entity.js';
+import { SpvMessageRepository } from '../../anaf/spv/repositories/spv-message.repository.js';
 import type { DownloadFile } from '../../common/download-file.js';
 import type { EfacturaInvoice } from '../../efactura/efactura-invoice.entity.js';
-import { EfacturaUpload } from '../../efactura/efactura-upload.entity.js';
+import type { EfacturaUpload } from '../../efactura/efactura-upload.entity.js';
+import type { Invoice } from '../../invoices/invoice.entity.js';
+import type { SpvMessage } from '../../anaf/spv/spv-message.entity.js';
+import { EfacturaUploadRepository } from '../../efactura/repositories/efactura-upload.repository.js';
 import { EfacturaArchiveService } from '../../efactura/services/efactura-archive.service.js';
-import { Invoice } from '../../invoices/invoice.entity.js';
+import { InvoiceRepository } from '../../invoices/repositories/invoice.repository.js';
 import { InvoiceDeliveryService } from '../../invoices/services/invoice-delivery.service.js';
 import type { Company } from '../company.entity.js';
 import { CompaniesService } from '../services/companies.service.js';
-import { companySpvMessages } from './company-records.js';
 import { toCsv, type CsvValue } from './csv.js';
 import { ZipStream } from './zip-stream.js';
 import {
@@ -32,17 +31,14 @@ export class CompanyExportService {
   private readonly logger = new Logger(CompanyExportService.name);
 
   constructor(
-    private readonly companies: CompaniesService,
-    @InjectRepository(Invoice)
-    private readonly invoices: Repository<Invoice>,
-    @InjectRepository(EfacturaUpload)
-    private readonly uploads: Repository<EfacturaUpload>,
-    @InjectRepository(SpvMessage)
-    private readonly messages: Repository<SpvMessage>,
-    private readonly delivery: InvoiceDeliveryService,
-    private readonly spv: SpvArchiveService,
-    private readonly efacturaArchive: EfacturaArchiveService,
-    private readonly activity: ActivityLogsService,
+    private readonly companiesService: CompaniesService,
+    private readonly invoiceRepository: InvoiceRepository,
+    private readonly efacturaUploadRepository: EfacturaUploadRepository,
+    private readonly spvMessageRepository: SpvMessageRepository,
+    private readonly invoiceDeliveryService: InvoiceDeliveryService,
+    private readonly spvArchiveService: SpvArchiveService,
+    private readonly efacturaArchiveService: EfacturaArchiveService,
+    private readonly activityLogsService: ActivityLogsService,
   ) {}
 
   async export(
@@ -50,8 +46,11 @@ export class CompanyExportService {
     id: number,
     now = new Date(),
   ): Promise<CompanyExport> {
-    const company = await this.companies.get(accountantId, id);
-    await this.activity.record(accountantId, companyExported(company));
+    const company = await this.companiesService.get(accountantId, id);
+    await this.activityLogsService.record(
+      accountantId,
+      companyExported(company),
+    );
     const zip = new ZipStream();
     void this.stream(zip, `company ${company.id}`, async (errors) => {
       await this.writeCompany(zip, company, '', errors);
@@ -90,19 +89,10 @@ export class CompanyExportService {
   ): Promise<boolean> {
     const accountantId = company.accountantId;
     const [invoices, uploads, archived, messages] = await Promise.all([
-      this.invoices.find({
-        where: { accountantId, companyId: company.id },
-        order: { issueDate: 'ASC', id: 'ASC' },
-      }),
-      this.uploads.find({
-        where: { accountantId, companyId: company.id },
-        order: { id: 'ASC' },
-      }),
-      this.efacturaArchive.forCompany(accountantId, company.id),
-      companySpvMessages(this.messages, company)
-        .orderBy('m.anafCreatedAt', 'ASC', 'NULLS LAST')
-        .addOrderBy('m.id', 'ASC')
-        .getMany(),
+      this.invoiceRepository.forCompany(accountantId, company.id),
+      this.efacturaUploadRepository.forCompany(accountantId, company.id),
+      this.efacturaArchiveService.forCompany(accountantId, company.id),
+      this.spvMessageRepository.ofCompany(company),
     ]);
 
     zip.add(`${prefix}${CompanyExportFile.Company}`, json(company));
@@ -120,10 +110,10 @@ export class CompanyExportService {
     for (const invoice of invoices) {
       if (!(await zip.ready())) return false;
       await this.addFile(zip, errors, invoiceFolder, false, () =>
-        this.delivery.pdf(accountantId, invoice.id),
+        this.invoiceDeliveryService.pdf(accountantId, invoice.id),
       );
       await this.addFile(zip, errors, invoiceFolder, true, () =>
-        this.delivery.xml(accountantId, invoice.id),
+        this.invoiceDeliveryService.xml(accountantId, invoice.id),
       );
     }
 
@@ -145,7 +135,7 @@ export class CompanyExportService {
     for (const row of archived) {
       if (!(await zip.ready())) return false;
       await this.addFile(zip, errors, archiveFolder, false, () =>
-        this.efacturaArchive.zip(accountantId, row.id),
+        this.efacturaArchiveService.zip(accountantId, row.id),
       );
     }
     return this.writeSpv(
@@ -175,7 +165,7 @@ export class CompanyExportService {
       if (!message.downloadedAt) continue;
       if (!(await zip.ready())) return false;
       await this.addFile(zip, errors, name, false, () =>
-        this.spv.download(accountantId, message.id),
+        this.spvArchiveService.download(accountantId, message.id),
       );
     }
     return true;
@@ -189,7 +179,7 @@ export class CompanyExportService {
   ): Promise<void> {
     if (!company.logoContentType) return;
     try {
-      const logo = await this.companies.getLogo(
+      const logo = await this.companiesService.getLogo(
         company.accountantId,
         company.id,
       );

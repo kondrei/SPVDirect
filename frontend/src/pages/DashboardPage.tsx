@@ -351,7 +351,7 @@ export function DashboardPage() {
   const stats = invoiceStats.data;
 
   return (
-    <>
+    <div className="dashboard">
       <PageHead
         title={name ? `Bună ziua, ${name}` : 'Panou'}
         context={today.charAt(0).toUpperCase() + today.slice(1)}
@@ -456,6 +456,6 @@ export function DashboardPage() {
       </div>
 
       <ActivityCard companies={list} />
-    </>
+    </div>
   );
 }

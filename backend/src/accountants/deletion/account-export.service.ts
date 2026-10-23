@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
 import type { ActivityItem } from '../../api-logs/dto/api-log.types.js';
 import { accountExported } from '../../api-logs/activity-entries.js';
 import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
-import { AnafConnection } from '../../anaf/anaf-connection.entity.js';
+import type { AnafConnection } from '../../anaf/anaf-connection.entity.js';
+import { AnafConnectionRepository } from '../../anaf/repositories/anaf-connection.repository.js';
 import { normalizeCif } from '../../anaf/spv/services/spv-archive.service.js';
-import { SpvMessage } from '../../anaf/spv/spv-message.entity.js';
+import { SpvMessageRepository } from '../../anaf/spv/repositories/spv-message.repository.js';
+import type { SpvMessage } from '../../anaf/spv/spv-message.entity.js';
 import type { Company } from '../../companies/company.entity.js';
 import {
   CompanyExportService,
@@ -28,31 +28,26 @@ import { AccountExportFile } from '../dto/accountant.enums.js';
 @Injectable()
 export class AccountExportService {
   constructor(
-    private readonly accountants: AccountantsService,
-    private readonly companies: CompaniesService,
-    private readonly companyExport: CompanyExportService,
-    @InjectRepository(AnafConnection)
-    private readonly connections: Repository<AnafConnection>,
-    @InjectRepository(SpvMessage)
-    private readonly messages: Repository<SpvMessage>,
-    private readonly activity: ActivityLogsService,
+    private readonly accountantsService: AccountantsService,
+    private readonly companiesService: CompaniesService,
+    private readonly companyExportService: CompanyExportService,
+    private readonly anafConnectionRepository: AnafConnectionRepository,
+    private readonly spvMessageRepository: SpvMessageRepository,
+    private readonly activityLogsService: ActivityLogsService,
   ) {}
 
   async export(accountantId: number, now = new Date()): Promise<CompanyExport> {
-    const profile = await this.accountants.getProfile(accountantId);
-    await this.activity.record(accountantId, accountExported());
+    const profile = await this.accountantsService.getProfile(accountantId);
+    await this.activityLogsService.record(accountantId, accountExported());
     const zip = new ZipStream();
-    void this.companyExport.stream(
+    void this.companyExportService.stream(
       zip,
       `account ${accountantId}`,
       async (errors) => {
         const [companies, connections, activity] = await Promise.all([
-          this.companies.list(accountantId),
-          this.connections.find({
-            where: { accountantId },
-            order: { id: 'ASC' },
-          }),
-          this.activity.all(accountantId),
+          this.companiesService.list(accountantId),
+          this.anafConnectionRepository.listInOrder(accountantId),
+          this.activityLogsService.all(accountantId),
         ]);
         zip.add(AccountExportFile.Profile, json(profile));
         zip.add(
@@ -77,7 +72,7 @@ export class AccountExportService {
           ),
         );
         for (const company of companies) {
-          const done = await this.companyExport.writeCompany(
+          const done = await this.companyExportService.writeCompany(
             zip,
             company,
             `${folder(company)}/`,
@@ -85,7 +80,7 @@ export class AccountExportService {
           );
           if (!done) return;
         }
-        await this.companyExport.writeSpv(
+        await this.companyExportService.writeSpv(
           zip,
           accountantId,
           await this.unmatchedMessages(accountantId, companies),
@@ -106,10 +101,7 @@ export class AccountExportService {
     companies: Company[],
   ): Promise<SpvMessage[]> {
     const cuis = new Set(companies.map((c) => c.cui));
-    const messages = await this.messages.find({
-      where: { accountantId, companyId: IsNull() },
-      order: { anafCreatedAt: 'ASC', id: 'ASC' },
-    });
+    const messages = await this.spvMessageRepository.unmatched(accountantId);
     return messages.filter((m) => !cuis.has(normalizeCif(m.cif) ?? ''));
   }
 }

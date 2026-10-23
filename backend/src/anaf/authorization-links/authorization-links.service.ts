@@ -1,13 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { InjectRepository } from '@nestjs/typeorm';
 import { createHash, randomBytes } from 'node:crypto';
-import { IsNull, Repository } from 'typeorm';
 import { authorizationLinkCreated } from '../../api-logs/activity-entries.js';
 import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import { CompaniesService } from '../../companies/services/companies.service.js';
 
-import { AuthorizationLink } from './authorization-link.entity.js';
+import type { AuthorizationLink } from './authorization-link.entity.js';
+import { AuthorizationLinkRepository } from './repositories/authorization-link.repository.js';
 import { LinkFailure } from '../dto/anaf.enums.js';
 import type { LinkLookup } from '../dto/anaf.types.js';
 
@@ -20,63 +19,56 @@ export function hashLinkToken(token: string): string {
 @Injectable()
 export class AuthorizationLinksService {
   constructor(
-    private readonly config: ConfigService,
-    private readonly companies: CompaniesService,
-    @InjectRepository(AuthorizationLink)
-    private readonly links: Repository<AuthorizationLink>,
-    private readonly activity: ActivityLogsService,
+    private readonly configService: ConfigService,
+    private readonly companiesService: CompaniesService,
+    private readonly authorizationLinkRepository: AuthorizationLinkRepository,
+    private readonly activityLogsService: ActivityLogsService,
   ) {}
 
   async create(accountantId: number, companyId: number) {
-    const company = await this.companies.get(accountantId, companyId);
+    const company = await this.companiesService.get(accountantId, companyId);
     const token = randomBytes(32).toString('base64url');
-    const link = await this.links.save(
-      this.links.create({
-        accountantId,
-        companyId: company.id,
-        tokenHash: hashLinkToken(token),
-        expiresAt: new Date(Date.now() + LINK_TTL_MS),
-      }),
-    );
-    await this.activity.record(
+    const link = await this.authorizationLinkRepository.insert({
+      accountantId,
+      companyId: company.id,
+      tokenHash: hashLinkToken(token),
+      expiresAt: new Date(Date.now() + LINK_TTL_MS),
+    });
+    await this.activityLogsService.record(
       accountantId,
       authorizationLinkCreated(company, link.expiresAt),
     );
     return {
       id: link.id,
-      url: `${this.config.getOrThrow<string>('API_URL')}/anaf/authorize/${token}`,
+      url: `${this.configService.getOrThrow<string>('API_URL')}/anaf/authorize/${token}`,
       expiresAt: link.expiresAt,
     };
   }
 
   async findByToken(token: string): Promise<LinkLookup> {
-    const link = await this.links.findOneBy({
-      tokenHash: hashLinkToken(token),
-    });
+    const link = await this.authorizationLinkRepository.findByTokenHash(
+      hashLinkToken(token),
+    );
     return this.check(link);
   }
 
   async findById(id: number): Promise<LinkLookup> {
-    return this.check(await this.links.findOneBy({ id }));
+    return this.check(await this.authorizationLinkRepository.findById(id));
   }
 
-  async claim(linkId: number): Promise<boolean> {
-    const result = await this.links.update(
-      { id: linkId, usedAt: IsNull() },
-      { usedAt: new Date() },
+  claim(linkId: number): Promise<boolean> {
+    return this.authorizationLinkRepository.claim(linkId);
+  }
+
+  release(linkId: number): Promise<void> {
+    return this.authorizationLinkRepository.release(linkId);
+  }
+
+  attachConnection(linkId: number, connectionId: number): Promise<void> {
+    return this.authorizationLinkRepository.attachConnection(
+      linkId,
+      connectionId,
     );
-    return (result.affected ?? 0) > 0;
-  }
-
-  async release(linkId: number): Promise<void> {
-    await this.links.update(
-      { id: linkId, anafConnectionId: IsNull() },
-      { usedAt: null },
-    );
-  }
-
-  async attachConnection(linkId: number, connectionId: number): Promise<void> {
-    await this.links.update({ id: linkId }, { anafConnectionId: connectionId });
   }
 
   private async check(link: AuthorizationLink | null): Promise<LinkLookup> {
@@ -85,7 +77,10 @@ export class AuthorizationLinksService {
     if (link.expiresAt.getTime() <= Date.now()) {
       return { ok: false, reason: LinkFailure.Expired };
     }
-    const company = await this.companies.get(link.accountantId, link.companyId);
+    const company = await this.companiesService.get(
+      link.accountantId,
+      link.companyId,
+    );
     return { ok: true, link, company };
   }
 }

@@ -7,48 +7,32 @@ import {
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
-import { InjectRepository } from '@nestjs/typeorm';
-import type { AxiosResponse, Method, ResponseType } from 'axios';
+import type { AxiosResponse } from 'axios';
 import { isAxiosError } from 'axios';
-import { Repository } from 'typeorm';
 import { ApiLogsService } from '../../api-logs/api-logs.service.js';
 import { trackApiCall } from '../../api-logs/track-api-call.js';
-import { AnafConnection } from '../anaf-connection.entity.js';
+import type { AnafConnection } from '../anaf-connection.entity.js';
+import { AnafConnectionRepository } from '../repositories/anaf-connection.repository.js';
 
 import { AnafOAuthService } from './anaf-oauth.service.js';
 import { AnafEnvironment } from '../dto/anaf.enums.js';
 import { ApiLogMethod } from '../../api-logs/dto/api-log.enums.js';
-
-export interface AnafRequest {
-  accountantId: number;
-  connectionId: number;
-  path: string;
-  service: string;
-  method?: Method;
-  params?: Record<string, string | number>;
-  data?: unknown;
-  headers?: Record<string, string>;
-  responseType?: ResponseType;
-  companyId?: number;
-  baseUrl?: string;
-  allowStatuses?: number[];
-}
+import type { AnafRequest } from '../dto/anaf.types.js';
 
 export const PERMISSION_DENIAL_MEMORY_MS = 60 * 60 * 1000;
 
 @Injectable()
 export class AnafApiService {
   constructor(
-    private readonly config: ConfigService,
-    private readonly http: HttpService,
-    private readonly oauth: AnafOAuthService,
-    private readonly apiLogs: ApiLogsService,
-    @InjectRepository(AnafConnection)
-    private readonly connections: Repository<AnafConnection>,
+    private readonly configService: ConfigService,
+    private readonly httpService: HttpService,
+    private readonly anafOAuthService: AnafOAuthService,
+    private readonly apiLogsService: ApiLogsService,
+    private readonly anafConnectionRepository: AnafConnectionRepository,
   ) {}
 
   environment(): AnafEnvironment {
-    return this.config.getOrThrow<AnafEnvironment>('ANAF_ENV');
+    return this.configService.getOrThrow<AnafEnvironment>('ANAF_ENV');
   }
 
   envPath(path: string, environment = this.environment()): string {
@@ -56,23 +40,26 @@ export class AnafApiService {
   }
 
   async request<T = unknown>(req: AnafRequest): Promise<AxiosResponse<T>> {
-    const connection = await this.connections.findOne({
-      select: { id: true, deniedWithFreshTokenAt: true },
-      where: { id: req.connectionId, accountantId: req.accountantId },
-    });
+    const connection = await this.anafConnectionRepository.findDenialState(
+      req.accountantId,
+      req.connectionId,
+    );
     if (!connection) throw new NotFoundException('Conexiune ANAF inexistentă');
 
-    let token = await this.oauth.getAccessToken(req.connectionId);
+    let token = await this.anafOAuthService.getAccessToken(req.connectionId);
     let res = await this.send<T>(req, token);
     if (this.tokenMayBeStale(connection, res.status)) {
-      const refreshed = await this.oauth.getAccessToken(req.connectionId, {
-        force: true,
-      });
+      const refreshed = await this.anafOAuthService.getAccessToken(
+        req.connectionId,
+        {
+          force: true,
+        },
+      );
       if (refreshed !== token) {
         token = refreshed;
         res = await this.send<T>(req, token);
         if (res.status === 403) {
-          await this.connections.update(req.connectionId, {
+          await this.anafConnectionRepository.update(req.connectionId, {
             deniedWithFreshTokenAt: new Date(),
           });
         }
@@ -114,7 +101,7 @@ export class AnafApiService {
   ): Promise<AxiosResponse<T>> {
     const method = (req.method ?? ApiLogMethod.Get).toUpperCase();
     return trackApiCall(
-      this.apiLogs,
+      this.apiLogsService,
       {
         accountantId: req.accountantId,
         anafConnectionId: req.connectionId,
@@ -125,10 +112,10 @@ export class AnafApiService {
       },
       async (outcome) => {
         try {
-          const res = await this.http.axiosRef.request<T>({
+          const res = await this.httpService.axiosRef.request<T>({
             baseURL:
               req.baseUrl ??
-              this.config.getOrThrow<string>('ANAF_API_ENDPOINT'),
+              this.configService.getOrThrow<string>('ANAF_API_ENDPOINT'),
             url: req.path,
             method,
             params: req.params,

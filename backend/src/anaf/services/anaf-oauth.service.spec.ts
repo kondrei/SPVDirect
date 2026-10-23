@@ -12,6 +12,7 @@ import {
 } from './anaf-token-client.service.js';
 import { fakeAnafJwt } from '../../testing/fake-anaf-jwt.js';
 import { AnafConnectionSource } from '../dto/anaf.enums.js';
+import { AnafConnectionRepository } from '../repositories/anaf-connection.repository.js';
 
 const env = {
   ANAF_CLIENT_ID: 'client-id',
@@ -102,7 +103,8 @@ function setup(connection?: Partial<AnafConnection>) {
   } as unknown as Repository<AnafConnection>;
 
   const client = new AnafTokenClient(config, http);
-  const instance = () => new AnafOAuthService(client, cipher, repo);
+  const instance = () =>
+    new AnafOAuthService(client, cipher, new AnafConnectionRepository(repo));
   const service = instance();
   return { service, instance, client, post, update, getOne, stored, cipher };
 }

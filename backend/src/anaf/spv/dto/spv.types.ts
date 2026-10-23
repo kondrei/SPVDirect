@@ -1,3 +1,5 @@
+import type { Company } from '../../../companies/company.entity.js';
+import type { SpvMessage } from '../spv-message.entity.js';
 export interface ImportSummary {
   fetched: number;
   added: number;
@@ -45,3 +47,23 @@ export interface ArchivePage {
   page: number;
   pageSize: number;
 }
+
+export type CompanyMessagesRef = Pick<Company, 'id' | 'accountantId' | 'cui'>;
+
+export type SpvMessageChanges = Partial<
+  Omit<SpvMessage, 'id' | 'accountantId' | 'anafMessageId'>
+>;
+
+export type SpvMessageInsert = Pick<
+  SpvMessage,
+  | 'accountantId'
+  | 'anafConnectionId'
+  | 'companyId'
+  | 'anafMessageId'
+  | 'cif'
+  | 'type'
+  | 'details'
+  | 'requestId'
+  | 'anafCreatedAt'
+  | 'anafCreatedRaw'
+>;

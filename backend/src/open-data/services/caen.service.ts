@@ -25,7 +25,7 @@ export class CaenService {
   private failedAt = 0;
   private loading: Promise<CaenTable | null> | null = null;
 
-  constructor(private readonly dataGovRo: DataGovRoService) {}
+  constructor(private readonly dataGovRoService: DataGovRoService) {}
 
   async describe(code: string | null | undefined): Promise<CaenInfo | null> {
     const table = await this.getTable();
@@ -70,7 +70,7 @@ export class CaenService {
   }
 
   private async download(): Promise<string> {
-    const packages = await this.dataGovRo.searchPackages(
+    const packages = await this.dataGovRoService.searchPackages(
       'nomenclatoare',
       'onrc',
     );
@@ -79,6 +79,6 @@ export class CaenService {
       .flatMap((pkg) => pkg.resources ?? [])
       .find((r) => /^n_caen\.csv$/i.test(r.name ?? ''))?.url;
     if (!url) throw new Error('No ONRC dataset with N_CAEN.CSV found');
-    return this.dataGovRo.downloadText(url);
+    return this.dataGovRoService.downloadText(url);
   }
 }

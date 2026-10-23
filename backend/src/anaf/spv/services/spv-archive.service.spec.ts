@@ -17,6 +17,8 @@ import type { SpvService } from './spv.service.js';
 import type { ActivityLogsService } from '../../../api-logs/activity-logs.service.js';
 import { ActivityAction } from '../../../api-logs/dto/api-log.enums.js';
 import { fakeActivityLogs } from '../../../testing/activity-logs.js';
+import { SpvMessageRepository } from '../repositories/spv-message.repository.js';
+import { CompanyRepository } from '../../../companies/repositories/company.repository.js';
 
 const MSG = {
   id: '100',
@@ -56,8 +58,8 @@ function setup(storeEnabled = false) {
   const activity = fakeActivityLogs();
   const service = new SpvArchiveService(
     { listMessages, downloadMessage } as unknown as SpvService,
-    messages as unknown as Repository<SpvMessage>,
-    companies as unknown as Repository<Company>,
+    new SpvMessageRepository(messages as unknown as Repository<SpvMessage>),
+    new CompanyRepository(companies as unknown as Repository<Company>),
     store as unknown as SpvFileStore,
     activity as unknown as ActivityLogsService,
   );

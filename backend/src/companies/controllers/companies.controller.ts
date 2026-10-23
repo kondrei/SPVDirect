@@ -39,18 +39,20 @@ import { BulkCreateStatus } from '../dto/company.enums.js';
 @UseGuards(JwtAuthGuard, AccountantParamGuard)
 export class CompaniesController {
   constructor(
-    private readonly companies: CompaniesService,
-    private readonly caen: CaenService,
+    private readonly companiesService: CompaniesService,
+    private readonly caenService: CaenService,
   ) {}
 
   private respond(company: Company) {
-    return toCompanyResponse(company, this.caen);
+    return toCompanyResponse(company, this.caenService);
   }
 
   @Get()
   async list(@Param('accountantId', ParseIdPipe) accountantId: number) {
     return Promise.all(
-      (await this.companies.list(accountantId)).map((c) => this.respond(c)),
+      (await this.companiesService.list(accountantId)).map((c) =>
+        this.respond(c),
+      ),
     );
   }
 
@@ -60,7 +62,7 @@ export class CompaniesController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Body() dto: CreateCompanyDto,
   ) {
-    return this.respond(await this.companies.create(accountantId, dto));
+    return this.respond(await this.companiesService.create(accountantId, dto));
   }
 
   @Post('bulk')
@@ -69,7 +71,7 @@ export class CompaniesController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Body() dto: CreateCompaniesDto,
   ) {
-    const results = await this.companies.createMany(accountantId, dto);
+    const results = await this.companiesService.createMany(accountantId, dto);
     return Promise.all(
       results.map(async (r) =>
         r.status === BulkCreateStatus.Created
@@ -84,7 +86,7 @@ export class CompaniesController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseIdPipe) id: number,
   ) {
-    return this.respond(await this.companies.get(accountantId, id));
+    return this.respond(await this.companiesService.get(accountantId, id));
   }
 
   @Post(':id/anaf-refresh')
@@ -94,7 +96,9 @@ export class CompaniesController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseIdPipe) id: number,
   ) {
-    return this.respond(await this.companies.refreshFromAnaf(accountantId, id));
+    return this.respond(
+      await this.companiesService.refreshFromAnaf(accountantId, id),
+    );
   }
 
   @Patch(':id')
@@ -104,7 +108,9 @@ export class CompaniesController {
     @Param('id', ParseIdPipe) id: number,
     @Body() dto: UpdateCompanyDto,
   ) {
-    return this.respond(await this.companies.update(accountantId, id, dto));
+    return this.respond(
+      await this.companiesService.update(accountantId, id, dto),
+    );
   }
 
   @Put(':id/logo')
@@ -117,7 +123,7 @@ export class CompaniesController {
     @UploadedFile() file: { buffer: Buffer } | undefined,
   ) {
     return this.respond(
-      await this.companies.setLogo(accountantId, id, file?.buffer),
+      await this.companiesService.setLogo(accountantId, id, file?.buffer),
     );
   }
 
@@ -127,7 +133,7 @@ export class CompaniesController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseIdPipe) id: number,
   ) {
-    const logo = await this.companies.getLogo(accountantId, id);
+    const logo = await this.companiesService.getLogo(accountantId, id);
     return new StreamableFile(logo.content, { type: logo.contentType });
   }
 
@@ -136,6 +142,8 @@ export class CompaniesController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseIdPipe) id: number,
   ) {
-    return this.respond(await this.companies.removeLogo(accountantId, id));
+    return this.respond(
+      await this.companiesService.removeLogo(accountantId, id),
+    );
   }
 }

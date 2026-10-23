@@ -1,14 +1,5 @@
-import type { ApiLogEntry, ApiLogsService } from './api-logs.service.js';
-
-export type ApiCallTarget = Omit<
-  ApiLogEntry,
-  'statusCode' | 'responseTimeMs' | 'error'
->;
-
-export interface ApiCallOutcome {
-  statusCode: number | null;
-  error: string | null;
-}
+import type { ApiLogsService } from './api-logs.service.js';
+import type { ApiCallOutcome, ApiCallTarget } from './dto/api-log.types.js';
 
 export async function trackApiCall<T>(
   apiLogs: Pick<ApiLogsService, 'record'>,

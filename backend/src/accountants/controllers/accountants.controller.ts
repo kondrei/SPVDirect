@@ -27,13 +27,13 @@ import { ChangePasswordDto, UpdateProfileDto } from '../dto/profile.dto.js';
 @UseGuards(JwtAuthGuard, AccountantParamGuard)
 export class AccountantsController {
   constructor(
-    private readonly accountants: AccountantsService,
-    private readonly session: SessionCookieService,
+    private readonly accountantsService: AccountantsService,
+    private readonly sessionCookieService: SessionCookieService,
   ) {}
 
   @Get('profile')
   getProfile(@Param('accountantId', ParseIdPipe) accountantId: number) {
-    return this.accountants.getProfile(accountantId);
+    return this.accountantsService.getProfile(accountantId);
   }
 
   @Patch('profile')
@@ -41,7 +41,7 @@ export class AccountantsController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Body() dto: UpdateProfileDto,
   ) {
-    return this.accountants.updateProfile(accountantId, dto);
+    return this.accountantsService.updateProfile(accountantId, dto);
   }
 
   @Get('profile/firm-lookup/:cui')
@@ -50,7 +50,7 @@ export class AccountantsController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('cui', ParseCuiPipe) cui: string,
   ) {
-    return this.accountants.lookupFirm(accountantId, cui);
+    return this.accountantsService.lookupFirm(accountantId, cui);
   }
 
   @Post('password')
@@ -61,7 +61,7 @@ export class AccountantsController {
     @Body() dto: ChangePasswordDto,
     @Res({ passthrough: true }) res: Response,
   ): Promise<void> {
-    await this.accountants.changePassword(accountantId, dto);
-    await this.session.issue(res, accountantId);
+    await this.accountantsService.changePassword(accountantId, dto);
+    await this.sessionCookieService.issue(res, accountantId);
   }
 }

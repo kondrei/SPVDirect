@@ -47,26 +47,26 @@ function unreachable(endpoint: string, err: unknown): string {
 @Injectable()
 export class AnafTokenClient {
   constructor(
-    private readonly config: ConfigService,
-    private readonly http: HttpService,
+    private readonly configService: ConfigService,
+    private readonly httpService: HttpService,
   ) {}
 
   buildAuthorizeUrl(state: string): string {
     const params = new URLSearchParams({
       response_type: 'code',
-      client_id: this.config.getOrThrow('ANAF_CLIENT_ID'),
-      redirect_uri: this.config.getOrThrow('ANAF_REDIRECT_URI'),
+      client_id: this.configService.getOrThrow('ANAF_CLIENT_ID'),
+      redirect_uri: this.configService.getOrThrow('ANAF_REDIRECT_URI'),
       token_content_type: 'jwt',
       state,
     });
-    return `${this.config.getOrThrow<string>('ANAF_AUTH_ENDPOINT')}?${params}`;
+    return `${this.configService.getOrThrow<string>('ANAF_AUTH_ENDPOINT')}?${params}`;
   }
 
   exchangeCode(code: string): Promise<AnafTokenSet> {
     return this.requestTokens({
       grant_type: AnafGrantType.AuthorizationCode,
       code,
-      redirect_uri: this.config.getOrThrow('ANAF_REDIRECT_URI'),
+      redirect_uri: this.configService.getOrThrow('ANAF_REDIRECT_URI'),
       token_content_type: 'jwt',
     });
   }
@@ -87,8 +87,8 @@ export class AnafTokenClient {
 
   async revokeToken(token: string, hint: AnafTokenHint): Promise<void> {
     try {
-      await this.http.axiosRef.post(
-        this.config.getOrThrow('ANAF_REVOKE_ENDPOINT'),
+      await this.httpService.axiosRef.post(
+        this.configService.getOrThrow('ANAF_REVOKE_ENDPOINT'),
         new URLSearchParams({ token, token_type_hint: hint }).toString(),
         { headers: this.clientAuthHeaders(), timeout: 30_000 },
       );
@@ -103,8 +103,9 @@ export class AnafTokenClient {
   }
 
   private clientAuthHeaders(): Record<string, string> {
-    const clientId = this.config.getOrThrow<string>('ANAF_CLIENT_ID');
-    const clientSecret = this.config.getOrThrow<string>('ANAF_CLIENT_SECRET');
+    const clientId = this.configService.getOrThrow<string>('ANAF_CLIENT_ID');
+    const clientSecret =
+      this.configService.getOrThrow<string>('ANAF_CLIENT_SECRET');
     const credentials = Buffer.from(`${clientId}:${clientSecret}`);
     return {
       Authorization: `Basic ${credentials.toString('base64')}`,
@@ -119,8 +120,8 @@ export class AnafTokenClient {
   ): Promise<AnafTokenSet> {
     let data: TokenResponse;
     try {
-      const res = await this.http.axiosRef.post<TokenResponse>(
-        this.config.getOrThrow('ANAF_TOKEN_ENDPOINT'),
+      const res = await this.httpService.axiosRef.post<TokenResponse>(
+        this.configService.getOrThrow('ANAF_TOKEN_ENDPOINT'),
         new URLSearchParams(form).toString(),
         { headers: this.clientAuthHeaders(), timeout: 30_000 },
       );

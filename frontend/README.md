@@ -39,6 +39,7 @@ Authorization links, including the page the certificate holder opens, are served
 | `npm test` | Unit and page tests (Vitest, jsdom; fetch is stubbed, no backend needed) |
 | `npm run typecheck` · `npm run lint` | `tsc -b` · oxlint |
 | `npm run build` | Typecheck + production build to `dist/` |
+| `npm run screenshots` | Regenerates the landing and README screenshots (see below) |
 
 ## Layout
 
@@ -52,7 +53,14 @@ src/
   pages/invoices/ InvoiceNewPage composes BuyerCard, InvoiceLinesCard and the options/totals cards around one reducer in invoiceForm.ts (form state, VAT rates realigned when the delivery date changes, validation, payload)
   lib/format.ts CUI rules (mirror the backend DTO), dates in Europe/Bucharest, decimal input, Romanian plurals, certificate status
   styles/       tokens.css (generated from the design system) · components.css · app.css
+  screenshots/  sample data (fixtures.ts), the app harness and the desktop + mobile collage used by `npm run screenshots`
 ```
+
+## Screenshots
+
+The landing gallery and the root README show `public/screenshots/<page>-<light|dark>.webp`: the real app, rendered with the sample data in `src/screenshots/fixtures.ts`, framed as a desktop window (1280×800) with a phone (390×844) beside it. The pages are listed in `src/pages/landing/screenshots.ts`.
+
+Run `npm run screenshots` after changing the menu, a page on the list or its sample data. The script starts Vite on :5198, opens `screenshots/collage.html` in headless Edge or Chrome (or the browser in `SCREENSHOT_BROWSER`) and writes the images. A page that asks for data the fixtures lack prints `screenshot: no sample data for ...`; add it to `SCREENSHOT_API`.
 
 ## Conventions
 

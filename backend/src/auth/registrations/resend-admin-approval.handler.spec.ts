@@ -4,6 +4,7 @@ import type { RegistrationMailer } from './services/registration-mailer.service.
 import { hashApprovalToken } from './services/registrations.service.js';
 import { ResendAdminApprovalCommand } from './resend-admin-approval.command.js';
 import { ResendAdminApprovalHandler } from './resend-admin-approval.handler.js';
+import { AccountantRepository } from '../../accountants/repositories/accountant.repository.js';
 
 const pending = {
   id: 7,
@@ -20,7 +21,7 @@ function setup() {
   };
   const handler = new ResendAdminApprovalHandler(
     { notifyAdmin } as unknown as RegistrationMailer,
-    accountants as unknown as Repository<Accountant>,
+    new AccountantRepository(accountants as unknown as Repository<Accountant>),
   );
   const run = () => handler.execute(new ResendAdminApprovalCommand(7));
   return { run, notifyAdmin, accountants };

@@ -24,8 +24,8 @@ interface CkanSearch {
 @Injectable()
 export class DataGovRoService {
   constructor(
-    private readonly config: ConfigService,
-    private readonly http: HttpService,
+    private readonly configService: ConfigService,
+    private readonly httpService: HttpService,
   ) {}
 
   async searchPackages(
@@ -34,15 +34,18 @@ export class DataGovRoService {
     rows = 20,
   ): Promise<CkanPackage[]> {
     const url = new URL(
-      `${this.config.getOrThrow<string>('DATA_GOV_RO_API_URL').replace(/\/$/, '')}/package_search`,
+      `${this.configService.getOrThrow<string>('DATA_GOV_RO_API_URL').replace(/\/$/, '')}/package_search`,
     );
     url.searchParams.set('q', query);
     url.searchParams.set('fq', `organization:${organization}`);
     url.searchParams.set('sort', 'metadata_created desc');
     url.searchParams.set('rows', String(rows));
-    const res = await this.http.axiosRef.get<CkanSearch>(url.toString(), {
-      timeout: 30_000,
-    });
+    const res = await this.httpService.axiosRef.get<CkanSearch>(
+      url.toString(),
+      {
+        timeout: 30_000,
+      },
+    );
     if (!res.data?.success) {
       throw new Error('data.gov.ro package_search failed');
     }
@@ -50,7 +53,7 @@ export class DataGovRoService {
   }
 
   async downloadText(url: string): Promise<string> {
-    const res = await this.http.axiosRef.get<string>(url, {
+    const res = await this.httpService.axiosRef.get<string>(url, {
       timeout: 60_000,
       responseType: 'text',
     });

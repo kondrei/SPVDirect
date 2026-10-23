@@ -1,25 +1,22 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
-import { In, IsNull, Not, type DataSource } from 'typeorm';
-import { Accountant } from '../../accountants/accountant.entity.js';
+import type { DataSource } from 'typeorm';
+import { AccountantRepository } from '../../accountants/repositories/accountant.repository.js';
 import { companyDeleted } from '../../api-logs/activity-entries.js';
 import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
-import { AuthorizationLink } from '../../anaf/authorization-links/authorization-link.entity.js';
+import { ApiLogRepository } from '../../api-logs/repositories/api-log.repository.js';
+import { AuthorizationLinkRepository } from '../../anaf/authorization-links/repositories/authorization-link.repository.js';
 import { AnafConnectionsService } from '../../anaf/services/anaf-connections.service.js';
-import { ApiLog } from '../../api-logs/api-log.entity.js';
-import { ApiLogService } from '../../api-logs/dto/api-log.enums.js';
+import { SpvMessageRepository } from '../../anaf/spv/repositories/spv-message.repository.js';
 import { SpvFileStore } from '../../anaf/spv/services/spv-file-store.service.js';
-import { SpvMessage } from '../../anaf/spv/spv-message.entity.js';
-import { EfacturaInvoice } from '../../efactura/efactura-invoice.entity.js';
-import { EfacturaUpload } from '../../efactura/efactura-upload.entity.js';
+import { EfacturaInvoiceRepository } from '../../efactura/repositories/efactura-invoice.repository.js';
+import { EfacturaUploadRepository } from '../../efactura/repositories/efactura-upload.repository.js';
 import { EfacturaFileStore } from '../../efactura/services/efactura-file-store.service.js';
-import { Invoice } from '../../invoices/invoice.entity.js';
+import { InvoiceRepository } from '../../invoices/repositories/invoice.repository.js';
 import { InvoiceFileStore } from '../../invoices/services/invoice-file-store.service.js';
 import { lockLiveCompany } from '../company-lock.js';
-import { Company } from '../company.entity.js';
+import { CompanyRepository } from '../repositories/company.repository.js';
 import { CompaniesService } from '../services/companies.service.js';
-import { companySpvMessages } from './company-records.js';
-import { UploadStatus } from '../../efactura/dto/efactura.enums.js';
 
 export const UPLOAD_IN_PROGRESS =
   'Firma are o factură în curs de trimitere la ANAF. Reîncercați după ce trimiterea se încheie.';
@@ -28,124 +25,84 @@ export const UPLOAD_IN_PROGRESS =
 export class CompanyDeletionService {
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
-    private readonly companies: CompaniesService,
-    private readonly invoiceFiles: InvoiceFileStore,
-    private readonly spvFiles: SpvFileStore,
-    private readonly efacturaFiles: EfacturaFileStore,
-    private readonly connections: AnafConnectionsService,
-    private readonly activity: ActivityLogsService,
+    private readonly companiesService: CompaniesService,
+    private readonly invoiceFileStore: InvoiceFileStore,
+    private readonly spvFileStore: SpvFileStore,
+    private readonly efacturaFileStore: EfacturaFileStore,
+    private readonly anafConnectionsService: AnafConnectionsService,
+    private readonly activityLogsService: ActivityLogsService,
+    private readonly companyRepository: CompanyRepository,
+    private readonly accountantRepository: AccountantRepository,
+    private readonly invoiceRepository: InvoiceRepository,
+    private readonly efacturaUploadRepository: EfacturaUploadRepository,
+    private readonly efacturaInvoiceRepository: EfacturaInvoiceRepository,
+    private readonly spvMessageRepository: SpvMessageRepository,
+    private readonly authorizationLinkRepository: AuthorizationLinkRepository,
+    private readonly apiLogRepository: ApiLogRepository,
   ) {}
 
   async softDelete(accountantId: number, id: number): Promise<void> {
-    const company = await this.companies.get(accountantId, id);
+    const company = await this.companiesService.get(accountantId, id);
     await this.dataSource.transaction(async (manager) => {
-      await lockLiveCompany(manager, accountantId, id);
-      if (
-        await manager.existsBy(EfacturaUpload, {
-          companyId: id,
-          status: UploadStatus.Sending,
-        })
-      ) {
+      await lockLiveCompany(this.companyRepository, manager, accountantId, id);
+      if (await this.efacturaUploadRepository.sendingForCompany(manager, id)) {
         throw new ConflictException(UPLOAD_IN_PROGRESS);
       }
-      const unlinked = await companySpvMessages(
-        manager.getRepository(SpvMessage),
-        company,
-      )
-        .andWhere('m.companyId IS NULL')
-        .select('m.id', 'id')
-        .getRawMany<{ id: number }>();
-      if (unlinked.length) {
-        await manager.update(
-          SpvMessage,
-          { id: In(unlinked.map((m) => m.id)) },
-          { companyId: id },
-        );
-      }
-      await manager.softDelete(Invoice, { companyId: id });
-      await manager.softDelete(EfacturaUpload, { companyId: id });
-      await manager.softDelete(EfacturaInvoice, { companyId: id });
-      await manager.softDelete(SpvMessage, { companyId: id });
-      await manager.delete(AuthorizationLink, {
-        companyId: id,
-        usedAt: IsNull(),
-      });
-      await manager.softDelete(Company, { id });
+      await this.spvMessageRepository.linkUnmatched(manager, company);
+      await this.invoiceRepository.softDeleteOfCompany(manager, id);
+      await this.efacturaUploadRepository.softDeleteOfCompany(manager, id);
+      await this.efacturaInvoiceRepository.softDeleteOfCompany(manager, id);
+      await this.spvMessageRepository.softDeleteOfCompany(manager, id);
+      await this.authorizationLinkRepository.deleteUnusedOfCompany(manager, id);
+      await this.companyRepository.softDelete(manager, id);
     });
-    await this.activity.record(accountantId, companyDeleted(company));
+    await this.activityLogsService.record(
+      accountantId,
+      companyDeleted(company),
+    );
   }
 
   async purge(companyId: number): Promise<void> {
     const [invoices, messages, archived] = await Promise.all([
-      this.dataSource.getRepository(Invoice).find({
-        select: { id: true, storagePath: true },
-        where: { companyId, storagePath: Not(IsNull()) },
-        withDeleted: true,
-      }),
-      this.dataSource.getRepository(SpvMessage).find({
-        select: { id: true, storagePath: true },
-        where: { companyId, storagePath: Not(IsNull()) },
-        withDeleted: true,
-      }),
-      this.dataSource.getRepository(EfacturaInvoice).find({
-        select: { id: true, zipStoragePath: true, pdfStoragePath: true },
-        where: { companyId },
-        withDeleted: true,
-      }),
+      this.invoiceRepository.storedOfCompany(companyId),
+      this.spvMessageRepository.storedOfCompany(companyId),
+      this.efacturaInvoiceRepository.storedOfCompany(companyId),
     ]);
     const invoicePaths = storedPaths(invoices);
     const spvPaths = await this.unusedSpvPaths(storedPaths(messages));
-    if (invoicePaths.length) await this.invoiceFiles.remove(invoicePaths);
-    if (spvPaths.length) await this.spvFiles.remove(spvPaths);
+    if (invoicePaths.length) await this.invoiceFileStore.remove(invoicePaths);
+    if (spvPaths.length) await this.spvFileStore.remove(spvPaths);
     const archivePaths = archived.flatMap((r) =>
       [r.zipStoragePath, r.pdfStoragePath].filter((p) => p !== null),
     );
-    if (archivePaths.length) await this.efacturaFiles.remove(archivePaths);
+    if (archivePaths.length) await this.efacturaFileStore.remove(archivePaths);
 
     await this.dataSource.transaction(async (manager) => {
-      await manager.delete(EfacturaInvoice, { companyId });
-      await manager.delete(EfacturaUpload, { companyId });
-      await manager.delete(Invoice, {
-        companyId,
-        stornoOfInvoiceId: Not(IsNull()),
-      });
-      await manager.delete(Invoice, { companyId });
-      await manager.delete(SpvMessage, { companyId });
-      await manager.delete(ApiLog, {
-        companyId,
-        service: In([ApiLogService.Activity, ApiLogService.Smtp]),
-      });
-      await manager.delete(Company, { id: companyId });
+      await this.efacturaInvoiceRepository.purgeCompany(manager, companyId);
+      await this.efacturaUploadRepository.purgeCompany(manager, companyId);
+      await this.invoiceRepository.purgeCompany(manager, companyId);
+      await this.spvMessageRepository.purgeCompany(manager, companyId);
+      await this.apiLogRepository.purgeCompanyActivity(manager, companyId);
+      await this.companyRepository.purge(manager, companyId);
     });
   }
 
   async purgeAccountant(accountantId: number): Promise<void> {
-    const companies = await this.dataSource.getRepository(Company).find({
-      select: { id: true },
-      where: { accountantId },
-      withDeleted: true,
-    });
+    const companies =
+      await this.companyRepository.idsOfAccountantWithDeleted(accountantId);
     for (const { id } of companies) await this.purge(id);
 
-    const messages = await this.dataSource.getRepository(SpvMessage).find({
-      select: { id: true, storagePath: true },
-      where: { accountantId, storagePath: Not(IsNull()) },
-      withDeleted: true,
-    });
+    const messages =
+      await this.spvMessageRepository.storedOfAccountant(accountantId);
     const spvPaths = storedPaths(messages);
-    if (spvPaths.length) await this.spvFiles.remove(spvPaths);
-    await this.connections.removeAll(accountantId);
-    await this.dataSource
-      .getRepository(Accountant)
-      .delete({ id: accountantId });
+    if (spvPaths.length) await this.spvFileStore.remove(spvPaths);
+    await this.anafConnectionsService.removeAll(accountantId);
+    await this.accountantRepository.delete(accountantId);
   }
 
   private async unusedSpvPaths(paths: string[]): Promise<string[]> {
     if (!paths.length) return [];
-    const live = await this.dataSource.getRepository(SpvMessage).find({
-      select: { id: true, storagePath: true },
-      where: { storagePath: In(paths) },
-    });
+    const live = await this.spvMessageRepository.liveWithPaths(paths);
     const used = new Set(storedPaths(live));
     return paths.filter((p) => !used.has(p));
   }

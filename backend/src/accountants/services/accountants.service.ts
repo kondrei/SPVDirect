@@ -3,8 +3,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import {
   passwordChanged,
   profileUpdated,
@@ -15,7 +13,8 @@ import { CaenService } from '../../open-data/services/caen.service.js';
 import { hashPassword, verifyPassword } from '../../common/crypto/password.js';
 import { AnafCompanyLookupService } from '../../companies/services/anaf-company-lookup.service.js';
 import { CUI_NOT_FOUND } from '../../companies/services/companies.service.js';
-import { Accountant } from '../accountant.entity.js';
+import type { Accountant } from '../accountant.entity.js';
+import { AccountantRepository } from '../repositories/accountant.repository.js';
 import type {
   ChangePasswordDto,
   UpdateProfileDto,
@@ -45,32 +44,24 @@ export function toProfile(a: Accountant, firmCaen: CaenInfo | null) {
 @Injectable()
 export class AccountantsService {
   constructor(
-    @InjectRepository(Accountant)
-    private readonly accountants: Repository<Accountant>,
-    private readonly anafLookup: AnafCompanyLookupService,
-    private readonly caen: CaenService,
-    private readonly activity: ActivityLogsService,
+    private readonly accountantRepository: AccountantRepository,
+    private readonly anafCompanyLookupService: AnafCompanyLookupService,
+    private readonly caenService: CaenService,
+    private readonly activityLogsService: ActivityLogsService,
   ) {}
 
   findById(id: number): Promise<Accountant | null> {
-    return this.accountants.findOneBy({ id });
+    return this.accountantRepository.findById(id);
   }
 
   findSessionState(
     id: number,
   ): Promise<Pick<Accountant, 'status' | 'passwordChangedAt'> | null> {
-    return this.accountants.findOne({
-      where: { id },
-      select: { id: true, status: true, passwordChangedAt: true },
-    });
+    return this.accountantRepository.findSessionState(id);
   }
 
   findByEmailWithPassword(email: string): Promise<Accountant | null> {
-    return this.accountants
-      .createQueryBuilder('a')
-      .addSelect('a.passwordHash')
-      .where('a.email = :email', { email })
-      .getOne();
+    return this.accountantRepository.findByEmailWithPassword(email);
   }
 
   async getProfile(id: number): Promise<AccountantProfile> {
@@ -97,20 +88,26 @@ export class AccountantsService {
         'Pentru membrii CECCAR completați calitatea profesională și numărul de legitimație',
       );
     }
-    if (dto.firmCaenCode && !(await this.caen.describe(dto.firmCaenCode))) {
+    if (
+      dto.firmCaenCode &&
+      !(await this.caenService.describe(dto.firmCaenCode))
+    ) {
       throw new BadRequestException(
         'Cod CAEN necunoscut în nomenclatorul CAEN',
       );
     }
-    const saved = await this.accountants.save(accountant);
+    const saved = await this.accountantRepository.save(accountant);
     if (changed.length) {
-      await this.activity.record(id, profileUpdated(changed));
+      await this.activityLogsService.record(id, profileUpdated(changed));
     }
     return this.profile(saved);
   }
 
   async lookupFirm(accountantId: number, cui: string): Promise<FirmLookup> {
-    const record = await this.anafLookup.lookup(accountantId, cui);
+    const record = await this.anafCompanyLookupService.lookup(
+      accountantId,
+      cui,
+    );
     if (!record) throw new BadRequestException(CUI_NOT_FOUND);
     const g = record.date_generale;
     const firmCaenCode = normalizeCaenCode(g.cod_CAEN);
@@ -118,16 +115,12 @@ export class AccountantsService {
       firmCui: cui,
       firmName: g.denumire.trim(),
       firmCaenCode,
-      firmCaen: await this.caen.tryDescribe(firmCaenCode),
+      firmCaen: await this.caenService.tryDescribe(firmCaenCode),
     };
   }
 
   async changePassword(id: number, dto: ChangePasswordDto): Promise<void> {
-    const accountant = await this.accountants
-      .createQueryBuilder('a')
-      .addSelect('a.passwordHash')
-      .where('a.id = :id', { id })
-      .getOne();
+    const accountant = await this.accountantRepository.findWithPassword(id);
     if (!accountant) throw new NotFoundException('Contul nu a fost găsit');
     if (!(await verifyPassword(dto.currentPassword, accountant.passwordHash))) {
       throw new BadRequestException('Parola actuală este incorectă');
@@ -137,18 +130,16 @@ export class AccountantsService {
         'Parola nouă trebuie să fie diferită de cea actuală',
       );
     }
-    await this.accountants.update(
-      { id },
-      {
-        passwordHash: await hashPassword(dto.newPassword),
-        passwordChangedAt: new Date(),
-      },
+    await this.accountantRepository.updatePassword(
+      id,
+      await hashPassword(dto.newPassword),
+      new Date(),
     );
-    await this.activity.record(id, passwordChanged());
+    await this.activityLogsService.record(id, passwordChanged());
   }
 
   private async profile(a: Accountant): Promise<AccountantProfile> {
-    return toProfile(a, await this.caen.tryDescribe(a.firmCaenCode));
+    return toProfile(a, await this.caenService.tryDescribe(a.firmCaenCode));
   }
 
   private async getOrThrow(id: number): Promise<Accountant> {

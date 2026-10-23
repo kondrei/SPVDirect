@@ -3,7 +3,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { QueryFailedError, type Repository } from 'typeorm';
+import { QueryFailedError, type DataSource, type Repository } from 'typeorm';
 import type { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import { ActivityAction } from '../../api-logs/dto/api-log.enums.js';
 import type { AnafApiService } from '../../anaf/services/anaf-api.service.js';
@@ -37,6 +37,9 @@ import { EfacturaArchiveService } from './efactura-archive.service.js';
 import type { EfacturaFileStore } from './efactura-file-store.service.js';
 import type { EfacturaValidator } from './efactura-validator.service.js';
 import type { EfacturaService } from './efactura.service.js';
+import { EfacturaInvoiceRepository } from '../repositories/efactura-invoice.repository.js';
+import { EfacturaUploadRepository } from '../repositories/efactura-upload.repository.js';
+import { CompanyRepository } from '../../companies/repositories/company.repository.js';
 
 const BUYER = {
   id: 7,
@@ -170,9 +173,15 @@ function setup({
     companies as unknown as CompaniesService,
     files as unknown as EfacturaFileStore,
     mailer as unknown as EfacturaArchiveMailer,
-    archive as unknown as Repository<EfacturaInvoice>,
-    uploads as unknown as Repository<EfacturaUpload>,
+    new EfacturaInvoiceRepository(
+      archive as unknown as Repository<EfacturaInvoice>,
+    ),
+    new EfacturaUploadRepository(
+      uploads as unknown as Repository<EfacturaUpload>,
+    ),
     activity as unknown as ActivityLogsService,
+    archive.manager as unknown as DataSource,
+    new CompanyRepository({} as never),
   );
   return {
     service,

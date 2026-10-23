@@ -1,9 +1,7 @@
 import type { Response } from 'express';
 import { RegistrationsController } from './registrations.controller.js';
-import type {
-  PendingRegistration,
-  RegistrationsService,
-} from './services/registrations.service.js';
+import type { PendingRegistration } from '../dto/auth.types.js';
+import type { RegistrationsService } from './services/registrations.service.js';
 
 const pending: PendingRegistration = {
   id: 7,

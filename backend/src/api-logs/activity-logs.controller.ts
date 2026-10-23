@@ -9,14 +9,14 @@ import { DEFAULT_ACTIVITY_PAGE_SIZE } from './dto/api-log.constants.js';
 @Controller('accountants/:accountantId/activity')
 @UseGuards(JwtAuthGuard, AccountantParamGuard)
 export class ActivityLogsController {
-  constructor(private readonly activity: ActivityLogsService) {}
+  constructor(private readonly activityLogsService: ActivityLogsService) {}
 
   @Get()
   list(
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Query() query: ListActivityQuery,
   ) {
-    return this.activity.list(accountantId, {
+    return this.activityLogsService.list(accountantId, {
       companyId: query.companyId,
       action: query.action,
       page: query.page ?? 1,

@@ -12,6 +12,7 @@ import { ProfessionalTitle, AccountStatus } from '../dto/accountant.enums.js';
 import type { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import { ActivityAction } from '../../api-logs/dto/api-log.enums.js';
 import { fakeActivityLogs } from '../../testing/activity-logs.js';
+import { AccountantRepository } from '../repositories/accountant.repository.js';
 
 function accountant(overrides: Partial<Accountant> = {}): Accountant {
   return {
@@ -65,7 +66,7 @@ function setup(
   };
   const activity = fakeActivityLogs();
   const service = new AccountantsService(
-    repo as unknown as Repository<Accountant>,
+    new AccountantRepository(repo as unknown as Repository<Accountant>),
     anaf as unknown as AnafCompanyLookupService,
     caen as unknown as CaenService,
     activity as unknown as ActivityLogsService,
@@ -312,7 +313,9 @@ describe('AccountantsService.findSessionState', () => {
   it('reads only the columns the session check needs', async () => {
     const findOne = vi.fn().mockResolvedValue({ id: 1, status: 'active' });
     const service = new AccountantsService(
-      { findOne } as unknown as Repository<Accountant>,
+      new AccountantRepository({
+        findOne,
+      } as unknown as Repository<Accountant>),
       {} as AnafCompanyLookupService,
       {} as CaenService,
       fakeActivityLogs() as unknown as ActivityLogsService,

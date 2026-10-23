@@ -39,7 +39,7 @@ export class MailService {
 
   constructor(
     config: ConfigService<Env, true>,
-    private readonly apiLogs: ApiLogsService,
+    private readonly apiLogsService: ApiLogsService,
   ) {
     const user = config.get('SMTP_USER', { infer: true });
     const pass = config.get('SMTP_PASS', { infer: true });
@@ -54,7 +54,7 @@ export class MailService {
 
   send(message: MailMessage, target: MailLogTarget): Promise<number | null> {
     return trackApiCall(
-      this.apiLogs,
+      this.apiLogsService,
       {
         accountantId: target.accountantId,
         anafConnectionId: null,

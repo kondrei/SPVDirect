@@ -14,6 +14,8 @@ import { AccountExportService } from './account-export.service.js';
 import type { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import { ActivityAction } from '../../api-logs/dto/api-log.enums.js';
 import { fakeActivityLogs } from '../../testing/activity-logs.js';
+import { AnafConnectionRepository } from '../../anaf/repositories/anaf-connection.repository.js';
+import { SpvMessageRepository } from '../../anaf/spv/repositories/spv-message.repository.js';
 
 const COMPANIES = [
   { id: 7, accountantId: 1, cui: '123', name: 'ALFA SRL' },
@@ -69,8 +71,10 @@ function setup() {
     accountants as unknown as AccountantsService,
     companies as unknown as CompaniesService,
     companyExport,
-    connections as unknown as Repository<AnafConnection>,
-    messages as unknown as Repository<SpvMessage>,
+    new AnafConnectionRepository(
+      connections as unknown as Repository<AnafConnection>,
+    ),
+    new SpvMessageRepository(messages as unknown as Repository<SpvMessage>),
     activity as unknown as ActivityLogsService,
   );
   return { service, accountants, writeCompany, messages, activity };

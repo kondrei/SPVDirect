@@ -26,11 +26,13 @@ class UpdateConnectionDto {
 @Controller('accountants/:accountantId/anaf/connections')
 @UseGuards(JwtAuthGuard, AccountantParamGuard)
 export class AnafConnectionsController {
-  constructor(private readonly connections: AnafConnectionsService) {}
+  constructor(
+    private readonly anafConnectionsService: AnafConnectionsService,
+  ) {}
 
   @Get()
   list(@Param('accountantId', ParseIdPipe) accountantId: number) {
-    return this.connections.list(accountantId);
+    return this.anafConnectionsService.list(accountantId);
   }
 
   @Patch(':id')
@@ -39,7 +41,7 @@ export class AnafConnectionsController {
     @Param('id', ParseIdPipe) id: number,
     @Body() dto: UpdateConnectionDto,
   ) {
-    return this.connections.rename(accountantId, id, dto.label);
+    return this.anafConnectionsService.rename(accountantId, id, dto.label);
   }
 
   @Delete(':id')
@@ -49,7 +51,7 @@ export class AnafConnectionsController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseIdPipe) id: number,
   ) {
-    return this.connections.remove(accountantId, id);
+    return this.anafConnectionsService.remove(accountantId, id);
   }
 
   @Get(':id/test')
@@ -58,6 +60,6 @@ export class AnafConnectionsController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseIdPipe) id: number,
   ) {
-    return this.connections.test(accountantId, id);
+    return this.anafConnectionsService.test(accountantId, id);
   }
 }

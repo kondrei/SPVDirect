@@ -28,18 +28,18 @@ import { AccountStatus } from '../../accountants/dto/accountant.enums.js';
 @Controller('auth')
 export class AuthController {
   constructor(
-    private readonly auth: AuthService,
-    private readonly accountants: AccountantsService,
-    private readonly commands: CommandBus,
-    private readonly session: SessionCookieService,
-    private readonly activity: ActivityLogsService,
+    private readonly authService: AuthService,
+    private readonly accountantsService: AccountantsService,
+    private readonly commandBus: CommandBus,
+    private readonly sessionCookieService: SessionCookieService,
+    private readonly activityLogsService: ActivityLogsService,
   ) {}
 
   @Post('register')
   @Throttle(CREDENTIALS_THROTTLE)
   @HttpCode(202)
   async register(@Body() dto: RegisterDto, @Ip() ip: string) {
-    await this.commands.execute(new RegisterAccountantCommand(dto, ip));
+    await this.commandBus.execute(new RegisterAccountantCommand(dto, ip));
     return { status: AccountStatus.Pending };
   }
 
@@ -50,22 +50,22 @@ export class AuthController {
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const accountant = await this.auth.validateLogin(dto);
-    await this.session.issue(res, accountant.id);
-    await this.activity.record(accountant.id, loggedIn());
+    const accountant = await this.authService.validateLogin(dto);
+    await this.sessionCookieService.issue(res, accountant.id);
+    await this.activityLogsService.record(accountant.id, loggedIn());
     return toPublic(accountant);
   }
 
   @Post('logout')
   @HttpCode(204)
   logout(@Res({ passthrough: true }) res: Response): void {
-    this.session.clear(res);
+    this.sessionCookieService.clear(res);
   }
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
   async me(@CurrentAccountantId() accountantId: number) {
-    const accountant = await this.accountants.findById(accountantId);
+    const accountant = await this.accountantsService.findById(accountantId);
     if (!accountant) throw new NotFoundException();
     return toPublic(accountant);
   }

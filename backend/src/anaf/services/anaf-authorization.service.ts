@@ -19,29 +19,29 @@ export class AnafAuthorizationService {
   private readonly logger = new Logger(AnafAuthorizationService.name);
 
   constructor(
-    private readonly tokens: AnafTokenClient,
-    private readonly oauth: AnafOAuthService,
-    private readonly links: AuthorizationLinksService,
-    private readonly companies: CompaniesService,
-    private readonly activity: ActivityLogsService,
+    private readonly anafTokenClient: AnafTokenClient,
+    private readonly anafOAuthService: AnafOAuthService,
+    private readonly authorizationLinksService: AuthorizationLinksService,
+    private readonly companiesService: CompaniesService,
+    private readonly activityLogsService: ActivityLogsService,
   ) {}
 
   authorizeUrl(state: string): string {
-    return this.tokens.buildAuthorizeUrl(state);
+    return this.anafTokenClient.buildAuthorizeUrl(state);
   }
 
   async complete(
     payload: OAuthStatePayload,
     code: string,
   ): Promise<AuthorizationOutcome> {
-    const tokens = await this.tokens.exchangeCode(code);
+    const tokens = await this.anafTokenClient.exchangeCode(code);
     if (payload.mode === AnafConnectionSource.Self) {
-      const connection = await this.oauth.saveConnection(
+      const connection = await this.anafOAuthService.saveConnection(
         payload.accountantId,
         tokens,
         AnafConnectionSource.Self,
       );
-      await this.activity.record(
+      await this.activityLogsService.record(
         payload.accountantId,
         certificateConnected(connection, null),
       );
@@ -51,13 +51,15 @@ export class AnafAuthorizationService {
       };
     }
 
-    const lookup = await this.links.findById(payload.linkId);
+    const lookup = await this.authorizationLinksService.findById(
+      payload.linkId,
+    );
     if (!lookup.ok)
       return {
         kind: AuthorizationOutcomeKind.LinkInvalid,
         reason: lookup.reason,
       };
-    if (!(await this.links.claim(lookup.link.id))) {
+    if (!(await this.authorizationLinksService.claim(lookup.link.id))) {
       return {
         kind: AuthorizationOutcomeKind.LinkInvalid,
         reason: LinkFailure.Used,
@@ -65,18 +67,24 @@ export class AnafAuthorizationService {
     }
     let connection: AnafConnection;
     try {
-      connection = await this.oauth.saveConnection(
+      connection = await this.anafOAuthService.saveConnection(
         lookup.link.accountantId,
         tokens,
         AnafConnectionSource.Link,
       );
     } catch (err) {
-      await this.links.release(lookup.link.id);
+      await this.authorizationLinksService.release(lookup.link.id);
       throw err;
     }
-    await this.links.attachConnection(lookup.link.id, connection.id);
-    await this.companies.attachConnection(lookup.company.id, connection.id);
-    await this.activity.record(
+    await this.authorizationLinksService.attachConnection(
+      lookup.link.id,
+      connection.id,
+    );
+    await this.companiesService.attachConnection(
+      lookup.company.id,
+      connection.id,
+    );
+    await this.activityLogsService.record(
       lookup.link.accountantId,
       certificateConnected(connection, lookup.company),
     );

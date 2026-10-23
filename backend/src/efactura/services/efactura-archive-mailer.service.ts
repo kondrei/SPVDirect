@@ -13,7 +13,7 @@ import type { EfacturaInvoice } from '../efactura-invoice.entity.js';
 export class EfacturaArchiveMailer {
   private readonly logger = new Logger(EfacturaArchiveMailer.name);
 
-  constructor(private readonly mail: MailService) {}
+  constructor(private readonly mailService: MailService) {}
 
   async send(
     invoice: EfacturaInvoice,
@@ -22,11 +22,14 @@ export class EfacturaArchiveMailer {
     attachments: MailAttachment[],
   ): Promise<void> {
     try {
-      await this.mail.send(this.message(invoice, to, note, attachments), {
-        kind: MailKind.EfacturaArchive,
-        accountantId: invoice.accountantId,
-        companyId: invoice.companyId,
-      });
+      await this.mailService.send(
+        this.message(invoice, to, note, attachments),
+        {
+          kind: MailKind.EfacturaArchive,
+          accountantId: invoice.accountantId,
+          companyId: invoice.companyId,
+        },
+      );
     } catch (err) {
       this.logger.error(
         `Archived e-Factura ${invoice.id} email failed (accountant ${invoice.accountantId}): ${(err as Error).message}`,

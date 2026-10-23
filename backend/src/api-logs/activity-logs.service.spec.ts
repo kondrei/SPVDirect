@@ -5,6 +5,7 @@ import { ActivityLogsController } from './activity-logs.controller.js';
 import { ActivityLogsService } from './activity-logs.service.js';
 import type { ApiLogStream } from './api-log-stream.js';
 import type { ApiLog } from './api-log.entity.js';
+import { ApiLogRepository } from './repositories/api-log.repository.js';
 import { SYSTEM_ACTOR_NAME } from './dto/api-log.constants.js';
 import {
   ActivityAction,
@@ -34,7 +35,7 @@ function setup(rows: object[] = [], total = rows.length) {
   };
   const stream = { write: vi.fn() };
   const service = new ActivityLogsService(
-    repo as unknown as Repository<ApiLog>,
+    new ApiLogRepository(repo as unknown as Repository<ApiLog>),
     stream as unknown as ApiLogStream,
   );
   return { service, repo, qb, stream };

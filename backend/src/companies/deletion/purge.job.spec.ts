@@ -10,6 +10,9 @@ import { PURGE_LOCK_KEY, PURGE_SCHEDULE } from '../../common/constants.js';
 import type { Company } from '../company.entity.js';
 import type { CompanyDeletionService } from './company-deletion.service.js';
 import { PURGE_BATCH, PURGE_GRACE_DAYS, PurgeJob } from './purge.job.js';
+import { AccountantRepository } from '../../accountants/repositories/accountant.repository.js';
+import { CompanyRepository } from '../repositories/company.repository.js';
+import { AdvisoryLockRepository } from '../../database/repositories/advisory-lock.repository.js';
 function setup(
   batches: number[][],
   accountantBatches: number[][] = [],
@@ -39,10 +42,12 @@ function setup(
   const recordJob = vi.fn().mockResolvedValue(undefined);
   const record = vi.fn().mockResolvedValue(undefined);
   const job = new PurgeJob(
-    { find } as unknown as Repository<Company>,
-    { find: findAccountants } as unknown as Repository<Accountant>,
+    new CompanyRepository({ find } as unknown as Repository<Company>),
+    new AccountantRepository({
+      find: findAccountants,
+    } as unknown as Repository<Accountant>),
     { purge, purgeAccountant } as unknown as CompanyDeletionService,
-    dataSource as unknown as DataSource,
+    new AdvisoryLockRepository(dataSource as unknown as DataSource),
     { recordJob, record } as unknown as ActivityLogsService,
   );
   return {
