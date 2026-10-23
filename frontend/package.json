@@ -15,7 +15,8 @@
     "lint": "oxlint src/",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint:sonar": "eslint --max-warnings 0 src"
+    "lint:sonar": "eslint --max-warnings 0 src",
+    "screenshots": "node scripts/screenshots.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.103.2",

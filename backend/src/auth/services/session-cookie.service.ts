@@ -14,7 +14,7 @@ export class SessionCookieService {
   private readonly production: boolean;
 
   constructor(
-    private readonly auth: AuthService,
+    private readonly authService: AuthService,
     config: ConfigService,
   ) {
     this.production = isProduction(config);
@@ -23,7 +23,7 @@ export class SessionCookieService {
   async issue(res: Response, accountantId: number): Promise<void> {
     res.cookie(
       SESSION_COOKIE,
-      await this.auth.signSession(accountantId),
+      await this.authService.signSession(accountantId),
       cookieOptions(SESSION_TTL_SECONDS, this.production),
     );
   }

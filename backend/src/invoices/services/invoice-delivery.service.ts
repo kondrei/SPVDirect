@@ -5,8 +5,6 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import {
   invoiceIssued,
   invoiceSent,
@@ -24,7 +22,8 @@ import type {
 } from '../dto/invoice.types.js';
 import { renderInvoiceXml } from '../builders/invoice-xml.js';
 import { invoiceFilename } from '../helpers/invoice-format.js';
-import { Invoice } from '../invoice.entity.js';
+import type { Invoice } from '../invoice.entity.js';
+import { InvoiceRepository } from '../repositories/invoice.repository.js';
 import { InvoiceFileStore } from './invoice-file-store.service.js';
 import { findOwnedInvoice } from './invoice-lookup.js';
 import { InvoiceMailer } from './invoice-mailer.service.js';
@@ -37,16 +36,15 @@ export class InvoiceDeliveryService {
   private readonly logger = new Logger(InvoiceDeliveryService.name);
 
   constructor(
-    @InjectRepository(Invoice)
-    private readonly invoices: Repository<Invoice>,
-    private readonly companies: CompaniesService,
-    private readonly store: InvoiceFileStore,
-    private readonly mailer: InvoiceMailer,
-    private readonly activity: ActivityLogsService,
+    private readonly invoiceRepository: InvoiceRepository,
+    private readonly companiesService: CompaniesService,
+    private readonly invoiceFileStore: InvoiceFileStore,
+    private readonly invoiceMailer: InvoiceMailer,
+    private readonly activityLogsService: ActivityLogsService,
   ) {}
 
   assertCanDeliver(options: DeliveryOptions): void {
-    if (options.saveToStorage && !this.store.configured) {
+    if (options.saveToStorage && !this.invoiceFileStore.configured) {
       throw new BadRequestException(STORAGE_NOT_CONFIGURED);
     }
   }
@@ -73,7 +71,7 @@ export class InvoiceDeliveryService {
         );
       }
     }
-    await this.activity.record(
+    await this.activityLogsService.record(
       invoice.accountantId,
       invoiceIssued(invoice, {
         emailedTo:
@@ -85,7 +83,11 @@ export class InvoiceDeliveryService {
   }
 
   async pdf(accountantId: number, id: number): Promise<InvoiceFile> {
-    const invoice = await findOwnedInvoice(this.invoices, accountantId, id);
+    const invoice = await findOwnedInvoice(
+      this.invoiceRepository,
+      accountantId,
+      id,
+    );
     return {
       content: await this.pdfFor(invoice),
       contentType: 'application/pdf',
@@ -94,7 +96,11 @@ export class InvoiceDeliveryService {
   }
 
   async xml(accountantId: number, id: number): Promise<InvoiceFile> {
-    const invoice = await findOwnedInvoice(this.invoices, accountantId, id);
+    const invoice = await findOwnedInvoice(
+      this.invoiceRepository,
+      accountantId,
+      id,
+    );
     return {
       content: Buffer.from(renderInvoiceXml(invoice), 'utf8'),
       contentType: 'application/xml',
@@ -107,9 +113,13 @@ export class InvoiceDeliveryService {
 
   async saveToStorage(accountantId: number, id: number): Promise<Invoice> {
     this.assertCanDeliver({ saveToStorage: true });
-    const invoice = await findOwnedInvoice(this.invoices, accountantId, id);
+    const invoice = await findOwnedInvoice(
+      this.invoiceRepository,
+      accountantId,
+      id,
+    );
     await this.putInStorage(invoice, await this.renderPdf(invoice));
-    await this.activity.record(accountantId, invoiceStored(invoice));
+    await this.activityLogsService.record(accountantId, invoiceStored(invoice));
     return invoice;
   }
 
@@ -118,7 +128,11 @@ export class InvoiceDeliveryService {
     id: number,
     to: string | null | undefined,
   ): Promise<Invoice> {
-    const invoice = await findOwnedInvoice(this.invoices, accountantId, id);
+    const invoice = await findOwnedInvoice(
+      this.invoiceRepository,
+      accountantId,
+      id,
+    );
     const recipient = to ?? invoice.buyer.email;
     if (!recipient) {
       throw new BadRequestException(
@@ -133,13 +147,16 @@ export class InvoiceDeliveryService {
         'Emailul nu a putut fi trimis. Verificați adresa și reîncercați.',
       );
     }
-    await this.activity.record(accountantId, invoiceSent(invoice, recipient));
+    await this.activityLogsService.record(
+      accountantId,
+      invoiceSent(invoice, recipient),
+    );
     return invoice;
   }
 
   private async logoFor(invoice: Invoice): Promise<InvoiceLogo | null> {
     try {
-      return await this.companies.getLogo(
+      return await this.companiesService.getLogo(
         invoice.accountantId,
         invoice.companyId,
       );
@@ -154,9 +171,9 @@ export class InvoiceDeliveryService {
   }
 
   private async pdfFor(invoice: Invoice): Promise<Buffer> {
-    if (invoice.storagePath && this.store.configured) {
+    if (invoice.storagePath && this.invoiceFileStore.configured) {
       try {
-        return await this.store.get(invoice.storagePath);
+        return await this.invoiceFileStore.get(invoice.storagePath);
       } catch (err) {
         this.logger.warn(
           `Invoice ${invoice.id} not read from storage, regenerating: ${(err as Error).message}`,
@@ -167,14 +184,14 @@ export class InvoiceDeliveryService {
   }
 
   private async putInStorage(invoice: Invoice, pdf: Buffer): Promise<void> {
-    const path = this.store.pathFor(
+    const path = this.invoiceFileStore.pathFor(
       invoice.accountantId,
       invoice.companyId,
       invoice.series,
       invoice.number,
     );
-    await this.store.put(path, pdf);
-    await this.invoices.update({ id: invoice.id }, { storagePath: path });
+    await this.invoiceFileStore.put(path, pdf);
+    await this.invoiceRepository.update(invoice.id, { storagePath: path });
     invoice.storagePath = path;
   }
 
@@ -183,12 +200,12 @@ export class InvoiceDeliveryService {
     to: string,
     pdf: Buffer,
   ): Promise<void> {
-    await this.mailer.send(invoice, to, pdf);
+    await this.invoiceMailer.send(invoice, to, pdf);
     const emailedAt = new Date();
-    await this.invoices.update(
-      { id: invoice.id },
-      { emailedTo: to, emailedAt },
-    );
+    await this.invoiceRepository.update(invoice.id, {
+      emailedTo: to,
+      emailedAt,
+    });
     invoice.emailedTo = to;
     invoice.emailedAt = emailedAt;
   }

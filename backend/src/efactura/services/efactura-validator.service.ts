@@ -38,9 +38,9 @@ export class EfacturaValidator {
   private readonly logger = new Logger(EfacturaValidator.name);
 
   constructor(
-    private readonly config: ConfigService,
-    private readonly http: HttpService,
-    private readonly apiLogs: ApiLogsService,
+    private readonly configService: ConfigService,
+    private readonly httpService: HttpService,
+    private readonly apiLogsService: ApiLogsService,
   ) {}
 
   async validate(
@@ -127,7 +127,7 @@ export class EfacturaValidator {
   ): Promise<AxiosResponse<unknown>> {
     assertXmlPayload(xml);
     return trackApiCall(
-      this.apiLogs,
+      this.apiLogsService,
       {
         accountantId,
         anafConnectionId: null,
@@ -138,8 +138,8 @@ export class EfacturaValidator {
       },
       async (outcome) => {
         try {
-          const res = await this.http.axiosRef.post<unknown>(
-            `${this.config.getOrThrow<string>('ANAF_EFACTURA_VALIDATE_ENDPOINT')}${path}`,
+          const res = await this.httpService.axiosRef.post<unknown>(
+            `${this.configService.getOrThrow<string>('ANAF_EFACTURA_VALIDATE_ENDPOINT')}${path}`,
             xml,
             {
               headers: { 'Content-Type': 'text/plain' },

@@ -17,6 +17,30 @@ export type ApiLogRow = Omit<
 > &
   Partial<Pick<ApiLog, 'description' | 'details'>>;
 
+export type ApiLogEntry = Pick<
+  ApiLog,
+  | 'accountantId'
+  | 'anafConnectionId'
+  | 'companyId'
+  | 'service'
+  | 'method'
+  | 'endpoint'
+  | 'statusCode'
+  | 'responseTimeMs'
+  | 'error'
+> &
+  Partial<Pick<ApiLog, 'details'>>;
+
+export type ApiCallTarget = Omit<
+  ApiLogEntry,
+  'statusCode' | 'responseTimeMs' | 'error'
+>;
+
+export interface ApiCallOutcome {
+  statusCode: number | null;
+  error: string | null;
+}
+
 export interface ActivityEntry {
   action: ActivityAction;
   description: string;

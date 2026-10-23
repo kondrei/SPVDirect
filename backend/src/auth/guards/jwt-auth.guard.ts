@@ -21,8 +21,8 @@ export interface AuthenticatedRequest extends Request {
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
-    private readonly jwt: JwtService,
-    private readonly auth: AuthService,
+    private readonly jwtService: JwtService,
+    private readonly authService: AuthService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -33,7 +33,7 @@ export class JwtAuthGuard implements CanActivate {
     if (!token) throw new UnauthorizedException();
     let payload: SessionPayload & { iat?: number };
     try {
-      payload = await this.jwt.verifyAsync(token, {
+      payload = await this.jwtService.verifyAsync(token, {
         audience: SESSION_AUDIENCE,
       });
     } catch {
@@ -42,7 +42,7 @@ export class JwtAuthGuard implements CanActivate {
     const accountantId = parseSessionSubject(payload.sub);
     if (
       accountantId === null ||
-      !(await this.auth.isSessionValid(accountantId, payload.iat))
+      !(await this.authService.isSessionValid(accountantId, payload.iat))
     ) {
       throw new UnauthorizedException();
     }

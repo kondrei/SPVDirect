@@ -89,8 +89,8 @@ export function toSpvMessages(raw: RawSpvMessage[]): SpvMessage[] {
 @Injectable()
 export class SpvService {
   constructor(
-    private readonly api: AnafApiService,
-    private readonly config: ConfigService,
+    private readonly anafApiService: AnafApiService,
+    private readonly configService: ConfigService,
   ) {}
 
   async listMessages(
@@ -101,7 +101,7 @@ export class SpvService {
     const params: Record<string, string | number> = { zile: query.zile };
     if (query.cif) params.cif = query.cif;
 
-    const res = await this.api.request<RawSpvList>({
+    const res = await this.anafApiService.request<RawSpvList>({
       accountantId,
       connectionId,
       service: ApiLogService.Spv,
@@ -126,7 +126,7 @@ export class SpvService {
     connectionId: number,
     messageId: string,
   ): Promise<SpvDocument> {
-    const res = await this.api.request<ArrayBuffer>({
+    const res = await this.anafApiService.request<ArrayBuffer>({
       accountantId,
       connectionId,
       service: ApiLogService.Spv,
@@ -178,7 +178,7 @@ export class SpvService {
     }
     if (dto.cuiPunctDeLucru) params.cui_pui = dto.cuiPunctDeLucru;
 
-    const res = await this.api.request<RawSpvRequestResult>({
+    const res = await this.anafApiService.request<RawSpvRequestResult>({
       accountantId,
       connectionId,
       service: ApiLogService.Spv,
@@ -202,7 +202,7 @@ export class SpvService {
   }
 
   private baseUrl(): string {
-    return this.config.getOrThrow<string>('ANAF_SPV_ENDPOINT');
+    return this.configService.getOrThrow<string>('ANAF_SPV_ENDPOINT');
   }
 
   private json<T extends object>(res: SpvReply): T {

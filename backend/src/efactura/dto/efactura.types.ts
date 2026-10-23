@@ -1,3 +1,4 @@
+import type { EfacturaInvoice } from '../efactura-invoice.entity.js';
 import type { EfacturaUpload } from '../efactura-upload.entity.js';
 import type { AnafEnvironment } from '../../anaf/dto/anaf.enums.js';
 import type {
@@ -214,3 +215,20 @@ export interface CompanySyncResult {
   imported: number;
   failed: boolean;
 }
+
+export interface UploadListFilter {
+  companyId?: number;
+  invoiceId?: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface ArchiveTotalRow {
+  currency: string;
+  count: string;
+  total: string | null;
+}
+
+export type EfacturaInvoiceChanges = Partial<
+  Pick<EfacturaInvoice, 'pdfStoragePath' | 'pdfContent'>
+>;

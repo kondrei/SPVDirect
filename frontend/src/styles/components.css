@@ -97,9 +97,9 @@
 .spv-avatar { width: 28px; height: 28px; border-radius: var(--radius-pill); background: var(--brand-soft); color: var(--brand); display: grid; place-items: center; font-size: 12px; font-weight: 600; flex: none; }
 
 /* Stat */
-.spv-stat { padding: var(--space-4) var(--space-5); }
+.spv-stat { padding: var(--space-4) var(--space-5); min-width: 0; }
 .spv-stat-label { font-size: 12px; line-height: 16px; color: var(--ink-muted); display: flex; align-items: center; gap: var(--space-1); }
-.spv-stat-value { margin-top: var(--space-1); font: 600 24px/32px var(--font-sans); font-variant-numeric: tabular-nums; }
+.spv-stat-value { margin-top: var(--space-1); font: 600 24px/32px var(--font-sans); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .spv-stat-note { font-size: 12px; line-height: 16px; color: var(--ink-muted); }
 
 /* App shell used by page mocks */

@@ -8,6 +8,7 @@ import { SPV_SYNC_SCHEDULE } from '../../common/constants.js';
 import type { AnafConnection } from '../anaf-connection.entity.js';
 import type { SpvArchiveService } from './services/spv-archive.service.js';
 import { SpvSyncJob } from './spv-sync.job.js';
+import { AnafConnectionRepository } from '../repositories/anaf-connection.repository.js';
 
 function setup(rows: { id: string; accountantId: number }[]) {
   const sync = vi.fn().mockResolvedValue({});
@@ -16,7 +17,9 @@ function setup(rows: { id: string; accountantId: number }[]) {
   const recordJob = vi.fn().mockResolvedValue(undefined);
   const job = new SpvSyncJob(
     { sync, moveStoredContent } as unknown as SpvArchiveService,
-    { find } as unknown as Repository<AnafConnection>,
+    new AnafConnectionRepository({
+      find,
+    } as unknown as Repository<AnafConnection>),
     { recordJob } as unknown as ActivityLogsService,
   );
   return { job, sync, find, moveStoredContent, recordJob };

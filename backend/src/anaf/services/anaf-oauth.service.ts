@@ -6,11 +6,10 @@ import {
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { Repository } from 'typeorm';
 import { TokenCipher } from '../../common/crypto/token-cipher.service.js';
-import { AnafConnection } from '../anaf-connection.entity.js';
+import type { AnafConnection } from '../anaf-connection.entity.js';
+import { AnafConnectionRepository } from '../repositories/anaf-connection.repository.js';
 import {
   AnafTokenClient,
   AnafTokenError,
@@ -36,14 +35,13 @@ export class AnafOAuthService {
   >();
 
   constructor(
-    private readonly tokens: AnafTokenClient,
-    private readonly cipher: TokenCipher,
-    @InjectRepository(AnafConnection)
-    private readonly connections: Repository<AnafConnection>,
+    private readonly anafTokenClient: AnafTokenClient,
+    private readonly tokenCipher: TokenCipher,
+    private readonly anafConnectionRepository: AnafConnectionRepository,
   ) {}
 
   async revokeConnection(connectionId: number): Promise<boolean> {
-    await this.connections.update(connectionId, {
+    await this.anafConnectionRepository.update(connectionId, {
       status: AnafConnectionStatus.Revoked,
     });
     await this.inFlightRefreshes.get(connectionId)?.catch(() => undefined);
@@ -51,15 +49,17 @@ export class AnafOAuthService {
     const connection = await this.waitForRefreshEnd(connectionId);
     const now = Date.now();
     if (connection.refreshExpiresAt.getTime() <= now) return true;
-    await this.connections.update(connectionId, { tokenCallAt: new Date(now) });
+    await this.anafConnectionRepository.update(connectionId, {
+      tokenCallAt: new Date(now),
+    });
     try {
-      await this.tokens.revokeToken(
-        this.cipher.decrypt(connection.refreshTokenEnc),
+      await this.anafTokenClient.revokeToken(
+        this.tokenCipher.decrypt(connection.refreshTokenEnc),
         AnafTokenHint.RefreshToken,
       );
       if (connection.accessExpiresAt.getTime() > now) {
-        await this.tokens.revokeToken(
-          this.cipher.decrypt(connection.accessTokenEnc),
+        await this.anafTokenClient.revokeToken(
+          this.tokenCipher.decrypt(connection.accessTokenEnc),
           AnafTokenHint.AccessToken,
         );
       }
@@ -82,13 +82,13 @@ export class AnafOAuthService {
         'Tokenul ANAF nu conține seria certificatului',
       );
     }
-    const existing = await this.connections.findOneBy({
+    const existing = await this.anafConnectionRepository.findBySerial(
       accountantId,
-      certSerial: tokens.serial,
-    });
+      tokens.serial,
+    );
     const connection =
       existing ??
-      this.connections.create({
+      this.anafConnectionRepository.create({
         accountantId,
         certSerial: tokens.serial,
         label: `Certificat …${tokens.serial.replaceAll(/[^0-9a-f]/gi, '').slice(-8)}`,
@@ -97,8 +97,8 @@ export class AnafOAuthService {
     const now = new Date();
     Object.assign(connection, {
       roles: tokens.roles,
-      accessTokenEnc: this.cipher.encrypt(tokens.accessToken),
-      refreshTokenEnc: this.cipher.encrypt(tokens.refreshToken),
+      accessTokenEnc: this.tokenCipher.encrypt(tokens.accessToken),
+      refreshTokenEnc: this.tokenCipher.encrypt(tokens.refreshToken),
       accessExpiresAt: tokens.accessExpiresAt,
       refreshExpiresAt: tokens.refreshExpiresAt,
       lastRefreshedAt: now,
@@ -106,7 +106,7 @@ export class AnafOAuthService {
       deniedWithFreshTokenAt: null,
       status: AnafConnectionStatus.Active,
     });
-    return this.connections.save(connection);
+    return this.anafConnectionRepository.save(connection);
   }
 
   async getAccessToken(
@@ -121,7 +121,7 @@ export class AnafOAuthService {
     }
     const now = Date.now();
     if (connection.refreshExpiresAt.getTime() <= now) {
-      await this.connections.update(connectionId, {
+      await this.anafConnectionRepository.update(connectionId, {
         status: AnafConnectionStatus.Expired,
       });
       throw new UnauthorizedException(
@@ -151,7 +151,7 @@ export class AnafOAuthService {
         'Tokenul ANAF a expirat și nu a putut fi reînnoit încă. Reîncercați în 1 minut.',
       );
     }
-    return this.cipher.decrypt(connection.accessTokenEnc);
+    return this.tokenCipher.decrypt(connection.accessTokenEnc);
   }
 
   private canRefresh(connection: AnafConnection, now: number): boolean {
@@ -195,37 +195,26 @@ export class AnafOAuthService {
     return run;
   }
 
-  private async claimRefresh(connectionId: number): Promise<boolean> {
-    const now = Date.now();
-    const result = await this.connections
-      .createQueryBuilder()
-      .update(AnafConnection)
-      .set({ tokenCallAt: new Date(now), refreshStartedAt: new Date(now) })
-      .where('id = :id', { id: connectionId })
-      .andWhere('status = :active', { active: AnafConnectionStatus.Active })
-      .andWhere(
-        `COALESCE(GREATEST(token_call_at, last_refreshed_at), '-infinity') <= :cooldownCutoff`,
-        { cooldownCutoff: new Date(now - TOKEN_COOLDOWN_MS) },
-      )
-      .andWhere(
-        `(refresh_started_at IS NULL OR refresh_started_at <= :leaseCutoff)`,
-        { leaseCutoff: new Date(now - REFRESH_LEASE_MS) },
-      )
-      .execute();
-    return result.affected === 1;
+  private claimRefresh(connectionId: number): Promise<boolean> {
+    return this.anafConnectionRepository.claimRefresh(
+      connectionId,
+      Date.now(),
+      TOKEN_COOLDOWN_MS,
+      REFRESH_LEASE_MS,
+    );
   }
 
   private async refresh(connectionId: number): Promise<string> {
     const connection = await this.loadWithTokens(connectionId);
     try {
-      const tokens = await this.tokens.refreshTokens(
-        this.cipher.decrypt(connection.refreshTokenEnc),
+      const tokens = await this.anafTokenClient.refreshTokens(
+        this.tokenCipher.decrypt(connection.refreshTokenEnc),
         connection.refreshExpiresAt,
       );
-      await this.connections.update(connectionId, {
+      await this.anafConnectionRepository.update(connectionId, {
         roles: tokens.roles.length ? tokens.roles : connection.roles,
-        accessTokenEnc: this.cipher.encrypt(tokens.accessToken),
-        refreshTokenEnc: this.cipher.encrypt(tokens.refreshToken),
+        accessTokenEnc: this.tokenCipher.encrypt(tokens.accessToken),
+        refreshTokenEnc: this.tokenCipher.encrypt(tokens.refreshToken),
         accessExpiresAt: tokens.accessExpiresAt,
         refreshExpiresAt: tokens.refreshExpiresAt,
         lastRefreshedAt: new Date(),
@@ -234,7 +223,7 @@ export class AnafOAuthService {
       return tokens.accessToken;
     } catch (err) {
       if (err instanceof AnafTokenError && err.invalidGrant) {
-        await this.connections.update(connectionId, {
+        await this.anafConnectionRepository.update(connectionId, {
           status: AnafConnectionStatus.Expired,
           refreshStartedAt: null,
         });
@@ -242,7 +231,7 @@ export class AnafOAuthService {
           'ANAF a refuzat reînnoirea tokenului. Reautorizați certificatul.',
         );
       }
-      await this.connections
+      await this.anafConnectionRepository
         .update(connectionId, { refreshStartedAt: null })
         .catch((releaseErr: unknown) =>
           this.logger.warn(
@@ -266,7 +255,7 @@ export class AnafOAuthService {
       (current.lastRefreshedAt?.getTime() ?? 0) >
       (seen.lastRefreshedAt?.getTime() ?? 0);
     return refreshedSince && current.accessExpiresAt.getTime() > Date.now()
-      ? this.cipher.decrypt(current.accessTokenEnc)
+      ? this.tokenCipher.decrypt(current.accessTokenEnc)
       : null;
   }
 
@@ -285,11 +274,7 @@ export class AnafOAuthService {
   }
 
   private async loadWithTokens(id: number): Promise<AnafConnection> {
-    const connection = await this.connections
-      .createQueryBuilder('c')
-      .addSelect(['c.accessTokenEnc', 'c.refreshTokenEnc'])
-      .where('c.id = :id', { id })
-      .getOne();
+    const connection = await this.anafConnectionRepository.findWithTokens(id);
     if (!connection) throw new NotFoundException('Conexiune ANAF inexistentă');
     return connection;
   }

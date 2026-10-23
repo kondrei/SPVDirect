@@ -1,52 +1,61 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, type SelectQueryBuilder } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
+import type { DataSource, EntityManager } from 'typeorm';
 import { isUniqueViolation } from '../../common/db-errors.js';
 import { lockLiveCompany } from '../../companies/company-lock.js';
-import { Company } from '../../companies/company.entity.js';
-import { Invoice } from '../invoice.entity.js';
+import { CompanyRepository } from '../../companies/repositories/company.repository.js';
+import type { Invoice } from '../invoice.entity.js';
+import { InvoiceRepository } from '../repositories/invoice.repository.js';
 
 export const NUMBER_RETRIES = 3;
 
 @Injectable()
 export class InvoiceNumbering {
   constructor(
-    @InjectRepository(Invoice)
-    private readonly invoices: Repository<Invoice>,
+    @InjectDataSource() private readonly dataSource: DataSource,
+    private readonly invoiceRepository: InvoiceRepository,
+    private readonly companyRepository: CompanyRepository,
   ) {}
 
-  next(companyId: number, series: string): Promise<number> {
-    return this.nextIn(this.invoices, companyId, series);
+  async next(companyId: number, series: string): Promise<number> {
+    return (await this.invoiceRepository.highestNumber(companyId, series)) + 1;
   }
 
   async insert(
-    build: (invoices: Repository<Invoice>) => Promise<Invoice>,
+    build: (manager: EntityManager) => Promise<Invoice>,
     requestedNumber?: number,
   ): Promise<Invoice> {
     for (let attempt = 1; ; attempt++) {
       let taken = '';
       try {
-        return await this.invoices.manager.transaction(async (manager) => {
-          const invoices = manager.getRepository(Invoice);
-          const invoice = await build(invoices);
+        return await this.dataSource.transaction(async (manager) => {
+          const invoice = await build(manager);
           await lockLiveCompany(
+            this.companyRepository,
             manager,
             invoice.accountantId,
             invoice.companyId,
           );
           invoice.number =
             requestedNumber ??
-            (await this.nextIn(invoices, invoice.companyId, invoice.series));
+            (await this.invoiceRepository.highestNumber(
+              invoice.companyId,
+              invoice.series,
+              manager,
+            )) + 1;
           taken = `${invoice.series} ${invoice.number}`;
           if (
             requestedNumber !== undefined &&
-            (await this.earlier(invoices, invoice.companyId, invoice.series)
-              .andWhere('i.number = :number', { number: requestedNumber })
-              .getExists())
+            (await this.invoiceRepository.numberUsedEarlier(
+              manager,
+              invoice.companyId,
+              invoice.series,
+              requestedNumber,
+            ))
           ) {
             throw takenError(taken);
           }
-          return invoices.save(invoice);
+          return this.invoiceRepository.save(manager, invoice);
         });
       } catch (err) {
         if (!isUniqueViolation(err)) throw err;
@@ -55,38 +64,6 @@ export class InvoiceNumbering {
         }
       }
     }
-  }
-
-  private async nextIn(
-    invoices: Repository<Invoice>,
-    companyId: number,
-    series: string,
-  ): Promise<number> {
-    const [own, earlier] = await Promise.all([
-      invoices.maximum('number', { companyId, series }),
-      this.earlier(invoices, companyId, series)
-        .select('MAX(i.number)', 'max')
-        .getRawOne<{ max: number | string | null }>(),
-    ]);
-    return Math.max(own ?? 0, Number(earlier?.max ?? 0)) + 1;
-  }
-
-  private earlier(
-    invoices: Repository<Invoice>,
-    companyId: number,
-    series: string,
-  ): SelectQueryBuilder<Invoice> {
-    return invoices.manager
-      .createQueryBuilder(Invoice, 'i')
-      .withDeleted()
-      .innerJoin(Company, 'c', 'c.id = i.companyId')
-      .innerJoin(
-        Company,
-        'self',
-        'self.id = :companyId AND self.id <> c.id AND self.accountantId = c.accountantId AND self.cui = c.cui',
-        { companyId },
-      )
-      .where('i.series = :series', { series });
   }
 }
 

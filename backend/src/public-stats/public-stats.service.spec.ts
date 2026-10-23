@@ -1,4 +1,10 @@
 import type { Repository } from 'typeorm';
+import { AccountantRepository } from '../accountants/repositories/accountant.repository.js';
+import { AnafConnectionRepository } from '../anaf/repositories/anaf-connection.repository.js';
+import { SpvMessageRepository } from '../anaf/spv/repositories/spv-message.repository.js';
+import { CompanyRepository } from '../companies/repositories/company.repository.js';
+import { EfacturaUploadRepository } from '../efactura/repositories/efactura-upload.repository.js';
+import { InvoiceRepository } from '../invoices/repositories/invoice.repository.js';
 import {
   PUBLIC_STATS_TTL_MS,
   PublicStatsService,
@@ -22,12 +28,12 @@ function setup() {
   };
   const r = (x: object) => x as unknown as Repository<never>;
   const service = new PublicStatsService(
-    r(repos.accountants),
-    r(repos.companies),
-    r(repos.invoices),
-    r(repos.uploads),
-    r(repos.spvMessages),
-    r(repos.connections),
+    new AccountantRepository(r(repos.accountants)),
+    new CompanyRepository(r(repos.companies)),
+    new InvoiceRepository(r(repos.invoices)),
+    new EfacturaUploadRepository(r(repos.uploads)),
+    new SpvMessageRepository(r(repos.spvMessages)),
+    new AnafConnectionRepository(r(repos.connections)),
   );
   return { service, repos };
 }

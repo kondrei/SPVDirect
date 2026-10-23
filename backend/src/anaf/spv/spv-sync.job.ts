@@ -1,7 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { InjectRepository } from '@nestjs/typeorm';
-import { MoreThan, Repository } from 'typeorm';
 import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import {
   jobFailed,
@@ -10,12 +8,11 @@ import {
 import { ScheduledJob } from '../../api-logs/dto/api-log.enums.js';
 import type { SpvSyncCounts } from '../../api-logs/dto/api-log.types.js';
 import { CRON_OPTIONS, SPV_SYNC_SCHEDULE } from '../../common/constants.js';
-import { AnafConnection } from '../anaf-connection.entity.js';
+import { AnafConnectionRepository } from '../repositories/anaf-connection.repository.js';
 import {
   DEFAULT_SYNC_DAYS,
   SpvArchiveService,
 } from './services/spv-archive.service.js';
-import { AnafConnectionStatus } from '../dto/anaf.enums.js';
 
 export const MAX_MOVE_BATCHES = 10;
 
@@ -25,10 +22,9 @@ export class SpvSyncJob {
   private running = false;
 
   constructor(
-    private readonly archive: SpvArchiveService,
-    @InjectRepository(AnafConnection)
-    private readonly connections: Repository<AnafConnection>,
-    private readonly activity: ActivityLogsService,
+    private readonly spvArchiveService: SpvArchiveService,
+    private readonly anafConnectionRepository: AnafConnectionRepository,
+    private readonly activityLogsService: ActivityLogsService,
   ) {}
 
   @Cron(SPV_SYNC_SCHEDULE, CRON_OPTIONS)
@@ -36,18 +32,15 @@ export class SpvSyncJob {
     if (this.running) return;
     this.running = true;
     try {
-      const active = await this.connections.find({
-        select: { id: true, accountantId: true },
-        where: {
-          status: AnafConnectionStatus.Active,
-          refreshExpiresAt: MoreThan(new Date()),
-        },
-        order: { id: 'ASC' },
-      });
+      const active = await this.anafConnectionRepository.listActive(new Date());
       const counts: SpvSyncCounts = { connections: 0, moved: 0, failed: 0 };
       for (const { id, accountantId } of active) {
         try {
-          await this.archive.sync(accountantId, id, DEFAULT_SYNC_DAYS);
+          await this.spvArchiveService.sync(
+            accountantId,
+            id,
+            DEFAULT_SYNC_DAYS,
+          );
           counts.connections++;
         } catch (err) {
           counts.failed++;
@@ -57,10 +50,12 @@ export class SpvSyncJob {
         }
       }
       await this.moveContentToStorage(counts);
-      await this.activity.recordJob(spvSyncCompleted(counts));
+      await this.activityLogsService.recordJob(spvSyncCompleted(counts));
     } catch (err) {
       this.logger.error(`SPV sync job failed: ${(err as Error).message}`);
-      await this.activity.recordJob(jobFailed(ScheduledJob.SpvSync, err));
+      await this.activityLogsService.recordJob(
+        jobFailed(ScheduledJob.SpvSync, err),
+      );
     } finally {
       this.running = false;
     }
@@ -69,7 +64,7 @@ export class SpvSyncJob {
   private async moveContentToStorage(counts: SpvSyncCounts): Promise<void> {
     try {
       for (let batch = 0; batch < MAX_MOVE_BATCHES; batch++) {
-        const moved = await this.archive.moveStoredContent();
+        const moved = await this.spvArchiveService.moveStoredContent();
         if (moved === 0) break;
         counts.moved += moved;
       }

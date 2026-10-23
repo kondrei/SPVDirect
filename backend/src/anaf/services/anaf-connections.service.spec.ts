@@ -7,6 +7,7 @@ import { redactBearerTokens } from '../redact-bearer.js';
 import type { AnafApiService } from './anaf-api.service.js';
 import { AnafConnectionsService } from './anaf-connections.service.js';
 import type { AnafOAuthService } from './anaf-oauth.service.js';
+import { AnafConnectionRepository } from '../repositories/anaf-connection.repository.js';
 
 const HELLO =
   'Hello, SPVDirect headers=key=Accept val=[application/json] ' +
@@ -51,7 +52,9 @@ describe('AnafConnectionsService.test', () => {
     const service = new AnafConnectionsService(
       api as unknown as AnafApiService,
       {} as AnafOAuthService,
-      repo as unknown as Repository<AnafConnection>,
+      new AnafConnectionRepository(
+        repo as unknown as Repository<AnafConnection>,
+      ),
       activity as unknown as ActivityLogsService,
     );
 
@@ -111,7 +114,9 @@ describe('AnafConnectionsService.removeAll', () => {
     const service = new AnafConnectionsService(
       {} as AnafApiService,
       oauth as unknown as AnafOAuthService,
-      repo as unknown as Repository<AnafConnection>,
+      new AnafConnectionRepository(
+        repo as unknown as Repository<AnafConnection>,
+      ),
       activity as unknown as ActivityLogsService,
     );
     return { service, repo, oauth, pending, activity };

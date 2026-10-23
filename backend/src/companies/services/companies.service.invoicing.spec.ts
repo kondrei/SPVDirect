@@ -7,6 +7,8 @@ import type { AnafCompanyLookupService } from './anaf-company-lookup.service.js'
 import { CompaniesService } from './companies.service.js';
 import type { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import { fakeActivityLogs } from '../../testing/activity-logs.js';
+import { AnafConnectionRepository } from '../../anaf/repositories/anaf-connection.repository.js';
+import { CompanyRepository } from '../repositories/company.repository.js';
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]);
 
@@ -31,8 +33,8 @@ function setup({
   };
   const activity = fakeActivityLogs();
   const service = new CompaniesService(
-    companies as unknown as Repository<Company>,
-    {} as Repository<AnafConnection>,
+    new CompanyRepository(companies as unknown as Repository<Company>),
+    new AnafConnectionRepository({} as Repository<AnafConnection>),
     {} as AnafCompanyLookupService,
     {} as AnafCompanyAccessService,
     activity as unknown as ActivityLogsService,

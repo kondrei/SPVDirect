@@ -20,6 +20,7 @@ import { EfacturaModule } from './efactura/efactura.module.js';
 import { InvoicesModule } from './invoices/invoices.module.js';
 import { OpenDataModule } from './open-data/open-data.module.js';
 import { PublicStatsModule } from './public-stats/public-stats.module.js';
+import { RepositoriesModule } from './database/repositories.module.js';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { PublicStatsModule } from './public-stats/public-stats.module.js';
         }),
     }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
+    RepositoriesModule,
     CqrsModule.forRoot(),
     ScheduleModule.forRoot(),
     CommonModule,

@@ -13,6 +13,7 @@ import {
   RETRY_GRACE_MS,
 } from './admin-approval-retry.job.js';
 import { ResendAdminApprovalCommand } from './resend-admin-approval.command.js';
+import { AccountantRepository } from '../../accountants/repositories/accountant.repository.js';
 
 function setup(ids: number[]) {
   const execute = vi.fn().mockResolvedValue('sent');
@@ -20,7 +21,7 @@ function setup(ids: number[]) {
   const recordJob = vi.fn().mockResolvedValue(undefined);
   const job = new AdminApprovalRetryJob(
     { execute } as unknown as CommandBus,
-    { find } as unknown as Repository<Accountant>,
+    new AccountantRepository({ find } as unknown as Repository<Accountant>),
     { recordJob } as unknown as ActivityLogsService,
   );
   return { job, execute, find, recordJob };

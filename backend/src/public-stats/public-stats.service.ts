@@ -1,26 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Accountant } from '../accountants/accountant.entity.js';
-import { AnafConnection } from '../anaf/anaf-connection.entity.js';
-import { SpvMessage } from '../anaf/spv/spv-message.entity.js';
-import { Company } from '../companies/company.entity.js';
-import { EfacturaUpload } from '../efactura/efactura-upload.entity.js';
-import { Invoice } from '../invoices/invoice.entity.js';
-import { AccountStatus } from '../accountants/dto/accountant.enums.js';
-import { UploadStatus } from '../efactura/dto/efactura.enums.js';
+import { AccountantRepository } from '../accountants/repositories/accountant.repository.js';
+import { AnafConnectionRepository } from '../anaf/repositories/anaf-connection.repository.js';
+import { SpvMessageRepository } from '../anaf/spv/repositories/spv-message.repository.js';
+import { CompanyRepository } from '../companies/repositories/company.repository.js';
+import { EfacturaUploadRepository } from '../efactura/repositories/efactura-upload.repository.js';
+import { InvoiceRepository } from '../invoices/repositories/invoice.repository.js';
+import type { PublicStats } from './dto/public-stats.types.js';
 
 export const PUBLIC_STATS_TTL_MS = 5 * 60_000;
-
-export interface PublicStats {
-  accountants: number;
-  companies: number;
-  invoices: number;
-  efacturaUploads: number;
-  spvMessages: number;
-  anafConnections: number;
-  updatedAt: string;
-}
 
 @Injectable()
 export class PublicStatsService {
@@ -29,18 +16,12 @@ export class PublicStatsService {
   private generation = 0;
 
   constructor(
-    @InjectRepository(Accountant)
-    private readonly accountants: Repository<Accountant>,
-    @InjectRepository(Company)
-    private readonly companies: Repository<Company>,
-    @InjectRepository(Invoice)
-    private readonly invoices: Repository<Invoice>,
-    @InjectRepository(EfacturaUpload)
-    private readonly uploads: Repository<EfacturaUpload>,
-    @InjectRepository(SpvMessage)
-    private readonly spvMessages: Repository<SpvMessage>,
-    @InjectRepository(AnafConnection)
-    private readonly connections: Repository<AnafConnection>,
+    private readonly accountantRepository: AccountantRepository,
+    private readonly companyRepository: CompanyRepository,
+    private readonly invoiceRepository: InvoiceRepository,
+    private readonly efacturaUploadRepository: EfacturaUploadRepository,
+    private readonly spvMessageRepository: SpvMessageRepository,
+    private readonly anafConnectionRepository: AnafConnectionRepository,
   ) {}
 
   invalidate(): void {
@@ -83,12 +64,12 @@ export class PublicStatsService {
       spvMessages,
       anafConnections,
     ] = await Promise.all([
-      this.accountants.countBy({ status: AccountStatus.Active }),
-      this.companies.count(),
-      this.invoices.count(),
-      this.uploads.countBy({ status: UploadStatus.Ok }),
-      this.spvMessages.count(),
-      this.connections.count(),
+      this.accountantRepository.countActive(),
+      this.companyRepository.count(),
+      this.invoiceRepository.count(),
+      this.efacturaUploadRepository.countOk(),
+      this.spvMessageRepository.count(),
+      this.anafConnectionRepository.count(),
     ]);
     return {
       accountants,

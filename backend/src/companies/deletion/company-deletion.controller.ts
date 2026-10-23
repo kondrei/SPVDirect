@@ -19,8 +19,8 @@ import { CompanyExportService } from './company-export.service.js';
 @UseGuards(JwtAuthGuard, AccountantParamGuard)
 export class CompanyDeletionController {
   constructor(
-    private readonly deletion: CompanyDeletionService,
-    private readonly exports: CompanyExportService,
+    private readonly companyDeletionService: CompanyDeletionService,
+    private readonly companyExportService: CompanyExportService,
   ) {}
 
   @Get(':id/export')
@@ -29,7 +29,7 @@ export class CompanyDeletionController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseIdPipe) id: number,
   ) {
-    return attachment(await this.exports.export(accountantId, id));
+    return attachment(await this.companyExportService.export(accountantId, id));
   }
 
   @Delete(':id')
@@ -38,6 +38,6 @@ export class CompanyDeletionController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseIdPipe) id: number,
   ) {
-    return this.deletion.softDelete(accountantId, id);
+    return this.companyDeletionService.softDelete(accountantId, id);
   }
 }

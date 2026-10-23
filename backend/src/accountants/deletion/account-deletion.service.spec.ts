@@ -18,6 +18,13 @@ import {
   AccountDeletionService,
   WRONG_PASSWORD,
 } from './account-deletion.service.js';
+import { AuthorizationLinkRepository } from '../../anaf/authorization-links/repositories/authorization-link.repository.js';
+import { SpvMessageRepository } from '../../anaf/spv/repositories/spv-message.repository.js';
+import { CompanyRepository } from '../../companies/repositories/company.repository.js';
+import { EfacturaInvoiceRepository } from '../../efactura/repositories/efactura-invoice.repository.js';
+import { EfacturaUploadRepository } from '../../efactura/repositories/efactura-upload.repository.js';
+import { InvoiceRepository } from '../../invoices/repositories/invoice.repository.js';
+import { AccountantRepository } from '../repositories/accountant.repository.js';
 
 async function setup({ sending = false, found = true } = {}) {
   const passwordHash = await hashPassword('parola-corecta');
@@ -43,10 +50,10 @@ async function setup({ sending = false, found = true } = {}) {
       return Promise.resolve({});
     }),
   };
+  const accountants = {
+    createQueryBuilder: vi.fn().mockReturnValue(builder),
+  };
   const dataSource = {
-    getRepository: vi.fn(() => ({
-      createQueryBuilder: vi.fn().mockReturnValue(builder),
-    })),
     transaction: vi.fn((work: (m: typeof manager) => Promise<unknown>) =>
       work(manager),
     ),
@@ -55,6 +62,13 @@ async function setup({ sending = false, found = true } = {}) {
   const service = new AccountDeletionService(
     dataSource as unknown as DataSource,
     anaf as unknown as AnafConnectionsService,
+    new AccountantRepository(accountants as never),
+    new CompanyRepository({} as never),
+    new InvoiceRepository({} as never),
+    new EfacturaUploadRepository({} as never),
+    new EfacturaInvoiceRepository({} as never),
+    new SpvMessageRepository({} as never),
+    new AuthorizationLinkRepository({} as never),
   );
   return { service, calls, manager, dataSource, anaf };
 }

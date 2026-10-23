@@ -1,13 +1,12 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import {
   certificateRemoved,
   certificateRenamed,
   certificateTested,
 } from '../../api-logs/activity-entries.js';
 import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
-import { AnafConnection } from '../anaf-connection.entity.js';
+import type { AnafConnection } from '../anaf-connection.entity.js';
+import { AnafConnectionRepository } from '../repositories/anaf-connection.repository.js';
 import { redactBearerTokens } from '../redact-bearer.js';
 import { AnafApiService } from './anaf-api.service.js';
 import { AnafOAuthService } from './anaf-oauth.service.js';
@@ -19,18 +18,14 @@ export class AnafConnectionsService {
   private readonly logger = new Logger(AnafConnectionsService.name);
 
   constructor(
-    private readonly api: AnafApiService,
-    private readonly oauth: AnafOAuthService,
-    @InjectRepository(AnafConnection)
-    private readonly connections: Repository<AnafConnection>,
-    private readonly activity: ActivityLogsService,
+    private readonly anafApiService: AnafApiService,
+    private readonly anafOAuthService: AnafOAuthService,
+    private readonly anafConnectionRepository: AnafConnectionRepository,
+    private readonly activityLogsService: ActivityLogsService,
   ) {}
 
   list(accountantId: number): Promise<AnafConnection[]> {
-    return this.connections.find({
-      where: { accountantId },
-      order: { createdAt: 'DESC' },
-    });
+    return this.anafConnectionRepository.listNewestFirst(accountantId);
   }
 
   async rename(
@@ -40,14 +35,17 @@ export class AnafConnectionsService {
   ): Promise<AnafConnection> {
     const connection = await this.get(accountantId, id);
     connection.label = label;
-    const saved = await this.connections.save(connection);
-    await this.activity.record(accountantId, certificateRenamed(saved));
+    const saved = await this.anafConnectionRepository.save(connection);
+    await this.activityLogsService.record(
+      accountantId,
+      certificateRenamed(saved),
+    );
     return saved;
   }
 
   async remove(accountantId: number, id: number): Promise<void> {
     const connection = await this.removeConnection(accountantId, id);
-    await this.activity.record(
+    await this.activityLogsService.record(
       accountantId,
       certificateRemoved({
         id,
@@ -58,10 +56,7 @@ export class AnafConnectionsService {
   }
 
   async removeAll(accountantId: number): Promise<number[]> {
-    const connections = await this.connections.find({
-      select: { id: true },
-      where: { accountantId },
-    });
+    const connections = await this.anafConnectionRepository.idsOf(accountantId);
     const results = await Promise.allSettled(
       connections.map(({ id }) => this.removeConnection(accountantId, id)),
     );
@@ -79,7 +74,7 @@ export class AnafConnectionsService {
 
   async test(accountantId: number, id: number): Promise<ConnectionTestResult> {
     const connection = await this.get(accountantId, id);
-    const res = await this.api.request<string>({
+    const res = await this.anafApiService.request<string>({
       accountantId,
       connectionId: id,
       service: ApiLogService.TestOAuth,
@@ -87,7 +82,7 @@ export class AnafConnectionsService {
       params: { name: 'SPVDirect' },
       responseType: 'text',
     });
-    await this.activity.record(
+    await this.activityLogsService.record(
       accountantId,
       certificateTested(connection, res.status),
     );
@@ -99,13 +94,16 @@ export class AnafConnectionsService {
     id: number,
   ): Promise<AnafConnection> {
     const connection = await this.get(accountantId, id);
-    await this.oauth.revokeConnection(connection.id);
-    await this.connections.remove(connection);
+    await this.anafOAuthService.revokeConnection(connection.id);
+    await this.anafConnectionRepository.remove(connection);
     return connection;
   }
 
   private async get(accountantId: number, id: number): Promise<AnafConnection> {
-    const connection = await this.connections.findOneBy({ id, accountantId });
+    const connection = await this.anafConnectionRepository.findOwned(
+      accountantId,
+      id,
+    );
     if (!connection) throw new NotFoundException('Conexiune ANAF inexistentă');
     return connection;
   }

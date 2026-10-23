@@ -8,10 +8,8 @@ import {
   sendHtmlPage as send,
 } from '../../common/html.js';
 import { ParseLinkTokenPipe } from '../../common/parse-token.pipe.js';
-import {
-  PendingRegistration,
-  RegistrationsService,
-} from './services/registrations.service.js';
+import type { PendingRegistration } from '../dto/auth.types.js';
+import { RegistrationsService } from './services/registrations.service.js';
 import { RegistrationDecision } from '../dto/auth.enums.js';
 
 const INVALID = 'Cererea nu există sau a fost deja aprobată ori respinsă.';
@@ -35,7 +33,7 @@ const CONFIRM: Record<
 @Controller('auth/registrations')
 @Throttle(PUBLIC_LINK_THROTTLE)
 export class RegistrationsController {
-  constructor(private readonly registrations: RegistrationsService) {}
+  constructor(private readonly registrationsService: RegistrationsService) {}
 
   @Get(':token/approve')
   confirmApprove(
@@ -59,7 +57,7 @@ export class RegistrationsController {
     @Param('token', ParseLinkTokenPipe) token: string,
     @Res() res: Response,
   ) {
-    const done = await this.registrations.approve(token);
+    const done = await this.registrationsService.approve(token);
     if (!done) return send(res, 404, 'Link invalid', INVALID);
     return send(
       res,
@@ -75,7 +73,7 @@ export class RegistrationsController {
     @Param('token', ParseLinkTokenPipe) token: string,
     @Res() res: Response,
   ) {
-    const done = await this.registrations.reject(token);
+    const done = await this.registrationsService.reject(token);
     if (!done) return send(res, 404, 'Link invalid', INVALID);
     return send(
       res,
@@ -90,7 +88,7 @@ export class RegistrationsController {
     token: string,
     decision: RegistrationDecision,
   ) {
-    const pending = await this.registrations.findPending(token);
+    const pending = await this.registrationsService.findPending(token);
     if (!pending) return send(res, 404, 'Link invalid', INVALID);
     const c = CONFIRM[decision];
     const action = `/auth/registrations/${encodeURIComponent(token)}/${decision}`;

@@ -32,7 +32,9 @@ import { EfacturaArchiveService } from '../services/efactura-archive.service.js'
 @Controller('accountants/:accountantId/efactura')
 @UseGuards(JwtAuthGuard, AccountantParamGuard)
 export class EfacturaArchiveController {
-  constructor(private readonly archive: EfacturaArchiveService) {}
+  constructor(
+    private readonly efacturaArchiveService: EfacturaArchiveService,
+  ) {}
 
   @Post('companies/:companyId/messages/import')
   @HttpCode(200)
@@ -42,7 +44,11 @@ export class EfacturaArchiveController {
     @Param('companyId', ParseIdPipe) companyId: number,
     @Body() dto: ImportMessagesDto,
   ) {
-    return this.archive.importMessages(accountantId, companyId, dto.messageIds);
+    return this.efacturaArchiveService.importMessages(
+      accountantId,
+      companyId,
+      dto.messageIds,
+    );
   }
 
   @Post('companies/:companyId/messages/import-period')
@@ -53,7 +59,11 @@ export class EfacturaArchiveController {
     @Param('companyId', ParseIdPipe) companyId: number,
     @Body() dto: ImportPeriodDto,
   ) {
-    return this.archive.importPeriod(accountantId, companyId, dto.zile);
+    return this.efacturaArchiveService.importPeriod(
+      accountantId,
+      companyId,
+      dto.zile,
+    );
   }
 
   @Get('archive')
@@ -62,7 +72,7 @@ export class EfacturaArchiveController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Query() query: ArchiveQuery,
   ) {
-    return this.archive.list(accountantId, {
+    return this.efacturaArchiveService.list(accountantId, {
       companyId: query.companyId,
       direction: query.direction,
       from: query.from,
@@ -79,7 +89,7 @@ export class EfacturaArchiveController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseIdPipe) id: number,
   ) {
-    return this.archive.get(accountantId, id);
+    return this.efacturaArchiveService.get(accountantId, id);
   }
 
   @Get('archive/:id/zip')
@@ -89,7 +99,7 @@ export class EfacturaArchiveController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseIdPipe) id: number,
   ) {
-    return attachment(await this.archive.zip(accountantId, id));
+    return attachment(await this.efacturaArchiveService.zip(accountantId, id));
   }
 
   @Get('archive/:id/xml')
@@ -99,7 +109,7 @@ export class EfacturaArchiveController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseIdPipe) id: number,
   ) {
-    return attachment(await this.archive.xml(accountantId, id));
+    return attachment(await this.efacturaArchiveService.xml(accountantId, id));
   }
 
   @Get('archive/:id/pdf')
@@ -109,7 +119,7 @@ export class EfacturaArchiveController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseIdPipe) id: number,
   ) {
-    return attachment(await this.archive.pdf(accountantId, id));
+    return attachment(await this.efacturaArchiveService.pdf(accountantId, id));
   }
 
   @Post('archive/:id/email')
@@ -120,7 +130,7 @@ export class EfacturaArchiveController {
     @Param('id', ParseIdPipe) id: number,
     @Body() dto: EmailArchiveDto,
   ) {
-    return this.archive.email(accountantId, id, {
+    return this.efacturaArchiveService.email(accountantId, id, {
       to: dto.to,
       message: dto.message,
     });

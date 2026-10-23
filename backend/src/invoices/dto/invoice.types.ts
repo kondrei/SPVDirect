@@ -1,7 +1,7 @@
 import type { DownloadFile } from '../../common/download-file.js';
 import type { Invoice } from '../invoice.entity.js';
 import type { UNITS } from './invoice.constants.js';
-import type { Currency, VatCategory } from './invoice.enums.js';
+import type { BuyerSource, Currency, VatCategory } from './invoice.enums.js';
 
 export type Unit = keyof typeof UNITS;
 
@@ -180,3 +180,25 @@ export interface InvoicePage {
 export type InvoiceDetail = Invoice & {
   remainingQuantities: number[] | null;
 };
+
+export interface InvoiceListFilter {
+  companyId?: number;
+  page: number;
+  pageSize: number;
+}
+
+export type InvoiceChanges = Partial<
+  Pick<Invoice, 'storagePath' | 'emailedTo' | 'emailedAt'>
+>;
+
+export type BuyerStatus = Pick<
+  BuyerLookup,
+  'vatPayer' | 'inactive' | 'eFactura'
+> & {
+  anafChecked: boolean;
+};
+
+export type FoundBuyer = BuyerLookup &
+  BuyerStatus & {
+    source: BuyerSource;
+  };

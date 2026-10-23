@@ -17,6 +17,7 @@ SPVDirect is an accountant portal for ANAF SPV services (e-Factura, e-Transport)
 ## Commands (run in `frontend/`)
 - `npm run dev`: http://localhost:5173. It proxies `/api/*` to the backend at https://localhost:3000, so start the backend first.
 - `npm test` (Vitest + Testing Library, no backend needed) · `npm run typecheck` · `npm run lint` · `npm run lint:sonar` · `npm run build`
+- `npm run screenshots` regenerates the landing gallery and README images (`public/screenshots/*.webp`) from the real app with the sample data in `src/screenshots/fixtures.ts`. Run it after changing the menu or a page listed in `src/pages/landing/screenshots.ts`.
 - Frontend conventions: design-system tokens only (`src/styles/tokens.css`), `StatusBadge` for every status, Romanian copy. Details in `frontend/README.md`.
 
 ## MANDATORY workflow after every code change
@@ -32,6 +33,7 @@ Sonar rules live in two places: the SonarJS rules that need type information in 
 ## Stack and conventions
 - Node 24 LTS (`.nvmrc`). Don't move to Node 26 until it becomes LTS (late Oct 2026).
 - **ESM project** (`"type": "module"`, `nodenext`): relative imports must end in `.js`, e.g. `import { X } from './x.js'`.
+- **Injected dependencies are named after their type** in lowerCamelCase: `private readonly companiesService: CompaniesService`, `companyRepository: CompanyRepository`, `configService: ConfigService`, `tokenCipher: TokenCipher`, `commandBus: CommandBus`. Inside a repository class the TypeORM repository follows the same rule: `Repository<Company>` is `companyRepository`. Never shorten to `companies`, `config`, `repo` or `activity`.
 - **Value sets are enums** in each module's `dto/<module>.enums.ts` (frontend mirror: `frontend/src/api/enums.ts`); code names members, never raw strings. Follow `.claude/skills/value-sets/SKILL.md`.
 - **Declarations live in `dto/`**: interfaces and types in `dto/<module>.types.ts`, constants (CSV headers, label tables, field lists, page sizes) in `dto/<module>.constants.ts`, file names as enums. Follow `.claude/skills/module-dto/SKILL.md`.
 - TypeORM **1.x**, not 0.3. Check APIs against `node_modules/typeorm` if unsure.
@@ -39,6 +41,7 @@ Sonar rules live in two places: the SonarJS rules that need type information in 
   - Migrations are listed explicitly in `src/database/migrations/index.ts`, not globbed. **Add each new migration class there.**
   - Every migration has a `<timestamp>-<Name>.spec.ts` beside it that runs `up` and `down` against a mocked `QueryRunner` and checks the tables, columns and indexes it touches.
   - Entities are listed in `src/config/typeorm.config.ts`.
+  - **Queries live in repositories**, never in services, jobs or handlers: each entity has an `@Injectable()` `<Entity>Repository` in `<module>/repositories/` that wraps the TypeORM `Repository<T>` and exposes named methods (`findOwned`, `page`, `softDeleteOfCompany`, ...). The global `RepositoriesModule` (`src/database/repositories.module.ts`) registers the entities with `forFeature` and provides every repository, so add new ones there. A service that needs a transaction opens it with `DataSource.transaction()` and passes the `EntityManager` to repository methods (`softDeleteOfCompany(manager, id)`). Postgres advisory locks go through `AdvisoryLockRepository.runExclusive()`. The one exception is `SlowQueryLogger`, which runs outside Nest DI.
   - Entities use plain FK id columns (`accountantId`, `companyId`, …) instead of relation decorators. This avoids ESM circular-import problems. The FK constraints live in the migrations.
   - Columns are snake_case in the DB (`@Column({ name: 'created_at' })`) and camelCase in TS. Timestamps are `timestamptz`.
 - The database is Supabase Postgres, reached through `DATABASE_URL` (Session pooler, SSL with `rejectUnauthorized: false`). Supabase Auth is **not** used.

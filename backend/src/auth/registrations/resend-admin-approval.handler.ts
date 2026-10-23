@@ -1,44 +1,34 @@
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
-import { InjectRepository } from '@nestjs/typeorm';
 import { randomBytes } from 'node:crypto';
-import { IsNull, Repository } from 'typeorm';
-import { Accountant } from '../../accountants/accountant.entity.js';
+import { AccountantRepository } from '../../accountants/repositories/accountant.repository.js';
 import { RegistrationMailer } from './services/registration-mailer.service.js';
 import { hashApprovalToken } from './services/registrations.service.js';
 import { ResendAdminApprovalCommand } from './resend-admin-approval.command.js';
-import { AccountStatus } from '../../accountants/dto/accountant.enums.js';
 import { ResendResult } from '../dto/auth.enums.js';
 
 @CommandHandler(ResendAdminApprovalCommand)
 export class ResendAdminApprovalHandler implements ICommandHandler<ResendAdminApprovalCommand> {
   constructor(
-    private readonly mailer: RegistrationMailer,
-    @InjectRepository(Accountant)
-    private readonly accountants: Repository<Accountant>,
+    private readonly registrationMailer: RegistrationMailer,
+    private readonly accountantRepository: AccountantRepository,
   ) {}
 
   async execute({
     accountantId,
   }: ResendAdminApprovalCommand): Promise<ResendResult> {
-    const unnotified = {
-      id: accountantId,
-      status: AccountStatus.Pending,
-      adminNotifiedAt: IsNull(),
-    };
-    const pending = await this.accountants.findOne({
-      select: { id: true, email: true, name: true, approvalTokenHash: true },
-      where: unnotified,
-    });
+    const pending =
+      await this.accountantRepository.findUnnotifiedPending(accountantId);
     if (!pending?.approvalTokenHash) return ResendResult.Skipped;
 
     const token = randomBytes(32).toString('base64url');
-    const claimed = await this.accountants.update(
-      { ...unnotified, approvalTokenHash: pending.approvalTokenHash },
-      { approvalTokenHash: hashApprovalToken(token) },
+    const claimed = await this.accountantRepository.swapApprovalToken(
+      accountantId,
+      pending.approvalTokenHash,
+      hashApprovalToken(token),
     );
-    if (!claimed.affected) return ResendResult.Skipped;
+    if (!claimed) return ResendResult.Skipped;
 
-    const sent = await this.mailer.notifyAdmin({
+    const sent = await this.registrationMailer.notifyAdmin({
       accountantId: pending.id,
       email: pending.email,
       name: pending.name,

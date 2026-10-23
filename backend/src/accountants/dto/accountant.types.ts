@@ -1,3 +1,4 @@
+import type { Accountant } from '../accountant.entity.js';
 import type { CaenInfo } from '../../open-data/caen.js';
 import type { toProfile } from '../services/accountants.service.js';
 
@@ -9,3 +10,8 @@ export interface FirmLookup {
   firmCaenCode: string | null;
   firmCaen: CaenInfo | null;
 }
+
+export type PendingAccountantData = Pick<
+  Accountant,
+  'email' | 'passwordHash' | 'name' | 'approvalTokenHash'
+>;

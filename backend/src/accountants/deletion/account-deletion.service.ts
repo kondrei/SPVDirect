@@ -6,18 +6,15 @@ import {
 } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import type { DataSource } from 'typeorm';
-import { AuthorizationLink } from '../../anaf/authorization-links/authorization-link.entity.js';
+import { AuthorizationLinkRepository } from '../../anaf/authorization-links/repositories/authorization-link.repository.js';
 import { AnafConnectionsService } from '../../anaf/services/anaf-connections.service.js';
-import { SpvMessage } from '../../anaf/spv/spv-message.entity.js';
+import { SpvMessageRepository } from '../../anaf/spv/repositories/spv-message.repository.js';
 import { verifyPassword } from '../../common/crypto/password.js';
-import { lockLiveCompanies } from '../../companies/company-lock.js';
-import { Company } from '../../companies/company.entity.js';
-import { EfacturaInvoice } from '../../efactura/efactura-invoice.entity.js';
-import { EfacturaUpload } from '../../efactura/efactura-upload.entity.js';
-import { Invoice } from '../../invoices/invoice.entity.js';
-import { Accountant } from '../accountant.entity.js';
-import { AccountStatus } from '../dto/accountant.enums.js';
-import { UploadStatus } from '../../efactura/dto/efactura.enums.js';
+import { CompanyRepository } from '../../companies/repositories/company.repository.js';
+import { EfacturaInvoiceRepository } from '../../efactura/repositories/efactura-invoice.repository.js';
+import { EfacturaUploadRepository } from '../../efactura/repositories/efactura-upload.repository.js';
+import { InvoiceRepository } from '../../invoices/repositories/invoice.repository.js';
+import { AccountantRepository } from '../repositories/accountant.repository.js';
 
 export const WRONG_PASSWORD = 'Parola este incorectă';
 export const ACCOUNT_UPLOAD_IN_PROGRESS =
@@ -27,45 +24,61 @@ export const ACCOUNT_UPLOAD_IN_PROGRESS =
 export class AccountDeletionService {
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
-    private readonly connections: AnafConnectionsService,
+    private readonly anafConnectionsService: AnafConnectionsService,
+    private readonly accountantRepository: AccountantRepository,
+    private readonly companyRepository: CompanyRepository,
+    private readonly invoiceRepository: InvoiceRepository,
+    private readonly efacturaUploadRepository: EfacturaUploadRepository,
+    private readonly efacturaInvoiceRepository: EfacturaInvoiceRepository,
+    private readonly spvMessageRepository: SpvMessageRepository,
+    private readonly authorizationLinkRepository: AuthorizationLinkRepository,
   ) {}
 
   async softDelete(accountantId: number, password: string): Promise<void> {
-    const accountant = await this.dataSource
-      .getRepository(Accountant)
-      .createQueryBuilder('a')
-      .addSelect('a.passwordHash')
-      .where('a.id = :id', { id: accountantId })
-      .getOne();
+    const accountant =
+      await this.accountantRepository.findWithPassword(accountantId);
     if (!accountant) throw new NotFoundException('Contul nu a fost găsit');
     if (!(await verifyPassword(password, accountant.passwordHash))) {
       throw new BadRequestException(WRONG_PASSWORD);
     }
 
     await this.dataSource.transaction(async (manager) => {
-      await lockLiveCompanies(manager, accountantId);
+      await this.companyRepository.lockLive(manager, accountantId);
       if (
-        await manager.existsBy(EfacturaUpload, {
+        await this.efacturaUploadRepository.sendingForAccountant(
+          manager,
           accountantId,
-          status: UploadStatus.Sending,
-        })
+        )
       ) {
         throw new ConflictException(ACCOUNT_UPLOAD_IN_PROGRESS);
       }
-      await manager.softDelete(Invoice, { accountantId });
-      await manager.softDelete(EfacturaUpload, { accountantId });
-      await manager.softDelete(EfacturaInvoice, { accountantId });
-      await manager.softDelete(SpvMessage, { accountantId });
-      await manager.softDelete(Company, { accountantId });
-      await manager.delete(AuthorizationLink, { accountantId });
-      await manager.update(
-        Accountant,
-        { id: accountantId },
-        { status: AccountStatus.Deleted },
+      await this.invoiceRepository.softDeleteOfAccountant(
+        manager,
+        accountantId,
       );
-      await manager.softDelete(Accountant, { id: accountantId });
+      await this.efacturaUploadRepository.softDeleteOfAccountant(
+        manager,
+        accountantId,
+      );
+      await this.efacturaInvoiceRepository.softDeleteOfAccountant(
+        manager,
+        accountantId,
+      );
+      await this.spvMessageRepository.softDeleteOfAccountant(
+        manager,
+        accountantId,
+      );
+      await this.companyRepository.softDeleteOfAccountant(
+        manager,
+        accountantId,
+      );
+      await this.authorizationLinkRepository.deleteOfAccountant(
+        manager,
+        accountantId,
+      );
+      await this.accountantRepository.markDeleted(manager, accountantId);
     });
 
-    await this.connections.removeAll(accountantId);
+    await this.anafConnectionsService.removeAll(accountantId);
   }
 }

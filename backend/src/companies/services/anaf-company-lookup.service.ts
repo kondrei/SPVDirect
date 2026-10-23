@@ -26,9 +26,9 @@ export class AnafCompanyLookupService {
   private nextAt = 0;
 
   constructor(
-    private readonly config: ConfigService,
-    private readonly http: HttpService,
-    private readonly apiLogs: ApiLogsService,
+    private readonly configService: ConfigService,
+    private readonly httpService: HttpService,
+    private readonly apiLogsService: ApiLogsService,
   ) {}
 
   async lookup(
@@ -61,9 +61,9 @@ export class AnafCompanyLookupService {
   ): Promise<Map<number, AnafTvaRecord>> {
     await this.waitTurn();
 
-    const endpoint = this.config.getOrThrow<string>('ANAF_TVA_ENDPOINT');
+    const endpoint = this.configService.getOrThrow<string>('ANAF_TVA_ENDPOINT');
     return trackApiCall(
-      this.apiLogs,
+      this.apiLogsService,
       {
         accountantId,
         anafConnectionId: null,
@@ -75,7 +75,7 @@ export class AnafCompanyLookupService {
       async (outcome) => {
         try {
           const data = bucharestDate.format(new Date());
-          const res = await this.http.axiosRef.post<AnafTvaResponse>(
+          const res = await this.httpService.axiosRef.post<AnafTvaResponse>(
             endpoint,
             cuis.map((cui) => ({ cui: Number(cui), data })),
             { timeout: 30_000, validateStatus: () => true },

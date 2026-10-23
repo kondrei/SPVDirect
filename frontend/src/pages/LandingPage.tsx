@@ -199,13 +199,17 @@ export function LandingPage() {
   return (
     <div className="landing">
       <header className="landing-bar">
-        <a href="#top" className="landing-home" aria-label="SPVDirect, începutul paginii">
+        <a
+          href="#top"
+          className="landing-home"
+          aria-label="SPVDirect, începutul paginii"
+        >
           <Wordmark />
         </a>
         <nav className="landing-nav" aria-label="Secțiuni">
           <a href="#aplicatia">Aplicația</a>
-          <a href="#functionalitati">Funcționalități</a>
           <a href="#cifre">Cifre</a>
+          <a href="#functionalitati">Funcționalități</a>
           <a href="#securitate">Securitate</a>
         </nav>
         <div className="spv-row">
@@ -224,10 +228,18 @@ export function LandingPage() {
             </ButtonLink>
           ) : (
             <>
-              <Button variant="ghost" size="sm" onClick={() => openAuth('login')}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => openAuth('login')}
+              >
                 Autentificare
               </Button>
-              <Button variant="primary" size="sm" onClick={() => openAuth('register')}>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => openAuth('register')}
+              >
                 Creează cont
               </Button>
             </>
@@ -243,28 +255,39 @@ export function LandingPage() {
             </Badge>
             <h1>Serviciile ANAF ale tuturor clienților, într-un singur loc.</h1>
             <p>
-              SPVDirect conectează cabinetul de contabilitate la Spațiul Privat Virtual: facturare,
-              RO e-Factura și mesaje SPV pentru fiecare firmă, cu certificatul digital folosit o
-              singură dată.
+              SPVDirect conectează cabinetul de contabilitate la Spațiul Privat
+              Virtual: facturare, RO e-Factura și mesaje SPV pentru fiecare
+              firmă, cu certificatul digital folosit o singură dată.
             </p>
           </div>
           {account}
         </section>
 
-        <section className="landing-section" id="aplicatia" aria-labelledby="aplicatia-title">
+        <section
+          className="landing-section"
+          id="aplicatia"
+          aria-labelledby="aplicatia-title"
+        >
           <div className="landing-section-head">
             <h2 id="aplicatia-title">Aplicația</h2>
-            <p>Panoul cabinetului: firmele, certificatele ANAF și facturile, dintr-o privire. Datele din imagine sunt de exemplu.</p>
+            <p>Prezentarea aplicatiei in imagini. Datele sunt de exemplu.</p>
           </div>
-          <AppPreview />
+          <AppPreview theme={theme} />
         </section>
 
         <Counters />
 
-        <section className="landing-section" id="functionalitati" aria-labelledby="functionalitati-title">
+        <section
+          className="landing-section"
+          id="functionalitati"
+          aria-labelledby="functionalitati-title"
+        >
           <div className="landing-section-head">
             <h2 id="functionalitati-title">Funcționalități</h2>
-            <p>Tot ce face un cabinet în SPV, fără să schimbe certificatul de la o firmă la alta.</p>
+            <p>
+              Tot ce face un cabinet în SPV, fără să schimbe certificatul de la
+              o firmă la alta.
+            </p>
           </div>
           <div className="landing-features">
             {FEATURES.map((f) => (
@@ -273,7 +296,9 @@ export function LandingPage() {
                   <span className="landing-feature-icon">
                     <Icon name={f.icon} />
                   </span>
-                  {f.soon ? <StatusBadge status="pending">În curând</StatusBadge> : null}
+                  {f.soon ? (
+                    <StatusBadge status="pending">În curând</StatusBadge>
+                  ) : null}
                 </div>
                 <h3>{f.title}</h3>
                 <p>{f.text}</p>
@@ -305,11 +330,17 @@ export function LandingPage() {
           </ol>
         </section>
 
-        <section className="landing-section" id="securitate" aria-labelledby="securitate-title">
+        <section
+          className="landing-section"
+          id="securitate"
+          aria-labelledby="securitate-title"
+        >
           <div className="spv-card landing-security">
             <div>
               <h2 id="securitate-title">Securitate</h2>
-              <p className="muted">Lucrați cu datele fiscale ale clienților. Le tratăm ca atare.</p>
+              <p className="muted">
+                Lucrați cu datele fiscale ale clienților. Le tratăm ca atare.
+              </p>
             </div>
             <ul>
               {SECURITY.map((s) => (
@@ -330,7 +361,11 @@ export function LandingPage() {
               Deschide aplicația
             </ButtonLink>
           ) : (
-            <Button variant="primary" icon="plus" onClick={() => openAuth('register')}>
+            <Button
+              variant="primary"
+              icon="plus"
+              onClick={() => openAuth('register')}
+            >
               Creează cont
             </Button>
           )}
@@ -340,7 +375,8 @@ export function LandingPage() {
       <footer className="landing-foot">
         <Wordmark />
         <span className="muted small">
-          © {new Date().getFullYear()} SPVDirect. Nu este un serviciu oficial ANAF.
+          © {new Date().getFullYear()} SPVDirect. Nu este un serviciu oficial
+          ANAF.
         </span>
       </footer>
     </div>

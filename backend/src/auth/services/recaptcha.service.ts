@@ -24,21 +24,21 @@ export class RecaptchaService {
   private readonly logger = new Logger(RecaptchaService.name);
 
   constructor(
-    private readonly config: ConfigService<Env, true>,
-    private readonly http: HttpService,
+    private readonly configService: ConfigService<Env, true>,
+    private readonly httpService: HttpService,
   ) {}
 
   async verify(token: string, action: string, remoteIp?: string) {
     const body = new URLSearchParams({
-      secret: this.config.get('RECAPTCHA_SECRET_KEY', { infer: true }),
+      secret: this.configService.get('RECAPTCHA_SECRET_KEY', { infer: true }),
       response: token,
     });
     if (remoteIp) body.set('remoteip', remoteIp);
 
     let data: SiteVerifyResponse | undefined;
     try {
-      const res = await this.http.axiosRef.post<SiteVerifyResponse>(
-        this.config.get('RECAPTCHA_VERIFY_URL', { infer: true }),
+      const res = await this.httpService.axiosRef.post<SiteVerifyResponse>(
+        this.configService.get('RECAPTCHA_VERIFY_URL', { infer: true }),
         body.toString(),
         {
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -55,7 +55,9 @@ export class RecaptchaService {
       );
     }
 
-    const minScore = this.config.get('RECAPTCHA_MIN_SCORE', { infer: true });
+    const minScore = this.configService.get('RECAPTCHA_MIN_SCORE', {
+      infer: true,
+    });
     if (
       !data?.success ||
       data.action !== action ||

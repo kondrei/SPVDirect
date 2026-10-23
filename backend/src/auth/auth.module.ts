@@ -2,13 +2,10 @@ import { Global, Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { Accountant } from '../accountants/accountant.entity.js';
 import { AccountantsModule } from '../accountants/accountants.module.js';
 import { ApiLogsModule } from '../api-logs/api-logs.module.js';
 import { AuthController } from './controllers/auth.controller.js';
 import { AuthService } from './services/auth.service.js';
-import { BannedEmail } from './banned-email.entity.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { RecaptchaService } from './services/recaptcha.service.js';
 import { SessionCookieService } from './services/session-cookie.service.js';
@@ -29,7 +26,6 @@ import { ResendAdminApprovalHandler } from './registrations/resend-admin-approva
     AccountantsModule,
     ApiLogsModule,
     HttpModule,
-    TypeOrmModule.forFeature([Accountant, BannedEmail]),
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({

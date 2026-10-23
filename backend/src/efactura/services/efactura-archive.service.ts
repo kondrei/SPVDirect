@@ -7,8 +7,8 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, Repository, type SelectQueryBuilder } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
+import type { DataSource } from 'typeorm';
 import {
   efacturaArchiveEmailed,
   efacturaArchiveImported,
@@ -19,11 +19,11 @@ import { isUniqueViolation } from '../../common/db-errors.js';
 import type { DownloadFile } from '../../common/download-file.js';
 import type { MailAttachment } from '../../common/mail/mail.service.js';
 import { lockLiveCompany } from '../../companies/company-lock.js';
+import { CompanyRepository } from '../../companies/repositories/company.repository.js';
 import type { Company } from '../../companies/company.entity.js';
 import { CompaniesService } from '../../companies/services/companies.service.js';
 import {
   ARCHIVE_FILE_MISSING,
-  ARCHIVE_LIST_COLUMNS,
   ARCHIVE_NOT_FOUND,
   DAY_MS,
   IMPORT_FAILED,
@@ -40,7 +40,6 @@ import {
   EfacturaDirection,
   EfacturaFileKind,
   EfacturaStandard,
-  EinvoiceTypeCode,
   ImportStatus,
   ValidateStandard,
 } from '../dto/efactura.enums.js';
@@ -56,17 +55,17 @@ import type {
   ImportPeriodResult,
   ImportResult,
 } from '../dto/efactura.types.js';
-import { EfacturaInvoice } from '../efactura-invoice.entity.js';
-import { EfacturaUpload } from '../efactura-upload.entity.js';
+import type { EfacturaInvoice } from '../efactura-invoice.entity.js';
+import { EfacturaInvoiceRepository } from '../repositories/efactura-invoice.repository.js';
+import { EfacturaUploadRepository } from '../repositories/efactura-upload.repository.js';
 import {
   directionOf,
   isInvoiceMessage,
-  likePattern,
   toArchiveDetail,
   toArchiveItem,
 } from '../helpers/archive-view.js';
 import { extractInvoiceXml } from '../helpers/efactura-zip.js';
-import { normalizeTaxId, parseEinvoice } from '../helpers/einvoice-parser.js';
+import { parseEinvoice } from '../helpers/einvoice-parser.js';
 import { EfacturaArchiveMailer } from './efactura-archive-mailer.service.js';
 import { EfacturaFileStore } from './efactura-file-store.service.js';
 import { EfacturaValidator } from './efactura-validator.service.js';
@@ -110,17 +109,17 @@ export class EfacturaArchiveService {
   private readonly logger = new Logger(EfacturaArchiveService.name);
 
   constructor(
-    private readonly efactura: EfacturaService,
-    private readonly api: AnafApiService,
-    private readonly validator: EfacturaValidator,
-    private readonly companies: CompaniesService,
-    private readonly files: EfacturaFileStore,
-    private readonly mailer: EfacturaArchiveMailer,
-    @InjectRepository(EfacturaInvoice)
-    private readonly archive: Repository<EfacturaInvoice>,
-    @InjectRepository(EfacturaUpload)
-    private readonly uploads: Repository<EfacturaUpload>,
-    private readonly activity: ActivityLogsService,
+    private readonly efacturaService: EfacturaService,
+    private readonly anafApiService: AnafApiService,
+    private readonly efacturaValidator: EfacturaValidator,
+    private readonly companiesService: CompaniesService,
+    private readonly efacturaFileStore: EfacturaFileStore,
+    private readonly efacturaArchiveMailer: EfacturaArchiveMailer,
+    private readonly efacturaInvoiceRepository: EfacturaInvoiceRepository,
+    private readonly efacturaUploadRepository: EfacturaUploadRepository,
+    private readonly activityLogsService: ActivityLogsService,
+    @InjectDataSource() private readonly dataSource: DataSource,
+    private readonly companyRepository: CompanyRepository,
   ) {}
 
   async importMessages(
@@ -128,7 +127,7 @@ export class EfacturaArchiveService {
     companyId: number,
     messageIds: string[],
   ): Promise<ImportResult[]> {
-    const company = await this.companies.get(accountantId, companyId);
+    const company = await this.companiesService.get(accountantId, companyId);
     const results = await this.importAll(
       accountantId,
       company,
@@ -144,7 +143,7 @@ export class EfacturaArchiveService {
     days: number,
     automatic = false,
   ): Promise<ImportPeriodResult> {
-    const company = await this.companies.get(accountantId, companyId);
+    const company = await this.companiesService.get(accountantId, companyId);
     const { connectionId, cui } = certified(company);
     const candidates = await this.invoiceMessages(
       { accountantId, connectionId, companyId },
@@ -170,13 +169,10 @@ export class EfacturaArchiveService {
     accountantId: number,
     filter: ArchiveFilter,
   ): Promise<ArchivePage> {
-    const [rows, total] = await this.filtered(accountantId, filter)
-      .select(ARCHIVE_LIST_COLUMNS.map((column) => `e.${column}`))
-      .orderBy('e.issueDate', 'DESC', 'NULLS LAST')
-      .addOrderBy('e.id', 'DESC')
-      .skip((filter.page - 1) * filter.pageSize)
-      .take(filter.pageSize)
-      .getManyAndCount();
+    const [rows, total] = await this.efacturaInvoiceRepository.page(
+      accountantId,
+      filter,
+    );
     return {
       items: rows.map((row) => toArchiveItem(row)),
       total,
@@ -194,10 +190,7 @@ export class EfacturaArchiveService {
     accountantId: number,
     companyId: number,
   ): Promise<EfacturaInvoice[]> {
-    return this.archive.find({
-      where: { accountantId, companyId },
-      order: { issueDate: 'ASC', id: 'ASC' },
-    });
+    return this.efacturaInvoiceRepository.forCompany(accountantId, companyId);
   }
 
   async zip(accountantId: number, id: number): Promise<DownloadFile> {
@@ -251,8 +244,13 @@ export class EfacturaArchiveService {
       content: await this.zipContent(row),
       contentType: 'application/zip',
     });
-    await this.mailer.send(row, input.to, input.message, attachments);
-    await this.activity.record(
+    await this.efacturaArchiveMailer.send(
+      row,
+      input.to,
+      input.message,
+      attachments,
+    );
+    await this.activityLogsService.record(
       accountantId,
       efacturaArchiveEmailed(row, input.to),
     );
@@ -268,7 +266,7 @@ export class EfacturaArchiveService {
     const startTime = endTime - days * DAY_MS + PERIOD_MARGIN_MS;
     const items: ImportItem[] = [];
     for (let page = 1; page <= MAX_MESSAGE_PAGES; page++) {
-      const list = await this.efactura.fetchMessages(target, cui, {
+      const list = await this.efacturaService.fetchMessages(target, cui, {
         startTime,
         endTime,
         pagina: page,
@@ -294,16 +292,13 @@ export class EfacturaArchiveService {
     messageIds: string[],
   ): Promise<Set<string>> {
     if (!messageIds.length) return new Set();
-    const rows = await this.archive
-      .createQueryBuilder('e')
-      .select('e.anafMessageId', 'anafMessageId')
-      .where('e.companyId = :companyId', { companyId })
-      .andWhere('e.environment = :environment', {
-        environment: this.api.environment(),
-      })
-      .andWhere('e.anafMessageId IN (:...messageIds)', { messageIds })
-      .getRawMany<{ anafMessageId: string }>();
-    return new Set(rows.map((r) => r.anafMessageId));
+    return new Set(
+      await this.efacturaInvoiceRepository.archivedMessageIds(
+        companyId,
+        this.anafApiService.environment(),
+        messageIds,
+      ),
+    );
   }
 
   private async importAll(
@@ -350,11 +345,12 @@ export class EfacturaArchiveService {
     company: Company,
     item: ImportItem,
   ): Promise<ImportResult> {
-    const environment = this.api.environment();
-    const existing = await this.archive.findOne({
-      select: { id: true },
-      where: { companyId: company.id, environment, anafMessageId: item.id },
-    });
+    const environment = this.anafApiService.environment();
+    const existing = await this.efacturaInvoiceRepository.findIdByMessage(
+      company.id,
+      environment,
+      item.id,
+    );
     if (existing) {
       return {
         messageId: item.id,
@@ -362,7 +358,11 @@ export class EfacturaArchiveService {
         id: existing.id,
       };
     }
-    const file = await this.efactura.fetchZip(target, environment, item.id);
+    const file = await this.efacturaService.fetchZip(
+      target,
+      environment,
+      item.id,
+    );
     const extracted = extractInvoiceXml(file.content);
     const parsed = extracted ? parseEinvoice(extracted.xml) : null;
     if (!extracted || !parsed) {
@@ -381,7 +381,7 @@ export class EfacturaArchiveService {
       };
     }
     const uploadIndex = item.hint?.requestId ?? extracted.uploadIndex;
-    const row = this.archive.create({
+    const row = this.efacturaInvoiceRepository.create({
       accountantId: target.accountantId,
       companyId: company.id,
       anafConnectionId: target.connectionId,
@@ -423,10 +423,11 @@ export class EfacturaArchiveService {
     environment: EfacturaInvoice['environment'],
     uploadIndex: string,
   ): Promise<number | null> {
-    const upload = await this.uploads.findOne({
-      select: { id: true, invoiceId: true },
-      where: { companyId, environment, uploadIndex },
-    });
+    const upload = await this.efacturaUploadRepository.findByIndex(
+      companyId,
+      environment,
+      uploadIndex,
+    );
     return upload?.invoiceId ?? null;
   }
 
@@ -434,9 +435,9 @@ export class EfacturaArchiveService {
     row: EfacturaInvoice,
     zip: Buffer,
   ): Promise<EfacturaInvoice | null> {
-    if (this.files.enabled) {
-      const path = this.files.pathFor(row, EfacturaFileKind.Zip);
-      await this.files.put(path, zip, 'application/zip');
+    if (this.efacturaFileStore.enabled) {
+      const path = this.efacturaFileStore.pathFor(row, EfacturaFileKind.Zip);
+      await this.efacturaFileStore.put(path, zip, 'application/zip');
       row.zipStoragePath = path;
       row.zipContent = null;
     } else {
@@ -444,14 +445,21 @@ export class EfacturaArchiveService {
       row.zipContent = zip;
     }
     try {
-      return await this.archive.manager.transaction(async (manager) => {
-        await lockLiveCompany(manager, row.accountantId, row.companyId);
-        return manager.getRepository(EfacturaInvoice).save(row);
+      return await this.dataSource.transaction(async (manager) => {
+        await lockLiveCompany(
+          this.companyRepository,
+          manager,
+          row.accountantId,
+          row.companyId,
+        );
+        return this.efacturaInvoiceRepository.insert(manager, row);
       });
     } catch (err) {
       if (isUniqueViolation(err)) return null;
       if (row.zipStoragePath) {
-        await this.files.remove([row.zipStoragePath]).catch(() => undefined);
+        await this.efacturaFileStore
+          .remove([row.zipStoragePath])
+          .catch(() => undefined);
       }
       throw err;
     }
@@ -465,64 +473,20 @@ export class EfacturaArchiveService {
   ): Promise<void> {
     const counts = countResults(results);
     if (!counts[ImportStatus.Imported] && !counts[ImportStatus.Failed]) return;
-    await this.activity.record(
+    await this.activityLogsService.record(
       accountantId,
       efacturaArchiveImported(company, counts, automatic),
     );
-  }
-
-  private filtered(
-    accountantId: number,
-    filter: ArchiveFilter,
-  ): SelectQueryBuilder<EfacturaInvoice> {
-    const qb = this.archive
-      .createQueryBuilder('e')
-      .where('e.accountantId = :accountantId', { accountantId });
-    if (filter.companyId) {
-      qb.andWhere('e.companyId = :companyId', { companyId: filter.companyId });
-    }
-    if (filter.direction) {
-      qb.andWhere('e.direction = :direction', { direction: filter.direction });
-    }
-    if (filter.from) qb.andWhere('e.issueDate >= :from', { from: filter.from });
-    if (filter.to) qb.andWhere('e.issueDate <= :to', { to: filter.to });
-    const search = filter.q?.trim();
-    if (search) {
-      const q = likePattern(search);
-      const cui = likePattern(normalizeTaxId(search) ?? search);
-      qb.andWhere(
-        new Brackets((b) =>
-          b
-            .where('e.number ILIKE :q', { q })
-            .orWhere('e.supplierName ILIKE :q', { q })
-            .orWhere('e.customerName ILIKE :q', { q })
-            .orWhere('e.supplierCui ILIKE :cui', { cui })
-            .orWhere('e.customerCui ILIKE :cui', { cui }),
-        ),
-      );
-    }
-    return qb;
   }
 
   private async totals(
     accountantId: number,
     filter: ArchiveFilter,
   ): Promise<ArchiveTotal[]> {
-    const rows = await this.filtered(accountantId, filter)
-      .select('e.currency', 'currency')
-      .addSelect('COUNT(*)', 'count')
-      .addSelect(
-        `SUM(CASE WHEN "e"."standard" = :creditStandard OR "e"."type_code" = :creditCode THEN -"e"."total_gross" ELSE "e"."total_gross" END)`,
-        'total',
-      )
-      .setParameters({
-        creditStandard: EfacturaStandard.CN,
-        creditCode: EinvoiceTypeCode.CreditNote,
-      })
-      .andWhere('e.currency IS NOT NULL')
-      .groupBy('e.currency')
-      .orderBy('e.currency', 'ASC')
-      .getRawMany<{ currency: string; count: string; total: string | null }>();
+    const rows = await this.efacturaInvoiceRepository.totals(
+      accountantId,
+      filter,
+    );
     return rows.map((r) => ({
       currency: r.currency,
       count: Number(r.count),
@@ -535,14 +499,11 @@ export class EfacturaArchiveService {
     id: number,
     withFiles = false,
   ): Promise<EfacturaInvoice> {
-    const qb = this.archive
-      .createQueryBuilder('e')
-      .where('e.id = :id AND e.accountantId = :accountantId', {
-        id,
-        accountantId,
-      });
-    if (withFiles) qb.addSelect(['e.zipContent', 'e.pdfContent']);
-    const row = await qb.getOne();
+    const row = await this.efacturaInvoiceRepository.findOwned(
+      accountantId,
+      id,
+      withFiles,
+    );
     if (!row) throw new NotFoundException(ARCHIVE_NOT_FOUND);
     return row;
   }
@@ -553,10 +514,10 @@ export class EfacturaArchiveService {
   ): Promise<Buffer | null> {
     if (content) return content;
     if (!path) return null;
-    if (!this.files.configured) {
+    if (!this.efacturaFileStore.configured) {
       throw new ConflictException(STORAGE_NOT_CONFIGURED);
     }
-    return this.files.get(path);
+    return this.efacturaFileStore.get(path);
   }
 
   private async zipContent(row: EfacturaInvoice): Promise<Buffer> {
@@ -577,7 +538,7 @@ export class EfacturaArchiveService {
     if (row.standard === EfacturaStandard.CII) {
       throw new BadRequestException(PDF_ONLY_UBL);
     }
-    const file = await this.validator.transform(
+    const file = await this.efacturaValidator.transform(
       row.accountantId,
       await this.invoiceXml(row),
       row.standard === EfacturaStandard.CN
@@ -591,15 +552,19 @@ export class EfacturaArchiveService {
 
   private async cachePdf(row: EfacturaInvoice, pdf: Buffer): Promise<void> {
     try {
-      if (this.files.enabled) {
-        const path = this.files.pathFor(row, EfacturaFileKind.Pdf);
-        await this.files.put(path, pdf, 'application/pdf');
-        await this.archive.update({ id: row.id }, { pdfStoragePath: path });
+      if (this.efacturaFileStore.enabled) {
+        const path = this.efacturaFileStore.pathFor(row, EfacturaFileKind.Pdf);
+        await this.efacturaFileStore.put(path, pdf, 'application/pdf');
+        await this.efacturaInvoiceRepository.update(row.id, {
+          pdfStoragePath: path,
+        });
         row.pdfStoragePath = path;
       } else {
-        await this.archive.update({ id: row.id }, { pdfContent: pdf });
+        await this.efacturaInvoiceRepository.update(row.id, {
+          pdfContent: pdf,
+        });
       }
-      row.pdfContent = this.files.enabled ? null : pdf;
+      row.pdfContent = this.efacturaFileStore.enabled ? null : pdf;
     } catch (err) {
       this.logger.warn(
         `PDF of archived e-Factura ${row.id} not cached: ${(err as Error).message}`,

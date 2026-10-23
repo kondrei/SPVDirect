@@ -12,6 +12,7 @@ vi.mock('../lib/recaptcha', () => ({
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.mocked(loadRecaptcha).mockClear();
+  localStorage.removeItem('spv-theme');
 });
 
 const STATS = {
@@ -46,8 +47,52 @@ describe('landing page', () => {
     expect(within(features).getByText('În curând')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Autentificare' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: 'Cont nou' })).toHaveAttribute('aria-selected', 'false');
-    expect(screen.getByRole('figure', { name: /Captură din aplicația SPVDirect/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Panou', description: /Panoul cabinetului/ })).toBeInTheDocument();
     expect(calls).toContain('GET /public/stats');
+  });
+
+  it('opens a screenshot full screen and steps through the pages', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem('spv-theme', 'dark');
+    renderApp('/', {
+      'GET /auth/me': { status: 401 },
+      'GET /public/stats': { status: 200, body: STATS },
+    });
+    const thumb = screen.getByRole('button', { name: 'Facturi', description: /Facturile emise/ });
+    expect(thumb.querySelector('img')).toHaveAttribute('src', '/screenshots/facturi-dark.webp');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await user.click(thumb);
+
+    const viewer = screen.getByRole('dialog', { name: 'Facturi' });
+    expect(within(viewer).getByText(/^3 din 6/)).toBeInTheDocument();
+    expect(within(viewer).getByRole('img', { name: /pagina Facturi,/ })).toHaveAttribute(
+      'src',
+      '/screenshots/facturi-dark.webp',
+    );
+
+    await user.click(within(viewer).getByRole('button', { name: 'Următoarea' }));
+    expect(screen.getByRole('dialog', { name: 'Arhivă e-Factura' })).toBeInTheDocument();
+
+    await user.keyboard('{ArrowLeft}{ArrowLeft}{ArrowLeft}');
+    expect(screen.getByRole('dialog', { name: 'Panou' })).toBeInTheDocument();
+
+    await user.keyboard('{ArrowLeft}');
+    expect(screen.getByRole('dialog', { name: 'Certificate ANAF' })).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('closes the screenshot viewer with its button', async () => {
+    const user = userEvent.setup();
+    renderApp('/', {
+      'GET /auth/me': { status: 401 },
+      'GET /public/stats': { status: 200, body: STATS },
+    });
+    await user.click(screen.getByRole('button', { name: 'Mesaje SPV' }));
+    await user.click(within(screen.getByRole('dialog', { name: 'Mesaje SPV' })).getByRole('button', { name: 'Închide' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('loads reCAPTCHA as soon as the login tab is shown', async () => {

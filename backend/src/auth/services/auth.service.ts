@@ -29,12 +29,12 @@ function unknownAccountHash(): Promise<string> {
 @Injectable()
 export class AuthService {
   constructor(
-    private readonly accountants: AccountantsService,
-    private readonly jwt: JwtService,
+    private readonly accountantsService: AccountantsService,
+    private readonly jwtService: JwtService,
   ) {}
 
   async validateLogin(dto: LoginDto): Promise<Accountant> {
-    const accountant = await this.accountants.findByEmailWithPassword(
+    const accountant = await this.accountantsService.findByEmailWithPassword(
       dto.email,
     );
     const passwordOk = await verifyPassword(
@@ -56,7 +56,7 @@ export class AuthService {
 
   signSession(accountantId: number): Promise<string> {
     const payload: SessionPayload = { sub: String(accountantId) };
-    return this.jwt.signAsync(payload, {
+    return this.jwtService.signAsync(payload, {
       expiresIn: SESSION_TTL_SECONDS,
       audience: SESSION_AUDIENCE,
     });
@@ -66,7 +66,7 @@ export class AuthService {
     accountantId: number,
     issuedAt: number | undefined,
   ): Promise<boolean> {
-    const state = await this.accountants.findSessionState(accountantId);
+    const state = await this.accountantsService.findSessionState(accountantId);
     if (state?.status !== AccountStatus.Active) return false;
     if (!state.passwordChangedAt) return true;
     const changedAt = Math.floor(state.passwordChangedAt.getTime() / 1000);

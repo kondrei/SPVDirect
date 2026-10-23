@@ -5,8 +5,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
+import type { DataSource } from 'typeorm';
 
 import {
   efacturaDownloaded,
@@ -20,13 +20,16 @@ import { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import { AnafApiService } from '../../anaf/services/anaf-api.service.js';
 import { isUniqueViolation } from '../../common/db-errors.js';
 import { lockLiveCompany } from '../../companies/company-lock.js';
+import { CompanyRepository } from '../../companies/repositories/company.repository.js';
 import type { Company } from '../../companies/company.entity.js';
 import { CompaniesService } from '../../companies/services/companies.service.js';
-import { Invoice } from '../../invoices/invoice.entity.js';
+import { InvoiceRepository } from '../../invoices/repositories/invoice.repository.js';
 import { INVOICE_NOT_FOUND } from '../../invoices/services/invoice-lookup.js';
 import { InvoicesService } from '../../invoices/services/invoices.service.js';
 import { assertXmlPayload } from '../dto/efactura.dto.js';
-import { EfacturaUpload } from '../efactura-upload.entity.js';
+import type { EfacturaUpload } from '../efactura-upload.entity.js';
+import { EfacturaInvoiceRepository } from '../repositories/efactura-invoice.repository.js';
+import { EfacturaUploadRepository } from '../repositories/efactura-upload.repository.js';
 import {
   bodyJson,
   bodyText,
@@ -50,7 +53,6 @@ import {
 } from '../../api-logs/dto/api-log.enums.js';
 import {
   UploadStatus,
-  ACTIVE_UPLOAD_STATUSES,
   EfacturaStandard,
   ValidateStandard,
 } from '../dto/efactura.enums.js';
@@ -63,6 +65,7 @@ import type {
   SendOutcome,
   RawMessageList,
   MessageQuery,
+  UploadListFilter,
 } from '../dto/efactura.types.js';
 import {
   NO_CERTIFICATE,
@@ -71,7 +74,6 @@ import {
   UPLOAD_INTERRUPTED,
   ZIP_MAGIC,
 } from '../dto/efactura.constants.js';
-import { EfacturaInvoice } from '../efactura-invoice.entity.js';
 
 export function certified(company: Company): CertifiedCompany {
   if (!company.anafConnectionId) throw new BadRequestException(NO_CERTIFICATE);
@@ -93,15 +95,16 @@ function alreadySent(active: EfacturaUpload | null): ConflictException {
 @Injectable()
 export class EfacturaService {
   constructor(
-    private readonly api: AnafApiService,
-    private readonly validator: EfacturaValidator,
-    private readonly companies: CompaniesService,
-    private readonly invoices: InvoicesService,
-    @InjectRepository(EfacturaUpload)
-    private readonly uploads: Repository<EfacturaUpload>,
-    private readonly activity: ActivityLogsService,
-    @InjectRepository(EfacturaInvoice)
-    private readonly archive: Repository<EfacturaInvoice>,
+    private readonly anafApiService: AnafApiService,
+    private readonly efacturaValidator: EfacturaValidator,
+    private readonly companiesService: CompaniesService,
+    private readonly invoicesService: InvoicesService,
+    private readonly efacturaUploadRepository: EfacturaUploadRepository,
+    private readonly activityLogsService: ActivityLogsService,
+    private readonly efacturaInvoiceRepository: EfacturaInvoiceRepository,
+    @InjectDataSource() private readonly dataSource: DataSource,
+    private readonly companyRepository: CompanyRepository,
+    private readonly invoiceRepository: InvoiceRepository,
   ) {}
 
   async upload(
@@ -111,13 +114,14 @@ export class EfacturaService {
     assertXmlPayload(input.xml);
     const company = await this.certifiedCompany(accountantId, input.companyId);
     const outcome = await this.send(accountantId, company, input);
-    const saved = await this.uploads.save(
-      this.uploads.create({
-        ...this.newUpload(accountantId, company, null, input.standard),
-        ...outcome,
-      }),
+    const saved = await this.efacturaUploadRepository.insert({
+      ...this.newUpload(accountantId, company, null, input.standard),
+      ...outcome,
+    });
+    await this.activityLogsService.record(
+      accountantId,
+      efacturaUploaded(saved, null),
     );
-    await this.activity.record(accountantId, efacturaUploaded(saved, null));
     return saved;
   }
 
@@ -126,7 +130,7 @@ export class EfacturaService {
     invoiceId: number,
     options: { extern?: boolean } = {},
   ): Promise<EfacturaUpload> {
-    const invoice = await this.invoices.get(accountantId, invoiceId);
+    const invoice = await this.invoicesService.get(accountantId, invoiceId);
     const company = await this.certifiedCompany(
       accountantId,
       invoice.companyId,
@@ -134,8 +138,8 @@ export class EfacturaService {
     const claim = await this.claimInvoice(accountantId, company, invoiceId);
     let outcome: SendOutcome;
     try {
-      const xml = await this.invoices.xml(accountantId, invoiceId);
-      const check = await this.validator.validateIfAvailable(
+      const xml = await this.invoicesService.xml(accountantId, invoiceId);
+      const check = await this.efacturaValidator.validateIfAvailable(
         accountantId,
         xml,
         ValidateStandard.FACT1,
@@ -153,33 +157,27 @@ export class EfacturaService {
         extern: options.extern,
       });
     } catch (err) {
-      await this.uploads.delete({ id: claim.id, status: UploadStatus.Sending });
+      await this.efacturaUploadRepository.deleteSending(claim.id);
       throw err;
     }
-    const saved = await this.uploads.save(Object.assign(claim, outcome));
-    await this.activity.record(accountantId, efacturaUploaded(saved, invoice));
+    const saved = await this.efacturaUploadRepository.save(
+      Object.assign(claim, outcome),
+    );
+    await this.activityLogsService.record(
+      accountantId,
+      efacturaUploaded(saved, invoice),
+    );
     return saved;
   }
 
   async list(
     accountantId: number,
-    filter: {
-      companyId?: number;
-      invoiceId?: number;
-      page: number;
-      pageSize: number;
-    },
+    filter: UploadListFilter,
   ): Promise<UploadPage> {
-    const [items, total] = await this.uploads.findAndCount({
-      where: {
-        accountantId,
-        ...(filter.companyId ? { companyId: filter.companyId } : {}),
-        ...(filter.invoiceId ? { invoiceId: filter.invoiceId } : {}),
-      },
-      order: { id: 'DESC' },
-      skip: (filter.page - 1) * filter.pageSize,
-      take: filter.pageSize,
-    });
+    const [items, total] = await this.efacturaUploadRepository.page(
+      accountantId,
+      filter,
+    );
     return { items, total, page: filter.page, pageSize: filter.pageSize };
   }
 
@@ -188,10 +186,10 @@ export class EfacturaService {
     invoiceIds: number[],
   ): Promise<EfacturaUpload[]> {
     if (!invoiceIds.length) return [];
-    const rows = await this.uploads.find({
-      where: { accountantId, invoiceId: In(invoiceIds) },
-      order: { id: 'DESC' },
-    });
+    const rows = await this.efacturaUploadRepository.newestFirstForInvoices(
+      accountantId,
+      invoiceIds,
+    );
     const latest = new Map<number, EfacturaUpload>();
     for (const row of rows) {
       if (row.invoiceId !== null && !latest.has(row.invoiceId)) {
@@ -202,7 +200,10 @@ export class EfacturaService {
   }
 
   async get(accountantId: number, id: number): Promise<EfacturaUpload> {
-    const upload = await this.uploads.findOneBy({ id, accountantId });
+    const upload = await this.efacturaUploadRepository.findOwned(
+      accountantId,
+      id,
+    );
     if (!upload) throw new NotFoundException('Încărcarea nu a fost găsită');
     return upload;
   }
@@ -215,12 +216,15 @@ export class EfacturaService {
         'Încărcarea nu are index ANAF sau certificatul a fost șters',
       );
     }
-    const res = await this.api.request<unknown>({
+    const res = await this.anafApiService.request<unknown>({
       accountantId,
       connectionId: upload.anafConnectionId,
       companyId: upload.companyId,
       service: ApiLogService.Efactura,
-      path: this.api.envPath('/FCTEL/rest/stareMesaj', upload.environment),
+      path: this.anafApiService.envPath(
+        '/FCTEL/rest/stareMesaj',
+        upload.environment,
+      ),
       params: { id_incarcare: upload.uploadIndex },
       responseType: 'text',
       allowStatuses: [400],
@@ -239,8 +243,11 @@ export class EfacturaService {
     upload.status = parsed.status;
     upload.downloadId = parsed.downloadId ?? upload.downloadId;
     upload.checkedAt = new Date();
-    const saved = await this.uploads.save(upload);
-    await this.activity.record(accountantId, efacturaStatusChecked(saved));
+    const saved = await this.efacturaUploadRepository.save(upload);
+    await this.activityLogsService.record(
+      accountantId,
+      efacturaStatusChecked(saved),
+    );
     return saved;
   }
 
@@ -263,7 +270,7 @@ export class EfacturaService {
       upload.environment,
       upload.downloadId,
     );
-    await this.activity.record(
+    await this.activityLogsService.record(
       accountantId,
       efacturaDownloaded(upload.companyId, upload.downloadId),
     );
@@ -275,7 +282,7 @@ export class EfacturaService {
     companyId: number,
     query: MessageQuery,
   ): Promise<MessageList> {
-    const record = await this.companies.get(accountantId, companyId);
+    const record = await this.companiesService.get(accountantId, companyId);
     const company = certified(record);
     const list = await this.fetchMessages(
       { accountantId, connectionId: company.connectionId, companyId },
@@ -283,7 +290,7 @@ export class EfacturaService {
       query,
     );
     await this.markArchived(companyId, list);
-    await this.activity.record(
+    await this.activityLogsService.record(
       accountantId,
       efacturaMessagesLoaded(record, list.messages.length, query),
     );
@@ -311,10 +318,10 @@ export class EfacturaService {
     }
     if (query.filtru) params.filtru = query.filtru;
 
-    const res = await this.api.request<RawMessageList>({
+    const res = await this.anafApiService.request<RawMessageList>({
       ...target,
       service: ApiLogService.Efactura,
-      path: this.api.envPath(
+      path: this.anafApiService.envPath(
         `/FCTEL/rest/${paged ? 'listaMesajePaginatieFactura' : 'listaMesajeFactura'}`,
       ),
       params,
@@ -352,14 +359,11 @@ export class EfacturaService {
     list: MessageList,
   ): Promise<void> {
     if (!list.messages.length) return;
-    const rows = await this.archive.find({
-      select: { id: true, anafMessageId: true },
-      where: {
-        companyId,
-        environment: this.api.environment(),
-        anafMessageId: In(list.messages.map((m) => m.id)),
-      },
-    });
+    const rows = await this.efacturaInvoiceRepository.idsByMessage(
+      companyId,
+      this.anafApiService.environment(),
+      list.messages.map((m) => m.id),
+    );
     const ids = new Map(rows.map((r) => [r.anafMessageId, r.id]));
     for (const message of list.messages) {
       message.archivedId = ids.get(message.id) ?? null;
@@ -374,10 +378,10 @@ export class EfacturaService {
     const company = await this.certifiedCompany(accountantId, companyId);
     const file = await this.fetchZip(
       { accountantId, connectionId: company.connectionId, companyId },
-      this.api.environment(),
+      this.anafApiService.environment(),
       messageId,
     );
-    await this.activity.record(
+    await this.activityLogsService.record(
       accountantId,
       efacturaDownloaded(companyId, messageId),
     );
@@ -388,13 +392,13 @@ export class EfacturaService {
     accountantId: number,
     invoiceId: number,
   ): Promise<ValidationResult> {
-    const invoice = await this.invoices.get(accountantId, invoiceId);
-    const result = await this.validator.validate(
+    const invoice = await this.invoicesService.get(accountantId, invoiceId);
+    const result = await this.efacturaValidator.validate(
       accountantId,
-      await this.invoices.xml(accountantId, invoiceId),
+      await this.invoicesService.xml(accountantId, invoiceId),
       ValidateStandard.FACT1,
     );
-    await this.activity.record(
+    await this.activityLogsService.record(
       accountantId,
       efacturaValidated(result, ValidateStandard.FACT1, invoice),
     );
@@ -406,8 +410,12 @@ export class EfacturaService {
     xml: string,
     standard: ValidateStandard = ValidateStandard.FACT1,
   ): Promise<ValidationResult> {
-    const result = await this.validator.validate(accountantId, xml, standard);
-    await this.activity.record(
+    const result = await this.efacturaValidator.validate(
+      accountantId,
+      xml,
+      standard,
+    );
+    await this.activityLogsService.record(
       accountantId,
       efacturaValidated(result, standard, null),
     );
@@ -420,13 +428,16 @@ export class EfacturaService {
     standard: ValidateStandard = ValidateStandard.FACT1,
     skipValidation = false,
   ): Promise<EfacturaFile> {
-    const file = await this.validator.transform(
+    const file = await this.efacturaValidator.transform(
       accountantId,
       xml,
       standard,
       skipValidation,
     );
-    await this.activity.record(accountantId, efacturaTransformed(standard));
+    await this.activityLogsService.record(
+      accountantId,
+      efacturaTransformed(standard),
+    );
     return file;
   }
 
@@ -434,7 +445,7 @@ export class EfacturaService {
     accountantId: number,
     companyId: number,
   ): Promise<CertifiedCompany> {
-    return certified(await this.companies.get(accountantId, companyId));
+    return certified(await this.companiesService.get(accountantId, companyId));
   }
 
   private newUpload(
@@ -448,7 +459,7 @@ export class EfacturaService {
       companyId: company.id,
       invoiceId,
       anafConnectionId: company.connectionId,
-      environment: this.api.environment(),
+      environment: this.anafApiService.environment(),
       standard,
       uploadIndex: null,
       status: UploadStatus.Sending,
@@ -464,22 +475,29 @@ export class EfacturaService {
     invoiceId: number,
   ): Promise<EfacturaUpload> {
     const insert = () =>
-      this.uploads.manager.transaction(async (manager) => {
-        await lockLiveCompany(manager, accountantId, company.id);
+      this.dataSource.transaction(async (manager) => {
+        await lockLiveCompany(
+          this.companyRepository,
+          manager,
+          accountantId,
+          company.id,
+        );
         if (
-          !(await manager.existsBy(Invoice, { id: invoiceId, accountantId }))
+          !(await this.invoiceRepository.existsOwned(
+            manager,
+            accountantId,
+            invoiceId,
+          ))
         ) {
           throw new NotFoundException(INVOICE_NOT_FOUND);
         }
-        const uploads = manager.getRepository(EfacturaUpload);
-        return uploads.save(
-          uploads.create(
-            this.newUpload(
-              accountantId,
-              company,
-              invoiceId,
-              EfacturaStandard.UBL,
-            ),
+        return this.efacturaUploadRepository.insertClaim(
+          manager,
+          this.newUpload(
+            accountantId,
+            company,
+            invoiceId,
+            EfacturaStandard.UBL,
           ),
         );
       });
@@ -488,22 +506,19 @@ export class EfacturaService {
     } catch (err) {
       if (!isUniqueViolation(err)) throw err;
     }
-    const active = await this.uploads.findOne({
-      where: {
-        accountantId,
-        invoiceId,
-        status: In([...ACTIVE_UPLOAD_STATUSES]),
-      },
-    });
+    const active = await this.efacturaUploadRepository.findActive(
+      accountantId,
+      invoiceId,
+    );
     if (
       active?.status !== UploadStatus.Sending ||
       Date.now() - active.createdAt.getTime() < STALE_SENDING_MS
     ) {
       throw alreadySent(active);
     }
-    await this.uploads.update(
-      { id: active.id, status: UploadStatus.Sending },
-      { status: UploadStatus.Rejected, errorMessage: UPLOAD_INTERRUPTED },
+    await this.efacturaUploadRepository.markInterrupted(
+      active.id,
+      UPLOAD_INTERRUPTED,
     );
     try {
       return await insert();
@@ -526,13 +541,13 @@ export class EfacturaService {
     if (input.autofactura) params.autofactura = 'DA';
     if (input.executare) params.executare = 'DA';
 
-    const res = await this.api.request<unknown>({
+    const res = await this.anafApiService.request<unknown>({
       accountantId,
       connectionId: company.connectionId,
       companyId: company.id,
       service: ApiLogService.Efactura,
       method: ApiLogMethod.Post,
-      path: this.api.envPath(
+      path: this.anafApiService.envPath(
         `/FCTEL/rest/${input.b2c ? 'uploadb2c' : 'upload'}`,
       ),
       params,
@@ -570,10 +585,10 @@ export class EfacturaService {
     environment: AnafEnvironment,
     id: string,
   ): Promise<EfacturaFile> {
-    const res = await this.api.request<ArrayBuffer>({
+    const res = await this.anafApiService.request<ArrayBuffer>({
       ...target,
       service: ApiLogService.Efactura,
-      path: this.api.envPath('/FCTEL/rest/descarcare', environment),
+      path: this.anafApiService.envPath('/FCTEL/rest/descarcare', environment),
       params: { id },
       responseType: 'arraybuffer',
       allowStatuses: [400],

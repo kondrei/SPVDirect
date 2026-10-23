@@ -1,6 +1,4 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { In, MoreThanOrEqual, Repository } from 'typeorm';
 import { CompaniesService } from '../../companies/services/companies.service.js';
 import type { CreateInvoiceDto } from '../dto/invoice.dto.js';
 import {
@@ -18,13 +16,15 @@ import {
   statsWindowStart,
   type InvoiceStats,
 } from '../helpers/invoice-stats.js';
-import { Invoice } from '../invoice.entity.js';
+import type { Invoice } from '../invoice.entity.js';
+import { InvoiceRepository } from '../repositories/invoice.repository.js';
 import { InvoiceDeliveryService } from './invoice-delivery.service.js';
 import type {
   CreatedInvoice,
   InvoiceSummary,
   InvoicePage,
   InvoiceDetail,
+  InvoiceListFilter,
 } from '../dto/invoice.types.js';
 import { findOwnedInvoice } from './invoice-lookup.js';
 import { InvoiceNumbering } from './invoice-numbering.service.js';
@@ -56,11 +56,10 @@ function toSummary(invoice: Invoice, stornoed: boolean): InvoiceSummary {
 @Injectable()
 export class InvoicesService {
   constructor(
-    @InjectRepository(Invoice)
-    private readonly invoices: Repository<Invoice>,
-    private readonly companies: CompaniesService,
-    private readonly numbering: InvoiceNumbering,
-    private readonly delivery: InvoiceDeliveryService,
+    private readonly invoiceRepository: InvoiceRepository,
+    private readonly companiesService: CompaniesService,
+    private readonly invoiceNumbering: InvoiceNumbering,
+    private readonly invoiceDeliveryService: InvoiceDeliveryService,
   ) {}
 
   async nextNumber(
@@ -68,33 +67,25 @@ export class InvoicesService {
     companyId: number,
     series: string,
   ): Promise<number> {
-    await this.companies.get(accountantId, companyId);
-    return this.numbering.next(companyId, series);
+    await this.companiesService.get(accountantId, companyId);
+    return this.invoiceNumbering.next(companyId, series);
   }
 
   async list(
     accountantId: number,
-    filter: { companyId?: number; page: number; pageSize: number },
+    filter: InvoiceListFilter,
   ): Promise<InvoicePage> {
-    const [rows, total] = await this.invoices.findAndCount({
-      where: {
-        accountantId,
-        ...(filter.companyId ? { companyId: filter.companyId } : {}),
-      },
-      order: { issueDate: 'DESC', id: 'DESC' },
-      skip: (filter.page - 1) * filter.pageSize,
-      take: filter.pageSize,
-    });
+    const [rows, total] = await this.invoiceRepository.page(
+      accountantId,
+      filter,
+    );
     const reversed = rows.length
       ? new Set(
           (
-            await this.invoices.find({
-              select: { stornoOfInvoiceId: true },
-              where: {
-                accountantId,
-                stornoOfInvoiceId: In(rows.map((r) => r.id)),
-              },
-            })
+            await this.invoiceRepository.stornoTargets(
+              accountantId,
+              rows.map((r) => r.id),
+            )
           ).map((r) => r.stornoOfInvoiceId),
         )
       : new Set<number | null>();
@@ -108,25 +99,15 @@ export class InvoicesService {
 
   async stats(accountantId: number): Promise<InvoiceStats> {
     const today = bucharestToday();
-    const rows = await this.invoices.find({
-      select: {
-        issueDate: true,
-        currency: true,
-        exchangeRate: true,
-        totalNet: true,
-        totalVatRon: true,
-        stornoOfInvoiceId: true,
-      },
-      where: {
-        accountantId,
-        issueDate: MoreThanOrEqual(statsWindowStart(today)),
-      },
-    });
+    const rows = await this.invoiceRepository.issuedSince(
+      accountantId,
+      statsWindowStart(today),
+    );
     return computeInvoiceStats(rows, today);
   }
 
   get(accountantId: number, id: number): Promise<Invoice> {
-    return findOwnedInvoice(this.invoices, accountantId, id);
+    return findOwnedInvoice(this.invoiceRepository, accountantId, id);
   }
 
   async xml(accountantId: number, id: number): Promise<string> {
@@ -139,7 +120,7 @@ export class InvoicesService {
       invoice.stornoOfInvoiceId === null
         ? remainingQuantities(
             invoice,
-            await this.invoices.findBy({ accountantId, stornoOfInvoiceId: id }),
+            await this.invoiceRepository.stornosOf(accountantId, id),
           )
         : null;
     return Object.assign(invoice, { remainingQuantities: remaining });
@@ -149,14 +130,17 @@ export class InvoicesService {
     accountantId: number,
     dto: CreateInvoiceDto,
   ): Promise<CreatedInvoice> {
-    const company = await this.companies.get(accountantId, dto.companyId);
+    const company = await this.companiesService.get(
+      accountantId,
+      dto.companyId,
+    );
     validateInvoiceDates(dto);
     if (dto.currency !== Currency.RON && !dto.exchangeRate) {
       throw new BadRequestException(
         'Introduceți cursul de schimb BNR pentru a calcula TVA în RON',
       );
     }
-    this.delivery.assertCanDeliver(dto);
+    this.invoiceDeliveryService.assertCanDeliver(dto);
 
     const seller = sellerFromCompany(company);
     const lines = normalizeLines(dto.lines, seller.vatPayer, dto.deliveryDate);
@@ -164,10 +148,10 @@ export class InvoicesService {
       dto.currency === Currency.RON ? null : (dto.exchangeRate ?? null);
     const computed = computeInvoice(lines, exchangeRate);
 
-    const invoice = await this.numbering.insert(
-      (invoices) =>
+    const invoice = await this.invoiceNumbering.insert(
+      () =>
         Promise.resolve(
-          invoices.create({
+          this.invoiceRepository.create({
             accountantId,
             companyId: company.id,
             series: dto.series,
@@ -196,6 +180,6 @@ export class InvoicesService {
         ),
       dto.number,
     );
-    return this.delivery.deliverNew(invoice, dto);
+    return this.invoiceDeliveryService.deliverNew(invoice, dto);
   }
 }

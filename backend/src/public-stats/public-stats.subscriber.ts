@@ -37,7 +37,7 @@ export class PublicStatsSubscriber implements EntitySubscriberInterface {
 
   constructor(
     @InjectDataSource() dataSource: DataSource,
-    private readonly stats: PublicStatsService,
+    private readonly publicStatsService: PublicStatsService,
   ) {
     dataSource.subscribers.push(this);
   }
@@ -62,7 +62,7 @@ export class PublicStatsSubscriber implements EntitySubscriberInterface {
     const runner = event.queryRunner;
     if (runner.isTransactionActive || !this.pending.has(runner)) return;
     this.pending.delete(runner);
-    this.stats.invalidate();
+    this.publicStatsService.invalidate();
   }
 
   afterTransactionRollback(event: TransactionRollbackEvent): void {
@@ -78,6 +78,6 @@ export class PublicStatsSubscriber implements EntitySubscriberInterface {
   ): void {
     if (!tracked.has(metadata.target)) return;
     if (runner.isTransactionActive) this.pending.add(runner);
-    else this.stats.invalidate();
+    else this.publicStatsService.invalidate();
   }
 }

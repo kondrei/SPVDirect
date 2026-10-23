@@ -32,8 +32,8 @@ import { SpvService } from '../services/spv.service.js';
 @UseGuards(JwtAuthGuard, AccountantParamGuard)
 export class SpvController {
   constructor(
-    private readonly spv: SpvService,
-    private readonly archive: SpvArchiveService,
+    private readonly spvService: SpvService,
+    private readonly spvArchiveService: SpvArchiveService,
   ) {}
 
   @Get('messages')
@@ -43,7 +43,7 @@ export class SpvController {
     @Param('connectionId', ParseIdPipe) connectionId: number,
     @Query() query: ListSpvMessagesQuery,
   ) {
-    return this.spv.listMessages(accountantId, connectionId, query);
+    return this.spvService.listMessages(accountantId, connectionId, query);
   }
 
   @Get('messages/:messageId/download')
@@ -54,7 +54,7 @@ export class SpvController {
     @Param('connectionId', ParseIdPipe) connectionId: number,
     @Param('messageId', ParseSpvMessageIdPipe) messageId: string,
   ) {
-    const doc = await this.spv.downloadMessage(
+    const doc = await this.spvService.downloadMessage(
       accountantId,
       connectionId,
       messageId,
@@ -70,7 +70,7 @@ export class SpvController {
     @Param('connectionId', ParseIdPipe) connectionId: number,
     @Body() dto: SyncSpvDto,
   ) {
-    return this.archive.sync(accountantId, connectionId, dto.zile);
+    return this.spvArchiveService.sync(accountantId, connectionId, dto.zile);
   }
 
   @Post('requests')
@@ -81,6 +81,6 @@ export class SpvController {
     @Param('connectionId', ParseIdPipe) connectionId: number,
     @Body() dto: CreateSpvRequestDto,
   ) {
-    return this.spv.createRequest(accountantId, connectionId, dto);
+    return this.spvService.createRequest(accountantId, connectionId, dto);
   }
 }

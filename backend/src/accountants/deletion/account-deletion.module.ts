@@ -1,9 +1,6 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { ApiLogsModule } from '../../api-logs/api-logs.module.js';
-import { AnafConnection } from '../../anaf/anaf-connection.entity.js';
 import { AnafModule } from '../../anaf/anaf.module.js';
-import { SpvMessage } from '../../anaf/spv/spv-message.entity.js';
 import { AuthModule } from '../../auth/auth.module.js';
 import { CompaniesModule } from '../../companies/companies.module.js';
 import { CompanyDeletionModule } from '../../companies/deletion/company-deletion.module.js';
@@ -20,7 +17,6 @@ import { AccountExportService } from './account-export.service.js';
     AuthModule,
     CompaniesModule,
     CompanyDeletionModule,
-    TypeOrmModule.forFeature([AnafConnection, SpvMessage]),
   ],
   controllers: [AccountDeletionController],
   providers: [AccountDeletionService, AccountExportService],

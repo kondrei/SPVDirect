@@ -25,7 +25,7 @@ import { ArchiveQuery } from '../dto/spv.dto.js';
 @Controller('accountants/:accountantId/spv/archive')
 @UseGuards(JwtAuthGuard, AccountantParamGuard)
 export class SpvArchiveController {
-  constructor(private readonly archive: SpvArchiveService) {}
+  constructor(private readonly spvArchiveService: SpvArchiveService) {}
 
   @Get()
   @Throttle(ARCHIVE_THROTTLE)
@@ -33,7 +33,7 @@ export class SpvArchiveController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Query() query: ArchiveQuery,
   ) {
-    return this.archive.list(accountantId, {
+    return this.spvArchiveService.list(accountantId, {
       cif: query.cif,
       type: query.type,
       companyId: query.companyId,
@@ -52,7 +52,7 @@ export class SpvArchiveController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @UploadedFile() file: { buffer: Buffer } | undefined,
   ) {
-    return this.archive.importMessages(accountantId, file?.buffer);
+    return this.spvArchiveService.importMessages(accountantId, file?.buffer);
   }
 
   @Put(':id/document')
@@ -67,7 +67,7 @@ export class SpvArchiveController {
     @Param('id', ParseIdPipe) id: number,
     @UploadedFile() file: { buffer: Buffer } | undefined,
   ) {
-    return this.archive.saveDocument(accountantId, id, file?.buffer);
+    return this.spvArchiveService.saveDocument(accountantId, id, file?.buffer);
   }
 
   @Get(':id/download')
@@ -77,7 +77,7 @@ export class SpvArchiveController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseIdPipe) id: number,
   ) {
-    const doc = await this.archive.download(accountantId, id);
+    const doc = await this.spvArchiveService.download(accountantId, id);
     return attachment(doc);
   }
 }

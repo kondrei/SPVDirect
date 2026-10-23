@@ -1,7 +1,9 @@
 import type { Repository } from 'typeorm';
 import type { ApiLogStream } from './api-log-stream.js';
 import type { ApiLog } from './api-log.entity.js';
-import { ApiLogsService, type ApiLogEntry } from './api-logs.service.js';
+import { ApiLogsService } from './api-logs.service.js';
+import type { ApiLogEntry } from './dto/api-log.types.js';
+import { ApiLogRepository } from './repositories/api-log.repository.js';
 
 const ENTRY: ApiLogEntry = {
   accountantId: 1,
@@ -20,7 +22,7 @@ function setup() {
   const repo = { insert: vi.fn().mockResolvedValue(undefined) };
   const stream = { write: vi.fn() };
   const service = new ApiLogsService(
-    repo as unknown as Repository<ApiLog>,
+    new ApiLogRepository(repo as unknown as Repository<ApiLog>),
     stream as unknown as ApiLogStream,
   );
   return { service, repo, stream };

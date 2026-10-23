@@ -3,8 +3,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Repository } from 'typeorm';
+import type { EntityManager } from 'typeorm';
 import { lockLiveCompany } from '../../companies/company-lock.js';
+import { CompanyRepository } from '../../companies/repositories/company.repository.js';
 import type { CreateStornoDto } from '../dto/invoice.dto.js';
 import { validateInvoiceDates } from '../builders/invoice-builder.js';
 import { computeInvoice } from '../helpers/invoice-calc.js';
@@ -13,7 +14,8 @@ import {
   buildStornoLines,
   remainingQuantities,
 } from '../helpers/invoice-storno.js';
-import { Invoice } from '../invoice.entity.js';
+import type { Invoice } from '../invoice.entity.js';
+import { InvoiceRepository } from '../repositories/invoice.repository.js';
 import { InvoiceDeliveryService } from './invoice-delivery.service.js';
 import type { CreatedInvoice } from '../dto/invoice.types.js';
 import { INVOICE_NOT_FOUND } from './invoice-lookup.js';
@@ -22,8 +24,10 @@ import { InvoiceNumbering } from './invoice-numbering.service.js';
 @Injectable()
 export class InvoiceStornoService {
   constructor(
-    private readonly numbering: InvoiceNumbering,
-    private readonly delivery: InvoiceDeliveryService,
+    private readonly invoiceNumbering: InvoiceNumbering,
+    private readonly invoiceDeliveryService: InvoiceDeliveryService,
+    private readonly invoiceRepository: InvoiceRepository,
+    private readonly companyRepository: CompanyRepository,
   ) {}
 
   async createStorno(
@@ -31,33 +35,40 @@ export class InvoiceStornoService {
     id: number,
     dto: CreateStornoDto,
   ): Promise<CreatedInvoice> {
-    this.delivery.assertCanDeliver(dto);
+    this.invoiceDeliveryService.assertCanDeliver(dto);
     const issueDate = dto.issueDate ?? bucharestToday();
     validateInvoiceDates({ issueDate, deliveryDate: issueDate });
 
-    const invoice = await this.numbering.insert((invoices) =>
-      this.buildStorno(invoices, accountantId, id, dto, issueDate),
+    const invoice = await this.invoiceNumbering.insert((manager) =>
+      this.buildStorno(manager, accountantId, id, dto, issueDate),
     );
-    return this.delivery.deliverNew(invoice, dto);
+    return this.invoiceDeliveryService.deliverNew(invoice, dto);
   }
 
   private async buildStorno(
-    invoices: Repository<Invoice>,
+    manager: EntityManager,
     accountantId: number,
     id: number,
     dto: CreateStornoDto,
     issueDate: string,
   ): Promise<Invoice> {
-    const target = await invoices.findOne({
-      select: { id: true, companyId: true },
-      where: { id, accountantId },
-    });
+    const target = await this.invoiceRepository.findRef(
+      manager,
+      accountantId,
+      id,
+    );
     if (!target) throw new NotFoundException(INVOICE_NOT_FOUND);
-    await lockLiveCompany(invoices.manager, accountantId, target.companyId);
-    const original = await invoices.findOne({
-      where: { id, accountantId },
-      lock: { mode: 'pessimistic_write' },
-    });
+    await lockLiveCompany(
+      this.companyRepository,
+      manager,
+      accountantId,
+      target.companyId,
+    );
+    const original = await this.invoiceRepository.findForUpdate(
+      manager,
+      accountantId,
+      id,
+    );
     if (!original) throw new NotFoundException(INVOICE_NOT_FOUND);
     if (original.stornoOfInvoiceId !== null) {
       throw new BadRequestException(
@@ -71,13 +82,13 @@ export class InvoiceStornoService {
     }
     const remaining = remainingQuantities(
       original,
-      await invoices.findBy({ accountantId, stornoOfInvoiceId: id }),
+      await this.invoiceRepository.stornosOf(accountantId, id, manager),
     );
     const computed = computeInvoice(
       buildStornoLines(original, remaining, dto.lines),
       original.exchangeRate,
     );
-    return invoices.create({
+    return this.invoiceRepository.create({
       accountantId,
       companyId: original.companyId,
       series: dto.series ?? original.series,

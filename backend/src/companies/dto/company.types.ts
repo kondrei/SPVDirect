@@ -22,3 +22,7 @@ export interface PurgeTally {
   purged: number;
   failed: number;
 }
+
+export type CompanyChanges = Partial<
+  Omit<Company, 'id' | 'accountantId' | 'createdAt' | 'updatedAt' | 'deletedAt'>
+>;

@@ -9,6 +9,7 @@ import {
 import type { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import { ActivityAction } from '../../api-logs/dto/api-log.enums.js';
 import { fakeActivityLogs } from '../../testing/activity-logs.js';
+import { AuthorizationLinkRepository } from './repositories/authorization-link.repository.js';
 
 function setup(link: Partial<AuthorizationLink> | null) {
   const repo = {
@@ -26,7 +27,9 @@ function setup(link: Partial<AuthorizationLink> | null) {
   const service = new AuthorizationLinksService(
     new ConfigService({ API_URL: 'https://api.spvdirect.ro' }),
     companies,
-    repo as unknown as Repository<AuthorizationLink>,
+    new AuthorizationLinkRepository(
+      repo as unknown as Repository<AuthorizationLink>,
+    ),
     activity as unknown as ActivityLogsService,
   );
   return { service, repo, activity };

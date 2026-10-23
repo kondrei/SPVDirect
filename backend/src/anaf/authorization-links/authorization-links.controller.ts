@@ -9,13 +9,15 @@ import { AuthorizationLinksService } from './authorization-links.service.js';
 )
 @UseGuards(JwtAuthGuard, AccountantParamGuard)
 export class AuthorizationLinksController {
-  constructor(private readonly links: AuthorizationLinksService) {}
+  constructor(
+    private readonly authorizationLinksService: AuthorizationLinksService,
+  ) {}
 
   @Post()
   create(
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('companyId', ParseIdPipe) companyId: number,
   ) {
-    return this.links.create(accountantId, companyId);
+    return this.authorizationLinksService.create(accountantId, companyId);
   }
 }

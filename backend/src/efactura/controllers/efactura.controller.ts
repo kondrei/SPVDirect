@@ -48,7 +48,7 @@ function xmlOf(file: { buffer: Buffer } | undefined): string {
 @Controller('accountants/:accountantId/efactura')
 @UseGuards(JwtAuthGuard, AccountantParamGuard)
 export class EfacturaController {
-  constructor(private readonly efactura: EfacturaService) {}
+  constructor(private readonly efacturaService: EfacturaService) {}
 
   @Get('uploads')
   @Throttle(EFACTURA_THROTTLE)
@@ -56,7 +56,7 @@ export class EfacturaController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Query() query: ListUploadsQuery,
   ) {
-    return this.efactura.list(accountantId, {
+    return this.efacturaService.list(accountantId, {
       companyId: query.companyId,
       invoiceId: query.invoiceId,
       page: query.page ?? 1,
@@ -72,7 +72,7 @@ export class EfacturaController {
     @Body() dto: UploadXmlDto,
     @UploadedFile() file: { buffer: Buffer } | undefined,
   ) {
-    return this.efactura.upload(accountantId, {
+    return this.efacturaService.upload(accountantId, {
       companyId: dto.companyId,
       standard: dto.standard,
       extern: dto.extern,
@@ -89,7 +89,7 @@ export class EfacturaController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Query() query: LatestUploadsQuery,
   ) {
-    return this.efactura.latestForInvoices(accountantId, query.ids);
+    return this.efacturaService.latestForInvoices(accountantId, query.ids);
   }
 
   @Get('uploads/:id')
@@ -98,7 +98,7 @@ export class EfacturaController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseIdPipe) id: number,
   ) {
-    return this.efactura.get(accountantId, id);
+    return this.efacturaService.get(accountantId, id);
   }
 
   @Post('uploads/:id/refresh')
@@ -108,7 +108,7 @@ export class EfacturaController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseIdPipe) id: number,
   ) {
-    return this.efactura.refresh(accountantId, id);
+    return this.efacturaService.refresh(accountantId, id);
   }
 
   @Get('uploads/:id/download')
@@ -118,7 +118,7 @@ export class EfacturaController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('id', ParseIdPipe) id: number,
   ) {
-    return attachment(await this.efactura.download(accountantId, id));
+    return attachment(await this.efacturaService.download(accountantId, id));
   }
 
   @Post('invoices/:invoiceId/upload')
@@ -128,7 +128,7 @@ export class EfacturaController {
     @Param('invoiceId', ParseIdPipe) invoiceId: number,
     @Body() dto: UploadInvoiceDto,
   ) {
-    return this.efactura.uploadInvoice(accountantId, invoiceId, dto);
+    return this.efacturaService.uploadInvoice(accountantId, invoiceId, dto);
   }
 
   @Post('invoices/:invoiceId/validate')
@@ -138,7 +138,7 @@ export class EfacturaController {
     @Param('accountantId', ParseIdPipe) accountantId: number,
     @Param('invoiceId', ParseIdPipe) invoiceId: number,
   ) {
-    return this.efactura.validateInvoice(accountantId, invoiceId);
+    return this.efacturaService.validateInvoice(accountantId, invoiceId);
   }
 
   @Get('companies/:companyId/messages')
@@ -148,7 +148,7 @@ export class EfacturaController {
     @Param('companyId', ParseIdPipe) companyId: number,
     @Query() query: ListMessagesQuery,
   ) {
-    return this.efactura.listMessages(accountantId, companyId, query);
+    return this.efacturaService.listMessages(accountantId, companyId, query);
   }
 
   @Get('companies/:companyId/messages/:messageId/download')
@@ -160,7 +160,11 @@ export class EfacturaController {
     @Param('messageId', ParseAnafIdPipe) messageId: string,
   ) {
     return attachment(
-      await this.efactura.downloadMessage(accountantId, companyId, messageId),
+      await this.efacturaService.downloadMessage(
+        accountantId,
+        companyId,
+        messageId,
+      ),
     );
   }
 
@@ -173,7 +177,11 @@ export class EfacturaController {
     @Body() dto: ValidateXmlDto,
     @UploadedFile() file: { buffer: Buffer } | undefined,
   ) {
-    return this.efactura.validateXml(accountantId, xmlOf(file), dto.standard);
+    return this.efacturaService.validateXml(
+      accountantId,
+      xmlOf(file),
+      dto.standard,
+    );
   }
 
   @Post('transform')
@@ -187,7 +195,7 @@ export class EfacturaController {
     @UploadedFile() file: { buffer: Buffer } | undefined,
   ) {
     return attachment(
-      await this.efactura.transformXml(
+      await this.efacturaService.transformXml(
         accountantId,
         xmlOf(file),
         dto.standard,

@@ -9,14 +9,21 @@ export class SpvFileStore {
   private readonly storage: SupabaseStorage;
 
   constructor(
-    private readonly config: ConfigService,
+    private readonly configService: ConfigService,
     http: HttpService,
   ) {
-    this.storage = new SupabaseStorage(config, http, 'SUPABASE_SPV_BUCKET');
+    this.storage = new SupabaseStorage(
+      configService,
+      http,
+      'SUPABASE_SPV_BUCKET',
+    );
   }
 
   get enabled(): boolean {
-    return this.config.get<FileStorage>('SPV_STORAGE') === FileStorage.Supabase;
+    return (
+      this.configService.get<FileStorage>('SPV_STORAGE') ===
+      FileStorage.Supabase
+    );
   }
 
   pathFor(accountantId: number, anafMessageId: string): string {

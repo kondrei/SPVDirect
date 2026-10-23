@@ -14,6 +14,9 @@ import { CompanyExportService } from './company-export.service.js';
 import { Currency } from '../../invoices/dto/invoice.enums.js';
 import type { ActivityLogsService } from '../../api-logs/activity-logs.service.js';
 import { fakeActivityLogs } from '../../testing/activity-logs.js';
+import { SpvMessageRepository } from '../../anaf/spv/repositories/spv-message.repository.js';
+import { EfacturaUploadRepository } from '../../efactura/repositories/efactura-upload.repository.js';
+import { InvoiceRepository } from '../../invoices/repositories/invoice.repository.js';
 
 const COMPANY = {
   id: 7,
@@ -112,9 +115,11 @@ function setup() {
   const activity = fakeActivityLogs();
   const service = new CompanyExportService(
     companies as unknown as CompaniesService,
-    invoices as unknown as Repository<Invoice>,
-    uploads as unknown as Repository<EfacturaUpload>,
-    messages as unknown as Repository<SpvMessage>,
+    new InvoiceRepository(invoices as unknown as Repository<Invoice>),
+    new EfacturaUploadRepository(
+      uploads as unknown as Repository<EfacturaUpload>,
+    ),
+    new SpvMessageRepository(messages as unknown as Repository<SpvMessage>),
     delivery as unknown as InvoiceDeliveryService,
     spv as unknown as SpvArchiveService,
     efacturaArchive as unknown as EfacturaArchiveService,

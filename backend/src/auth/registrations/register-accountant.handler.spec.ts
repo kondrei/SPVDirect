@@ -16,6 +16,8 @@ import {
 } from './register-accountant.handler.js';
 import { AccountantRegisteredEvent } from './registration.events.js';
 import { hashApprovalToken } from './services/registrations.service.js';
+import { AccountantRepository } from '../../accountants/repositories/accountant.repository.js';
+import { BannedEmailRepository } from '../repositories/banned-email.repository.js';
 
 const dto = {
   email: 'new@example.com',
@@ -37,6 +39,8 @@ function setup() {
     { verify } as unknown as RecaptchaService,
     { transaction } as unknown as DataSource,
     { publish } as unknown as EventBus,
+    new AccountantRepository({} as never),
+    new BannedEmailRepository(),
   );
   const run = (ip?: string) =>
     handler.execute(new RegisterAccountantCommand(dto, ip));
