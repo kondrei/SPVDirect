@@ -10,6 +10,7 @@ import {
 import { Accountant } from '../accountant.entity.js';
 import { AccountStatus } from '../dto/accountant.enums.js';
 import type { PendingAccountantData } from '../dto/accountant.types.js';
+import type { MfaSessionState } from '../../auth/dto/auth.types.js';
 
 @Injectable()
 export class AccountantRepository {
@@ -22,13 +23,24 @@ export class AccountantRepository {
     return this.accountantRepository.findOneBy({ id });
   }
 
-  findSessionState(
-    id: number,
-  ): Promise<Pick<Accountant, 'status' | 'passwordChangedAt'> | null> {
+  findSessionState(id: number): Promise<MfaSessionState | null> {
     return this.accountantRepository.findOne({
       where: { id },
-      select: { id: true, status: true, passwordChangedAt: true },
+      select: {
+        id: true,
+        status: true,
+        passwordChangedAt: true,
+        mfaChangedAt: true,
+      },
     });
+  }
+
+  async markMfaChanged(
+    manager: EntityManager,
+    id: number,
+    mfaChangedAt: Date,
+  ): Promise<void> {
+    await manager.update(Accountant, { id }, { mfaChangedAt });
   }
 
   findByEmailWithPassword(email: string): Promise<Accountant | null> {

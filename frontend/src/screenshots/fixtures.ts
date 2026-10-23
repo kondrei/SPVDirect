@@ -327,4 +327,10 @@ export const SCREENSHOT_API: Record<string, unknown> = {
   [`${prefix}/efactura/archive`]: ARCHIVE_PAGE,
   [`${prefix}/spv/archive`]: SPV_PAGE,
   [`${prefix}/profile`]: PROFILE,
+  [`${prefix}/mfa`]: {
+    enabled: false,
+    appEnabledAt: null,
+    emailEnabledAt: null,
+    recoveryCodeAvailable: false,
+  },
 };

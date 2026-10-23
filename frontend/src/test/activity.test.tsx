@@ -1,9 +1,12 @@
 import { fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ActivityAction } from '../api/enums';
+import { ACTIVITY_PAGE_SIZE } from '../common/constants';
 import { ME, renderApp } from './render';
 
 afterEach(() => vi.unstubAllGlobals());
+
+const SIZE = ACTIVITY_PAGE_SIZE;
 
 const COMPANY = {
   id: 7,
@@ -33,29 +36,38 @@ const ITEMS = [
   },
 ];
 
-function routes(page: (url: string) => { status: number; body?: unknown }) {
+const OLDER = [
+  {
+    id: 0,
+    action: ActivityAction.LoggedIn,
+    companyId: null,
+    description: 'Autentificare în cont',
+    details: {},
+    accountantName: 'Andrei K',
+    createdAt: '2026-10-19T09:00:00Z',
+  },
+];
+
+function routes(page: (key: string) => { status: number; body?: unknown }) {
   return {
     'GET /auth/me': { status: 200, body: ME },
     'GET /accountants/1/companies': { status: 200, body: [COMPANY] },
     'GET /accountants/1/anaf/connections': { status: 200, body: [] },
     'GET /accountants/1/invoices/stats': { status: 500, body: {} },
-    'GET /accountants/1/activity?page=1&pageSize=20': page(
-      '/activity?page=1&pageSize=20',
-    ),
-    'GET /accountants/1/activity?page=1&pageSize=20&companyId=7': page(
-      'company',
-    ),
-    'GET /accountants/1/activity?page=2&pageSize=20': page('page2'),
+    [`GET /accountants/1/activity?page=1&pageSize=${SIZE}`]: page('page1'),
+    [`GET /accountants/1/activity?page=1&pageSize=${SIZE}&companyId=7`]:
+      page('company'),
+    [`GET /accountants/1/activity?page=2&pageSize=${SIZE}`]: page('page2'),
   };
 }
 
 describe('Activitate pe panou', () => {
-  it('lists the operations with date, label, company, details and accountant', async () => {
+  it('lists the operations with date, label, company and details', async () => {
     renderApp(
       '/accountants/1',
       routes(() => ({
         status: 200,
-        body: { items: ITEMS, total: 2, page: 1, pageSize: 20 },
+        body: { items: ITEMS, total: 2, page: 1, pageSize: SIZE },
       })),
     );
     const table = await screen.findByRole('table', { name: 'Activitate' });
@@ -68,13 +80,14 @@ describe('Activitate pe panou', () => {
     expect(
       within(rows[1]).getByText(/Factura FCT 000012 a fost emisă/),
     ).toBeInTheDocument();
-    expect(within(rows[1]).getByText('Andrei K')).toBeInTheDocument();
+    expect(within(table).queryByText('Andrei K')).not.toBeInTheDocument();
+    expect(within(table).queryByText('Utilizator')).not.toBeInTheDocument();
     expect(within(rows[2]).getByText('Firmă ștearsă')).toBeInTheDocument();
     expect(within(rows[2]).getByText('GAMA SRL')).toBeInTheDocument();
     expect(screen.getByText(/Pagina 1 din 1 · 2 operațiuni/)).toBeInTheDocument();
   });
 
-  it('shows the entries of scheduled jobs with their own labels and the system as user', async () => {
+  it('shows the entries of scheduled jobs with their own labels', async () => {
     renderApp(
       '/accountants/1',
       routes(() => ({
@@ -104,14 +117,13 @@ describe('Activitate pe panou', () => {
           ],
           total: 2,
           page: 1,
-          pageSize: 20,
+          pageSize: SIZE,
         },
       })),
     );
     const table = await screen.findByRole('table', { name: 'Activitate' });
     const rows = within(table).getAllByRole('row');
     expect(within(rows[1]).getByText('Import automat eșuat')).toBeInTheDocument();
-    expect(within(rows[1]).getByText('Sistem (automat)')).toBeInTheDocument();
     expect(
       within(rows[2]).getByText('Date eliminate definitiv'),
     ).toBeInTheDocument();
@@ -119,24 +131,37 @@ describe('Activitate pe panou', () => {
   });
 
   it('filters by company and pages through older operations', async () => {
+    const pages = Math.ceil(45 / SIZE);
     const { calls } = renderApp(
       '/accountants/1',
-      routes(() => ({
+      routes((key) => ({
         status: 200,
-        body: { items: ITEMS, total: 45, page: 1, pageSize: 20 },
+        body:
+          key === 'page2'
+            ? { items: OLDER, total: 45, page: 2, pageSize: SIZE }
+            : { items: ITEMS, total: 45, page: 1, pageSize: SIZE },
       })),
     );
-    await screen.findByText('Pagina 1 din 3 · 45 de operațiuni');
+    await screen.findByText(`Pagina 1 din ${pages} · 45 de operațiuni`);
     fireEvent.click(screen.getByRole('button', { name: 'Mai vechi' }));
     await vi.waitFor(() =>
-      expect(calls).toContain('GET /accountants/1/activity?page=2&pageSize=20'),
+      expect(calls).toContain(
+        `GET /accountants/1/activity?page=2&pageSize=${SIZE}`,
+      ),
     );
+    await screen.findByText(`Pagina 2 din ${pages} · 45 de operațiuni`);
+    await screen.findByText('Autentificare în cont');
+    const rows = within(
+      screen.getByRole('table', { name: 'Activitate' }),
+    ).getAllByRole('row');
+    expect(rows).toHaveLength(OLDER.length + 1);
+    expect(within(rows[1]).getByText('Autentificare în cont')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Firma'), {
       target: { value: '7' },
     });
     await vi.waitFor(() =>
       expect(calls).toContain(
-        'GET /accountants/1/activity?page=1&pageSize=20&companyId=7',
+        `GET /accountants/1/activity?page=1&pageSize=${SIZE}&companyId=7`,
       ),
     );
   });
@@ -146,7 +171,7 @@ describe('Activitate pe panou', () => {
       '/accountants/1',
       routes(() => ({
         status: 200,
-        body: { items: [], total: 0, page: 1, pageSize: 20 },
+        body: { items: [], total: 0, page: 1, pageSize: SIZE },
       })),
     );
     expect(

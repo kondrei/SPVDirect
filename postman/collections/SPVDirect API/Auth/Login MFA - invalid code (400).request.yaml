@@ -1,0 +1,19 @@
+$kind: http-request
+description: "The code is 6 digits (app or email) or 5 digits (recovery code); `method` is `app`, `email` or `recovery` (optional: 5 digits mean recovery, 6 the app); `rememberDevice` is a boolean."
+url: "{{baseUrl}}/auth/login/mfa"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "code": "12ab",
+      "rememberDevice": "yes",
+      "method": "sms"
+    }
+scripts:
+  - type: afterResponse
+    code: pm.test('Status 400', () => pm.response.to.have.status(400));
+    language: text/javascript
+order: 7000

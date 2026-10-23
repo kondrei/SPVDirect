@@ -7,6 +7,8 @@ import {
   ValidateStandard,
 } from '../efactura/dto/efactura.enums.js';
 import type { ImportCounts } from '../efactura/dto/efactura.types.js';
+import { MFA_METHOD_LABELS } from '../auth/dto/auth.constants.js';
+import type { MfaFactor } from '../auth/dto/auth.types.js';
 
 import {
   formatAmount,
@@ -88,6 +90,38 @@ export function passwordChanged(): ActivityEntry {
   return {
     action: ActivityAction.PasswordChanged,
     description: 'Parola contului a fost schimbată',
+  };
+}
+
+export function mfaEnabled(method: MfaFactor): ActivityEntry {
+  return {
+    action: ActivityAction.MfaEnabled,
+    description: `Autentificarea în doi pași cu ${MFA_METHOD_LABELS[method]} a fost activată`,
+    details: { method },
+  };
+}
+
+export function mfaDisabled(method: MfaFactor | null): ActivityEntry {
+  return {
+    action: ActivityAction.MfaDisabled,
+    description: method
+      ? `Autentificarea în doi pași cu ${MFA_METHOD_LABELS[method]} a fost dezactivată`
+      : 'Autentificarea în doi pași a fost dezactivată complet',
+    details: { method },
+  };
+}
+
+export function mfaRecoveryUsed(): ActivityEntry {
+  return {
+    action: ActivityAction.MfaRecoveryUsed,
+    description: 'Autentificare cu codul de recuperare',
+  };
+}
+
+export function mfaRecoveryRegenerated(): ActivityEntry {
+  return {
+    action: ActivityAction.MfaRecoveryRegenerated,
+    description: 'A fost generat un cod de recuperare nou',
   };
 }
 

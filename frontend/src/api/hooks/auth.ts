@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { recaptchaToken } from '../../lib/recaptcha';
 import { api, ApiError } from '../client';
-import type { Accountant } from '../types';
+import type { Accountant, LoginResult, MfaEmailCodeSent, MfaRequired } from '../types';
 import { keys, removeAccountData } from './queryKeys';
-import { AccountStatus } from '../enums';
+import { AccountStatus, type MfaMethod } from '../enums';
 
 export function useMe() {
   return useQuery({
@@ -24,15 +24,38 @@ export function useMe() {
   });
 }
 
+export function isMfaRequired(result: LoginResult): result is MfaRequired {
+  return 'mfaRequired' in result;
+}
+
 export function useLogin() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (dto: { email: string; password: string }) =>
-      api<Accountant>('/auth/login', { method: 'POST', json: dto }),
+      api<LoginResult>('/auth/login', { method: 'POST', json: dto }),
+    onSuccess: (result) => {
+      if (isMfaRequired(result)) return;
+      removeAccountData(qc);
+      qc.setQueryData(keys.me, result);
+    },
+  });
+}
+
+export function useLoginMfa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (dto: { code: string; method: MfaMethod; rememberDevice: boolean }) =>
+      api<Accountant>('/auth/login/mfa', { method: 'POST', json: dto }),
     onSuccess: (me) => {
       removeAccountData(qc);
       qc.setQueryData(keys.me, me);
     },
+  });
+}
+
+export function useSendLoginEmailCode() {
+  return useMutation({
+    mutationFn: () => api<MfaEmailCodeSent>('/auth/login/mfa/email', { method: 'POST' }),
   });
 }
 

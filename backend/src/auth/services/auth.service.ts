@@ -12,6 +12,7 @@ import { LoginDto } from '../dto/auth.dto.js';
 import {
   SESSION_AUDIENCE,
   SESSION_TTL_SECONDS,
+  issuedAfter,
   SessionPayload,
 } from '../session.js';
 import { AccountStatus } from '../../accountants/dto/accountant.enums.js';
@@ -68,8 +69,6 @@ export class AuthService {
   ): Promise<boolean> {
     const state = await this.accountantsService.findSessionState(accountantId);
     if (state?.status !== AccountStatus.Active) return false;
-    if (!state.passwordChangedAt) return true;
-    const changedAt = Math.floor(state.passwordChangedAt.getTime() / 1000);
-    return issuedAt !== undefined && issuedAt >= changedAt;
+    return issuedAfter(issuedAt, state.passwordChangedAt, state.mfaChangedAt);
   }
 }

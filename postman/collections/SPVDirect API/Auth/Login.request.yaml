@@ -1,5 +1,5 @@
 $kind: http-request
-description: Public, throttled (10/min). Returns 200 with the accountant, sets `spv_session` and saves `accountantId`.
+description: Public, throttled (10/min). Returns 200 with the accountant, sets `spv_session` and saves `accountantId`. With two-step verification on (and no trusted-device cookie) it returns `{ mfaRequired: true, methods }` (`app`, `email`) instead, sets only `spv_mfa_pending` (10 min), and `POST /auth/login/mfa` finishes the login.
 url: "{{baseUrl}}/auth/login"
 method: POST
 headers:

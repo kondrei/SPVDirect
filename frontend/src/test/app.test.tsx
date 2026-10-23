@@ -747,6 +747,15 @@ const profileApi = (extra: Parameters<typeof renderApp>[1] = {}) => ({
   'GET /accountants/1/companies': { status: 200, body: [] },
   'GET /accountants/1/anaf/connections': { status: 200, body: [] },
   'GET /accountants/1/profile': { status: 200, body: PROFILE },
+  'GET /accountants/1/mfa': {
+    status: 200,
+    body: {
+      enabled: false,
+      appEnabledAt: null,
+      emailEnabledAt: null,
+      recoveryCodeAvailable: false,
+    },
+  },
   ...extra,
 });
 

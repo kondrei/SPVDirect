@@ -1,4 +1,5 @@
-import { ActivityAction, ImportStatus } from '../api/enums';
+import { ActivityAction, ImportStatus, MfaMethod } from '../api/enums';
+import type { MfaFactor } from '../api/types';
 import type { Tone } from '../components/ui';
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
@@ -11,6 +12,13 @@ export const MAX_SPV_IMPORT_BYTES = 5 * 1024 * 1024;
 export const MAX_SPV_PDF_BYTES = 10 * 1024 * 1024;
 export const SPV_PAGE_SIZE = 25;
 export const MIN_PASSWORD = 10;
+export const MFA_CODE_PATTERN = /^(?:\d{5}|\d{6})$/;
+export const RECOVERY_CODE_DIGITS = 5;
+export const MFA_FACTORS: readonly MfaFactor[] = [MfaMethod.App, MfaMethod.Email];
+export const MFA_FACTOR_LABELS: Record<MfaFactor, string> = {
+  [MfaMethod.App]: 'Aplicația de autentificare',
+  [MfaMethod.Email]: 'Email',
+};
 
 export const INVOICE_PAGE_SIZE = 25;
 
@@ -24,12 +32,16 @@ export const IMPORT_PROBLEM_STATUSES: ReadonlySet<ImportStatus> = new Set([
 
 export const MAX_LOGO_BYTES = 512 * 1024;
 
-export const ACTIVITY_PAGE_SIZE = 20;
+export const ACTIVITY_PAGE_SIZE = 6;
 
 export const ACTIVITY_LABELS: Record<ActivityAction, { label: string; tone: Tone }> = {
   [ActivityAction.LoggedIn]: { label: 'Autentificare', tone: 'neutral' },
   [ActivityAction.ProfileUpdated]: { label: 'Profil modificat', tone: 'neutral' },
   [ActivityAction.PasswordChanged]: { label: 'Parolă schimbată', tone: 'warning' },
+  [ActivityAction.MfaEnabled]: { label: '2FA activată', tone: 'success' },
+  [ActivityAction.MfaDisabled]: { label: '2FA dezactivată', tone: 'warning' },
+  [ActivityAction.MfaRecoveryUsed]: { label: 'Cod de recuperare folosit', tone: 'warning' },
+  [ActivityAction.MfaRecoveryRegenerated]: { label: 'Cod de recuperare nou', tone: 'neutral' },
   [ActivityAction.AccountExported]: { label: 'Export cont', tone: 'neutral' },
   [ActivityAction.CompanyCreated]: { label: 'Firmă adăugată', tone: 'success' },
   [ActivityAction.CompanyUpdated]: { label: 'Firmă modificată', tone: 'neutral' },

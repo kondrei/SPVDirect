@@ -1,7 +1,21 @@
 import { useEffect, useRef, useState, type SubmitEvent, type KeyboardEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { useLogin, useRegister } from '../../api/hooks/auth';
-import { MIN_PASSWORD } from '../../common/constants';
+import {
+  isMfaRequired,
+  useLogin,
+  useLoginMfa,
+  useRegister,
+  useSendLoginEmailCode,
+} from '../../api/hooks/auth';
+import { MfaMethod } from '../../api/enums';
+import type { Accountant, MfaFactor } from '../../api/types';
+import {
+  MFA_CODE_PATTERN,
+  MFA_FACTOR_LABELS,
+  MFA_FACTORS,
+  MIN_PASSWORD,
+  RECOVERY_CODE_DIGITS,
+} from '../../common/constants';
 import { Alert, Button, TextField } from '../../components/ui';
 import { accountantPath } from '../../hooks/useAppPath';
 import { loadRecaptcha } from '../../lib/recaptcha';
@@ -18,25 +32,146 @@ export function authTab(value: string | null): AuthTab {
   return value === 'register' ? 'register' : 'login';
 }
 
-function LoginForm() {
-  const login = useLogin();
+function useEnterApp() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
+  return (me: Accountant) => {
+    const next = params.get('next');
+    return navigate(next ? safeNext(next) : accountantPath(me.id, ''), { replace: true });
+  };
+}
+
+function MfaCodeForm({ methods, onBack }: Readonly<{ methods: MfaFactor[]; onBack: () => void }>) {
+  const verify = useLoginMfa();
+  const sendCode = useSendLoginEmailCode();
+  const enter = useEnterApp();
+  const [method, setMethod] = useState<MfaFactor>(methods[0] ?? MfaMethod.App);
+  const [code, setCode] = useState('');
+  const [remember, setRemember] = useState(false);
+  const [touched, setTouched] = useState(false);
+  const autoSent = useRef(false);
+  const clean = code.replaceAll(/\s/g, '');
+  const invalid = !MFA_CODE_PATTERN.test(clean);
+  const viaEmail = method === MfaMethod.Email;
+
+  useEffect(() => {
+    if (autoSent.current || methods.length !== 1 || methods[0] !== MfaMethod.Email) return;
+    autoSent.current = true;
+    sendCode.mutate();
+  }, [methods, sendCode]);
+
+  const choose = (next: MfaFactor) => {
+    verify.reset();
+    setMethod(next);
+  };
+
+  const submit = (e: SubmitEvent) => {
+    e.preventDefault();
+    setTouched(true);
+    if (invalid) return;
+    const used = clean.length === RECOVERY_CODE_DIGITS ? MfaMethod.Recovery : method;
+    verify.mutate({ code: clean, method: used, rememberDevice: remember }, { onSuccess: enter });
+  };
+
+  return (
+    <form onSubmit={submit} noValidate>
+      <p className="landing-auth-lead">
+        {viaEmail
+          ? 'Introduceți codul de 6 cifre primit pe email.'
+          : 'Introduceți codul din aplicația de autentificare (Google Authenticator, Microsoft Authenticator etc.).'}
+      </p>
+      {methods.length > 1 ? (
+        <fieldset className="mfa-methods">
+          <legend className="spv-field-label">Primesc codul din</legend>
+          {MFA_FACTORS.map((m) => (
+            <label key={m} className="check">
+              <input
+                type="radio"
+                name="mfa-method"
+                checked={method === m}
+                onChange={() => choose(m)}
+              />
+              <span>{MFA_FACTOR_LABELS[m]}</span>
+            </label>
+          ))}
+        </fieldset>
+      ) : null}
+      {viaEmail ? (
+        <div className="stack">
+          {sendCode.isSuccess ? (
+            <Alert tone="success" title={`Am trimis codul la ${sendCode.data.sentTo}.`}>
+              Codul este valabil 10 minute.
+            </Alert>
+          ) : null}
+          {sendCode.isError ? <Alert tone="danger" title={sendCode.error.message} /> : null}
+          <Button size="sm" loading={sendCode.isPending} onClick={() => sendCode.mutate()}>
+            {sendCode.isSuccess ? 'Trimite alt cod' : 'Trimite codul pe email'}
+          </Button>
+        </div>
+      ) : null}
+      {verify.isError ? <Alert tone="danger" title={verify.error.message} /> : null}
+      <TextField
+        label="Cod de verificare"
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        maxLength={7}
+        value={code}
+        onChange={(e) => {
+          verify.reset();
+          setCode(e.target.value);
+        }}
+        hint={`${viaEmail ? '6 cifre din email' : '6 cifre din aplicație'} sau codul de recuperare din 5 cifre.`}
+        error={touched && invalid ? 'Introduceți 6 cifre sau codul de recuperare din 5 cifre.' : undefined}
+      />
+      <label className="check">
+        <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+        <span>Nu mai cere codul pe acest dispozitiv 30 de zile</span>
+      </label>
+      <Button type="submit" variant="primary" loading={verify.isPending}>
+        {verify.isPending ? 'Se verifică…' : 'Verifică codul'}
+      </Button>
+      <Button variant="ghost" onClick={onBack} disabled={verify.isPending}>
+        Înapoi
+      </Button>
+    </form>
+  );
+}
+
+function LoginForm() {
+  const login = useLogin();
+  const enter = useEnterApp();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [mfaMethods, setMfaMethods] = useState<MfaFactor[] | null>(null);
 
   const submit = (e: SubmitEvent) => {
     e.preventDefault();
     login.mutate(
       { email: email.trim(), password },
       {
-        onSuccess: (me) => {
-          const next = params.get('next');
-          navigate(next ? safeNext(next) : accountantPath(me.id, ''), { replace: true });
+        onSuccess: (result) => {
+          if (isMfaRequired(result)) {
+            setPassword('');
+            setMfaMethods(result.methods);
+          } else {
+            void enter(result);
+          }
         },
       },
     );
   };
+
+  if (mfaMethods) {
+    return (
+      <MfaCodeForm
+        methods={mfaMethods}
+        onBack={() => {
+          login.reset();
+          setMfaMethods(null);
+        }}
+      />
+    );
+  }
 
   return (
     <form onSubmit={submit} noValidate>

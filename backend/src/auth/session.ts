@@ -26,3 +26,12 @@ export function cookieOptions(
     maxAge: maxAgeSeconds * 1000,
   };
 }
+
+export function issuedAfter(
+  issuedAt: number | undefined,
+  ...changes: (Date | null)[]
+): boolean {
+  const latest = Math.max(0, ...changes.map((c) => c?.getTime() ?? 0));
+  if (!latest) return true;
+  return issuedAt !== undefined && issuedAt >= Math.floor(latest / 1000);
+}

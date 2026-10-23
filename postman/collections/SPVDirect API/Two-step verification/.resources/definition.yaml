@@ -1,0 +1,3 @@
+$kind: collection
+description: "Optional two-step verification for the SPVDirect session: an authenticator app (TOTP, RFC 6238) and/or a code sent by email. The run account keeps it off, so the routes that change it are checked on their error paths; turning it on needs a code from an authenticator app. Run after Auth."
+order: 2500

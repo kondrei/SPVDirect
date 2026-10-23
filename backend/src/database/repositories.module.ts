@@ -10,7 +10,9 @@ import { SpvMessageRepository } from '../anaf/spv/repositories/spv-message.repos
 import { SpvMessage } from '../anaf/spv/spv-message.entity.js';
 import { ApiLog } from '../api-logs/api-log.entity.js';
 import { ApiLogRepository } from '../api-logs/repositories/api-log.repository.js';
+import { AccountantMfa } from '../auth/accountant-mfa.entity.js';
 import { BannedEmail } from '../auth/banned-email.entity.js';
+import { AccountantMfaRepository } from '../auth/repositories/accountant-mfa.repository.js';
 import { BannedEmailRepository } from '../auth/repositories/banned-email.repository.js';
 import { Company } from '../companies/company.entity.js';
 import { CompanyRepository } from '../companies/repositories/company.repository.js';
@@ -24,6 +26,7 @@ import { AdvisoryLockRepository } from './repositories/advisory-lock.repository.
 
 const REPOSITORIES = [
   AccountantRepository,
+  AccountantMfaRepository,
   AnafConnectionRepository,
   AuthorizationLinkRepository,
   SpvMessageRepository,
@@ -41,6 +44,7 @@ const REPOSITORIES = [
   imports: [
     TypeOrmModule.forFeature([
       Accountant,
+      AccountantMfa,
       AnafConnection,
       AuthorizationLink,
       SpvMessage,

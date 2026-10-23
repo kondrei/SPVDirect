@@ -1,0 +1,9 @@
+$kind: http-request
+description: "Emails a 6-digit code (10 min) during a pending login when the email method is on; answers `{ sentTo }` with the masked address. 429 within a minute of the last code."
+url: "{{baseUrl}}/auth/login/mfa/email"
+method: POST
+scripts:
+  - type: afterResponse
+    code: pm.test('Status 401', () => pm.response.to.have.status(401));
+    language: text/javascript
+order: 8000

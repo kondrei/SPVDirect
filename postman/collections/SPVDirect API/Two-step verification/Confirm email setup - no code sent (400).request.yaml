@@ -1,0 +1,17 @@
+$kind: http-request
+description: "With the emailed code it turns the email method on and answers `{ recoveryCode }` like the app setup."
+url: "{{baseUrl}}/accountants/{{accountantId}}/mfa/email/setup/confirm"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "code": "123456"
+    }
+scripts:
+  - type: afterResponse
+    code: pm.test('Status 400', () => pm.response.to.have.status(400));
+    language: text/javascript
+order: 8000

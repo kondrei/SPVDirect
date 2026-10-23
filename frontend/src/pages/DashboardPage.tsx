@@ -4,6 +4,7 @@ import { useCompanies } from '../api/hooks/companies';
 import { useConnections, useConnectUrl } from '../api/hooks/connections';
 import { useInvoiceStats } from '../api/hooks/invoices';
 import { useMe } from '../api/hooks/auth';
+import { useMfaStatus } from '../api/hooks/mfa';
 import type { AnafConnection, Company, InvoiceStats } from '../api/types';
 import { ActivityCard } from '../components/ActivityCard';
 import { EmptyState } from '../components/EmptyState';
@@ -72,6 +73,28 @@ function ExpiringAlert({
       {expiring.length > 1
         ? ` Încă ${pluralCertificate(expiring.length - 1)} expiră curând.`
         : ''}
+    </Alert>
+  );
+}
+
+function MfaAlert() {
+  const appPath = useAppPath();
+  const mfa = useMfaStatus();
+  if (!mfa.data || mfa.data.enabled) return null;
+  return (
+    <Alert
+      tone="info"
+      title="Protejați contul cu autentificarea în doi pași"
+      action={
+        <ButtonLink size="sm" to={appPath('/profile')}>
+          Activează din Profil
+        </ButtonLink>
+      }
+    >
+      În cont sunt certificatele ANAF, facturile și mesajele SPV ale clienților. Doar cu
+      parola, oricine o află poate lucra în numele dvs. la ANAF. Cu un cod din aplicația de pe
+      telefon (Google sau Microsoft Authenticator) sau primit pe email, o parolă furată nu mai
+      este suficientă.
     </Alert>
   );
 }
@@ -383,6 +406,7 @@ export function DashboardPage() {
 
       <ExpiringAlert expiring={expiring} companiesOn={companiesOn} />
       <DeadAlert dead={dead} />
+      <MfaAlert />
 
       <div className="grid-stats">
         <Stat

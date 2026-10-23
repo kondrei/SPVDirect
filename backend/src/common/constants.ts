@@ -54,6 +54,9 @@ export const REDACTED_LOG_KEYS = new Set([
   'supplierName',
   'customerName',
   'label',
+  'secret',
+  'otpauthUri',
+  'recoveryCode',
 ]);
 export const LOG_TEXT_MASKS: readonly [RegExp, string][] = [
   [/eyJ[\w-]+\.[\w-]+\.[\w-]*/g, '[token]'],

@@ -3,6 +3,7 @@ import type { QueryClient } from '@tanstack/react-query';
 export const keys = {
   me: ['me'] as const,
   profile: ['profile'] as const,
+  mfa: ['mfa'] as const,
   caen: (code: string) => ['caen', code] as const,
   companies: ['companies'] as const,
   company: (id: number) => ['companies', id] as const,

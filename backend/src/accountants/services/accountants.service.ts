@@ -20,6 +20,7 @@ import type {
   UpdateProfileDto,
 } from '../dto/profile.dto.js';
 import type { AccountantProfile, FirmLookup } from '../dto/accountant.types.js';
+import type { MfaSessionState } from '../../auth/dto/auth.types.js';
 
 export function toProfile(a: Accountant, firmCaen: CaenInfo | null) {
   return {
@@ -54,9 +55,7 @@ export class AccountantsService {
     return this.accountantRepository.findById(id);
   }
 
-  findSessionState(
-    id: number,
-  ): Promise<Pick<Accountant, 'status' | 'passwordChangedAt'> | null> {
+  findSessionState(id: number): Promise<MfaSessionState | null> {
     return this.accountantRepository.findSessionState(id);
   }
 

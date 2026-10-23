@@ -18,6 +18,7 @@ import { formatDate, isValidCui, normalizeCui } from '../lib/format';
 import { MIN_PASSWORD } from '../common/constants';
 import { SelectField } from '../components/SelectField';
 import { ProfessionalTitle } from '../api/enums';
+import { MfaCard } from './profile/MfaCard';
 
 const PROFESSIONAL_TITLES: Record<ProfessionalTitle, string> = {
   expert_contabil: 'Expert contabil',
@@ -545,6 +546,7 @@ export function ProfilePage() {
       <div className="grid-1-1">
         <ProfileForm profile={profile.data} />
         <PasswordCard />
+        <MfaCard />
         <AccountDataCard />
       </div>
     </>

@@ -76,11 +76,6 @@ export function ActivityCard({ companies }: Readonly<{ companies: Company[] }>) 
               wide: true,
               render: (r) => r.description,
             },
-            {
-              key: 'user',
-              header: 'Utilizator',
-              render: (r) => r.accountantName,
-            },
           ]}
         />
         <div className="spv-row">
