@@ -25,6 +25,7 @@ import { CompaniesService } from '../../companies/services/companies.service.js'
 import {
   ARCHIVE_FILE_MISSING,
   ARCHIVE_NOT_FOUND,
+  CLOCK_SKEW_MS,
   DAY_MS,
   IMPORT_FAILED,
   IMPORT_PERIOD_BATCH,
@@ -262,7 +263,7 @@ export class EfacturaArchiveService {
     cui: string,
     days: number,
   ): Promise<ImportItem[]> {
-    const endTime = Date.now();
+    const endTime = Date.now() - CLOCK_SKEW_MS;
     const startTime = endTime - days * DAY_MS + PERIOD_MARGIN_MS;
     const items: ImportItem[] = [];
     for (let page = 1; page <= MAX_MESSAGE_PAGES; page++) {
