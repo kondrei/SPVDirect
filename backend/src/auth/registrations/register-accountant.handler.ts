@@ -6,6 +6,7 @@ import type { Accountant } from '../../accountants/accountant.entity.js';
 import { AccountantRepository } from '../../accountants/repositories/accountant.repository.js';
 import { hashPassword } from '../../common/crypto/password.js';
 import { isUniqueViolation } from '../../common/db-errors.js';
+import { AccountantMfaRepository } from '../repositories/accountant-mfa.repository.js';
 import { BannedEmailRepository } from '../repositories/banned-email.repository.js';
 import { RecaptchaService } from '../services/recaptcha.service.js';
 import { RegisterAccountantCommand } from './register-accountant.command.js';
@@ -25,6 +26,7 @@ export class RegisterAccountantHandler implements ICommandHandler<RegisterAccoun
     private readonly eventBus: EventBus,
     private readonly accountantRepository: AccountantRepository,
     private readonly bannedEmailRepository: BannedEmailRepository,
+    private readonly accountantMfaRepository: AccountantMfaRepository,
   ) {}
 
   async execute({ dto, remoteIp }: RegisterAccountantCommand): Promise<void> {
@@ -45,12 +47,20 @@ export class RegisterAccountantHandler implements ICommandHandler<RegisterAccoun
         if (await this.accountantRepository.existsByEmail(m, dto.email)) {
           throw new ConflictException(EMAIL_TAKEN);
         }
-        return this.accountantRepository.insertPending(m, {
+        const pending = await this.accountantRepository.insertPending(m, {
           email: dto.email,
           passwordHash,
           name: dto.name ?? null,
           approvalTokenHash: hashApprovalToken(token),
         });
+        if (dto.mfaMethod) {
+          await this.accountantMfaRepository.saveRequest(
+            m,
+            pending.id,
+            dto.mfaMethod,
+          );
+        }
+        return pending;
       });
     } catch (err) {
       if (isUniqueViolation(err)) throw new ConflictException(EMAIL_TAKEN);

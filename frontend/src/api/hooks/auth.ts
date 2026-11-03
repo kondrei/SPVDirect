@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { recaptchaToken } from '../../lib/recaptcha';
 import { api, ApiError } from '../client';
-import type { Accountant, LoginResult, MfaEmailCodeSent, MfaRequired } from '../types';
+import type { Accountant, LoginResult, MfaEmailCodeSent, MfaFactor, MfaRequired } from '../types';
 import { keys, removeAccountData } from './queryKeys';
 import { AccountStatus, type MfaMethod } from '../enums';
 
@@ -65,6 +65,7 @@ export function useRegister() {
       email: string;
       password: string;
       name?: string;
+      mfaMethod?: MfaFactor;
     }) =>
       api<{ status: AccountStatus.Pending }>('/auth/register', {
         method: 'POST',

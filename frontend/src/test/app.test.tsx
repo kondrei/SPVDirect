@@ -754,6 +754,7 @@ const profileApi = (extra: Parameters<typeof renderApp>[1] = {}) => ({
       appEnabledAt: null,
       emailEnabledAt: null,
       recoveryCodeAvailable: false,
+      requestedMethod: null,
     },
   },
   ...extra,

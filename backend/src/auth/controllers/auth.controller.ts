@@ -58,7 +58,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const accountant = await this.authService.validateLogin(dto);
-    const methods = await this.mfaService.factors(accountant.id);
+    const { methods, setup } = await this.mfaService.loginState(accountant.id);
     if (
       methods.length &&
       !this.mfaService.trustsDevice(
@@ -73,7 +73,7 @@ export class AuthController {
     }
     await this.sessionCookieService.issue(res, accountant.id);
     await this.activityLogsService.record(accountant.id, loggedIn());
-    return toPublic(accountant);
+    return { ...toPublic(accountant), mfaSetup: setup };
   }
 
   @Post('login/mfa')

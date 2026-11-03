@@ -332,5 +332,6 @@ export const SCREENSHOT_API: Record<string, unknown> = {
     appEnabledAt: null,
     emailEnabledAt: null,
     recoveryCodeAvailable: false,
+    requestedMethod: null,
   },
 };

@@ -1,5 +1,5 @@
 $kind: http-request
-description: "Validation: bad email and a password shorter than 10 chars."
+description: "Validation: bad email, a password shorter than 10 chars and an unknown two-step method (`mfaMethod` is optional, `app` or `email`)."
 url: "{{baseUrl}}/auth/register"
 method: POST
 headers:
@@ -9,7 +9,8 @@ body:
   content: |-
     {
       "email": "not-an-email",
-      "password": "scurta"
+      "password": "scurta",
+      "mfaMethod": "sms"
     }
 scripts:
   - type: afterResponse
@@ -23,6 +24,7 @@ scripts:
         const msg = errorMessage();
         pm.expect(msg).to.include('email');
         pm.expect(msg).to.include('password');
+        pm.expect(msg).to.include('Metoda este una dintre: app, email');
       });
     language: text/javascript
 order: 2000

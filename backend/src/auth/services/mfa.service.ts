@@ -46,6 +46,7 @@ import type {
   MfaEnabled,
   MfaFactor,
   MfaFactorDates,
+  MfaLoginState,
   MfaRecoveryCode,
   MfaSetup,
   MfaState,
@@ -82,6 +83,7 @@ function noMfa(accountantId: number, email: string): MfaState {
     recoveryFailures: 0,
     emailCodeHash: null,
     emailCodeExpiresAt: null,
+    requestedMethod: null,
   };
 }
 
@@ -135,10 +137,14 @@ export class MfaService {
     private readonly mfaMailer: MfaMailer,
   ) {}
 
-  async factors(accountantId: number): Promise<MfaFactor[]> {
-    return mfaFactors(
-      await this.accountantMfaRepository.findFactors(accountantId),
-    );
+  async loginState(accountantId: number): Promise<MfaLoginState> {
+    const factors =
+      await this.accountantMfaRepository.findFactors(accountantId);
+    const methods = mfaFactors(factors);
+    return {
+      methods,
+      setup: methods.length ? null : (factors?.requestedMethod ?? null),
+    };
   }
 
   async status(accountantId: number): Promise<MfaStatus> {
@@ -152,7 +158,12 @@ export class MfaService {
         enabled &&
         Boolean(state.recoveryHash) &&
         state.recoveryFailures < MFA_RECOVERY_MAX_FAILURES,
+      requestedMethod: enabled ? null : state.requestedMethod,
     };
+  }
+
+  async dismissRequest(accountantId: number): Promise<void> {
+    await this.accountantMfaRepository.dismissRequest(accountantId);
   }
 
   trustsDevice(

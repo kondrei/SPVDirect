@@ -57,6 +57,7 @@ function state(overrides: Partial<MfaState> = {}): MfaState {
     recoveryFailures: 0,
     emailCodeHash: null,
     emailCodeExpiresAt: null,
+    requestedMethod: null,
     ...overrides,
   };
 }
@@ -94,6 +95,7 @@ async function setup(stored: MfaState | null = state()) {
     disableApp: vi.fn().mockResolvedValue(true),
     disableEmail: vi.fn().mockResolvedValue(true),
     disableAll: vi.fn().mockResolvedValue(true),
+    dismissRequest: vi.fn().mockResolvedValue(undefined),
   };
   const activity = fakeActivityLogs();
   const mailer = {
@@ -149,6 +151,30 @@ describe('MfaService.status', () => {
         recoveryCodeAvailable: available,
       });
     }
+  });
+
+  it('reports the method chosen at registration until a method is on', async () => {
+    const at = new Date('2026-10-02T00:00:00Z');
+    const pending = await setup(off({ requestedMethod: MfaMethod.Email }));
+    await expect(pending.service.status(7)).resolves.toMatchObject({
+      enabled: false,
+      requestedMethod: MfaMethod.Email,
+    });
+    const done = await setup(
+      off({ emailEnabledAt: at, requestedMethod: MfaMethod.App }),
+    );
+    await expect(done.service.status(7)).resolves.toMatchObject({
+      enabled: true,
+      requestedMethod: null,
+    });
+  });
+});
+
+describe('MfaService registration choice', () => {
+  it('dismisses the method chosen at registration', async () => {
+    const { service, repo } = await setup(off());
+    await service.dismissRequest(7);
+    expect(repo.dismissRequest).toHaveBeenCalledWith(7);
   });
 });
 
@@ -739,6 +765,7 @@ describe('MfaService and the accountants table', () => {
       appEnabledAt: null,
       emailEnabledAt: null,
       recoveryCodeAvailable: false,
+      requestedMethod: null,
     });
     await expect(service.startAppSetup(7, password)).resolves.toMatchObject({
       otpauthUri: expect.stringContaining('ana%40example.ro'),
@@ -759,10 +786,34 @@ describe('MfaService and the accountants table', () => {
   it('reads the methods for the login answer', async () => {
     const { service, repo } = await setup();
     Object.assign(repo, {
-      findFactors: vi
-        .fn()
-        .mockResolvedValue({ appEnabledAt: new Date(), emailEnabledAt: null }),
+      findFactors: vi.fn().mockResolvedValue({
+        appEnabledAt: new Date(),
+        emailEnabledAt: null,
+        requestedMethod: MfaMethod.Email,
+      }),
     });
-    await expect(service.factors(7)).resolves.toEqual([MfaMethod.App]);
+    await expect(service.loginState(7)).resolves.toEqual({
+      methods: [MfaMethod.App],
+      setup: null,
+    });
+  });
+
+  it('asks for the setup chosen at registration while no method is on', async () => {
+    const { service, repo } = await setup();
+    const findFactors = vi.fn().mockResolvedValue({
+      appEnabledAt: null,
+      emailEnabledAt: null,
+      requestedMethod: MfaMethod.App,
+    });
+    Object.assign(repo, { findFactors });
+    await expect(service.loginState(7)).resolves.toEqual({
+      methods: [],
+      setup: MfaMethod.App,
+    });
+    findFactors.mockResolvedValue(null);
+    await expect(service.loginState(7)).resolves.toEqual({
+      methods: [],
+      setup: null,
+    });
   });
 });

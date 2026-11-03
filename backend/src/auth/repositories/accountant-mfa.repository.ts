@@ -5,7 +5,8 @@ import { AccountantMfa } from '../accountant-mfa.entity.js';
 import type {
   MfaAttemptLimits,
   MfaEmailCode,
-  MfaFactorDates,
+  MfaFactor,
+  MfaLoginFactors,
 } from '../dto/auth.types.js';
 
 @Injectable()
@@ -15,11 +16,31 @@ export class AccountantMfaRepository {
     private readonly accountantMfaRepository: Repository<AccountantMfa>,
   ) {}
 
-  findFactors(accountantId: number): Promise<MfaFactorDates | null> {
+  findFactors(accountantId: number): Promise<MfaLoginFactors | null> {
     return this.accountantMfaRepository.findOne({
       where: { accountantId },
-      select: { accountantId: true, appEnabledAt: true, emailEnabledAt: true },
+      select: {
+        accountantId: true,
+        appEnabledAt: true,
+        emailEnabledAt: true,
+        requestedMethod: true,
+      },
     });
+  }
+
+  async saveRequest(
+    manager: EntityManager,
+    accountantId: number,
+    requestedMethod: MfaFactor,
+  ): Promise<void> {
+    await manager.insert(AccountantMfa, { accountantId, requestedMethod });
+  }
+
+  async dismissRequest(accountantId: number): Promise<void> {
+    await this.accountantMfaRepository.update(
+      { accountantId, requestedMethod: Not(IsNull()) },
+      { requestedMethod: null },
+    );
   }
 
   findState(accountantId: number): Promise<AccountantMfa | null> {
@@ -37,6 +58,7 @@ export class AccountantMfaRepository {
         recoveryFailures: true,
         emailCodeHash: true,
         emailCodeExpiresAt: true,
+        requestedMethod: true,
       },
     });
   }
@@ -100,6 +122,7 @@ export class AccountantMfaRepository {
         lastUsedStep: step,
         failedAttempts: 0,
         lockedUntil: null,
+        requestedMethod: null,
         ...(recoveryHash ? { recoveryHash, recoveryFailures: 0 } : {}),
       },
     );
@@ -125,6 +148,7 @@ export class AccountantMfaRepository {
         emailEnabledAt: now,
         emailCodeHash: null,
         emailCodeExpiresAt: null,
+        requestedMethod: null,
         ...(recoveryHash ? { recoveryHash, recoveryFailures: 0 } : {}),
       },
     );

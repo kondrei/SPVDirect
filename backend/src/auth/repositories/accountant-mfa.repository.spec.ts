@@ -1,5 +1,11 @@
-import type { EntityManager, Repository } from 'typeorm';
+import {
+  IsNull,
+  Not,
+  type EntityManager,
+  type Repository,
+} from 'typeorm';
 import { AccountantMfa } from '../accountant-mfa.entity.js';
+import { MfaMethod } from '../dto/auth.enums.js';
 import { AccountantMfaRepository } from './accountant-mfa.repository.js';
 
 function builder(affected: number) {
@@ -131,6 +137,46 @@ describe('AccountantMfaRepository upserts', () => {
       code.sentAt,
       code.resendBefore,
     ]);
+  });
+});
+
+describe('AccountantMfaRepository registration choice', () => {
+  it('inserts the chosen method through the registration transaction', async () => {
+    const insert = vi.fn().mockResolvedValue(undefined);
+    const { repository } = builder(0);
+    await repository.saveRequest(
+      { insert } as unknown as EntityManager,
+      7,
+      MfaMethod.Email,
+    );
+    expect(insert).toHaveBeenCalledWith(AccountantMfa, {
+      accountantId: 7,
+      requestedMethod: MfaMethod.Email,
+    });
+  });
+
+  it('dismisses only a row that has a choice', async () => {
+    const update = vi.fn().mockResolvedValue({ affected: 1 });
+    const repository = new AccountantMfaRepository({
+      update,
+    } as unknown as Repository<AccountantMfa>);
+    await repository.dismissRequest(7);
+    expect(update).toHaveBeenCalledWith(
+      { accountantId: 7, requestedMethod: Not(IsNull()) },
+      { requestedMethod: null },
+    );
+  });
+
+  it('clears the choice when either method is turned on', async () => {
+    const update = vi.fn().mockResolvedValue({ affected: 1 });
+    const manager = { update } as unknown as EntityManager;
+    const { repository } = builder(0);
+    await repository.enableApp(manager, 7, 100, null);
+    await repository.enableEmail(manager, 7, 'hash', null, new Date());
+    for (const call of update.mock.calls) {
+      expect(call[2]).toMatchObject({ requestedMethod: null });
+    }
+    expect(update).toHaveBeenCalledTimes(2);
   });
 });
 

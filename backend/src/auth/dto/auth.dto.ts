@@ -3,6 +3,7 @@ import {
   IsBoolean,
   IsEmail,
   IsEnum,
+  IsIn,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -10,8 +11,9 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
-import { MFA_CODE_PATTERN } from './auth.constants.js';
+import { MFA_CODE_PATTERN, MFA_FACTORS } from './auth.constants.js';
 import { MfaMethod } from './auth.enums.js';
+import type { MfaFactor } from './auth.types.js';
 
 function stripSpaces(value: unknown): unknown {
   return typeof value === 'string' ? value.replaceAll(/\s/g, '') : value;
@@ -36,6 +38,12 @@ export class RegisterDto {
   @IsNotEmpty()
   @MaxLength(4000)
   captchaToken: string;
+
+  @IsOptional()
+  @IsIn(MFA_FACTORS, {
+    message: `Metoda este una dintre: ${MFA_FACTORS.join(', ')}`,
+  })
+  mfaMethod?: MfaFactor;
 }
 
 export class LoginDto {

@@ -15,6 +15,7 @@ export const MIN_PASSWORD = 10;
 export const MFA_CODE_PATTERN = /^(?:\d{5}|\d{6})$/;
 export const RECOVERY_CODE_DIGITS = 5;
 export const MFA_FACTORS: readonly MfaFactor[] = [MfaMethod.App, MfaMethod.Email];
+export const MFA_CARD_ID = 'autentificare-2fa';
 export const MFA_FACTOR_LABELS: Record<MfaFactor, string> = {
   [MfaMethod.App]: 'Aplicația de autentificare',
   [MfaMethod.Email]: 'Email',

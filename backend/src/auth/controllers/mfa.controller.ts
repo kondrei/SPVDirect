@@ -124,6 +124,14 @@ export class MfaController {
     return this.disableAndRenew(accountantId, dto, res, MfaMethod.Email);
   }
 
+  @Delete('request')
+  @HttpCode(204)
+  dismissRequest(
+    @Param('accountantId', ParseIdPipe) accountantId: number,
+  ): Promise<void> {
+    return this.mfaService.dismissRequest(accountantId);
+  }
+
   @Delete()
   @HttpCode(204)
   @Throttle(PASSWORD_THROTTLE)
