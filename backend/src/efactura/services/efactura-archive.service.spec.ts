@@ -19,6 +19,7 @@ import {
   ublInvoice,
 } from '../../testing/efactura-fixtures.js';
 import {
+  CLOCK_SKEW_MS,
   NOT_AN_INVOICE,
   NOT_A_PARTY,
   NO_CERTIFICATE,
@@ -411,7 +412,8 @@ describe('EfacturaArchiveService.importPeriod', () => {
     ];
     expect(cui).toBe(BUYER_CUI);
     expect(query.pagina).toBe(2);
-    expect(query.endTime).toBeGreaterThanOrEqual(now);
+    expect(query.endTime).toBeGreaterThanOrEqual(now - CLOCK_SKEW_MS);
+    expect(query.endTime).toBeLessThanOrEqual(Date.now() - CLOCK_SKEW_MS);
     expect(query.endTime - query.startTime).toBeLessThan(60 * 24 * 3600_000);
     expect(result).toEqual({
       found: 2,

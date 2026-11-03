@@ -21,6 +21,7 @@ export const MAX_IMPORT_IDS = 50;
 export const IMPORT_PERIOD_BATCH = 50;
 export const MAX_MESSAGE_PAGES = 20;
 export const PERIOD_MARGIN_MS = 60_000;
+export const CLOCK_SKEW_MS = 60_000;
 export const DAY_MS = 24 * 3600 * 1000;
 
 export const MAX_ZIP_ENTRIES = 10;
