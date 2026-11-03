@@ -1,5 +1,5 @@
 $kind: http-request
-description: "Whether two-step verification is on, since when, and whether an unused recovery code is left. Never returns the secret or the code."
+description: "Whether two-step verification is on, since when, whether an unused recovery code is left, and the method chosen at registration (`requestedMethod`, null once a method is on). Never returns the secret or the code."
 url: "{{baseUrl}}/accountants/{{accountantId}}/mfa"
 method: GET
 scripts:
@@ -12,6 +12,7 @@ scripts:
         pm.expect(s).to.have.property('appEnabledAt');
         pm.expect(s).to.have.property('emailEnabledAt');
         pm.expect(s.recoveryCodeAvailable).to.be.a('boolean');
+        pm.expect(s).to.have.property('requestedMethod');
         pm.expect(s).to.not.have.any.keys('secret', 'mfaSecret', 'recoveryCode', 'mfaRecoveryHash');
       });
     language: text/javascript

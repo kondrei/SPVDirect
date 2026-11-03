@@ -20,6 +20,7 @@ function build() {
       .fn()
       .mockResolvedValue({ recoveryCode: '11111' }),
     disable: vi.fn().mockResolvedValue(undefined),
+    dismissRequest: vi.fn().mockResolvedValue(undefined),
   };
   const cookies = { issue: vi.fn().mockResolvedValue(undefined) };
   const controller = new MfaController(
@@ -49,10 +50,18 @@ describe('MfaController', () => {
     'disableApp',
     'disableEmail',
     'disable',
+    'dismissRequest',
   ])('parses the accountant id of %s with ParseIdPipe', (method) => {
     expect(paramPipes(MfaController, method, 'accountantId')).toContain(
       ParseIdPipe,
     );
+  });
+
+  it('dismisses the method chosen at registration without touching the session', async () => {
+    const { controller, service, cookies } = build();
+    await controller.dismissRequest(7);
+    expect(service.dismissRequest).toHaveBeenCalledWith(7);
+    expect(cookies.issue).not.toHaveBeenCalled();
   });
 
   it('starts both setups with the password and does not touch the session', async () => {

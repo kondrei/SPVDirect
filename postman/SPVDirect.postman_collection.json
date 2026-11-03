@@ -170,6 +170,7 @@
                   "  const msg = errorMessage();",
                   "  pm.expect(msg).to.include('email');",
                   "  pm.expect(msg).to.include('password');",
+                  "  pm.expect(msg).to.include('Metoda este una dintre: app, email');",
                   "});"
                 ]
               }
@@ -186,14 +187,14 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"not-an-email\",\n  \"password\": \"scurta\"\n}",
+              "raw": "{\n  \"email\": \"not-an-email\",\n  \"password\": \"scurta\",\n  \"mfaMethod\": \"sms\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
             },
-            "description": "Validation: bad email and a password shorter than 10 chars."
+            "description": "Validation: bad email, a password shorter than 10 chars and an unknown two-step method (`mfaMethod` is optional, `app` or `email`)."
           }
         },
         {
@@ -420,6 +421,7 @@
                   "  pm.expect(s).to.have.property('appEnabledAt');",
                   "  pm.expect(s).to.have.property('emailEnabledAt');",
                   "  pm.expect(s.recoveryCodeAvailable).to.be.a('boolean');",
+                  "  pm.expect(s).to.have.property('requestedMethod');",
                   "  pm.expect(s).to.not.have.any.keys('secret', 'mfaSecret', 'recoveryCode', 'mfaRecoveryHash');",
                   "});"
                 ]
@@ -803,6 +805,25 @@
               }
             },
             "description": "Turns every method off (204), removes the secret, the email code and the recovery code, re-issues the session cookie and ends other sessions."
+          }
+        },
+        {
+          "name": "Dismiss registration choice",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/accountants/{{accountantId}}/mfa/request",
+            "description": "Drops the two-step method chosen at registration (`requestedMethod`), so login and Panou stop pointing to its setup. Needs no password: it only removes the reminder. 204 also when nothing was chosen."
           }
         }
       ]

@@ -197,6 +197,7 @@ const OFF: MfaStatus = {
   appEnabledAt: null,
   emailEnabledAt: null,
   recoveryCodeAvailable: false,
+  requestedMethod: null,
 };
 const APP_ON: MfaStatus = {
   ...OFF,
@@ -243,7 +244,7 @@ describe('two-step verification on Profil', () => {
     );
     expect(await screen.findByText('Aplicația de autentificare')).toBeInTheDocument();
     expect(screen.getAllByText('Dezactivată')).toHaveLength(2);
-    await user.click(screen.getAllByRole('button', { name: 'Activează' })[0]);
+    await user.click(screen.getAllByRole('button', { name: 'Activează' })[1]);
     await user.type(screen.getByLabelText('Parola, pentru confirmare'), 'parola-mea');
     await user.click(screen.getByRole('button', { name: 'Continuă' }));
 
@@ -305,7 +306,7 @@ describe('two-step verification on Profil', () => {
         'POST /accountants/1/mfa/app/setup': { status: 400, body: { message: 'Parola este incorectă' } },
       }),
     );
-    await user.click((await screen.findAllByRole('button', { name: 'Activează' }))[0]);
+    await user.click((await screen.findAllByRole('button', { name: 'Activează' }))[1]);
     await user.type(screen.getByLabelText('Parola, pentru confirmare'), 'gresita');
     await user.click(screen.getByRole('button', { name: 'Continuă' }));
     expect(await screen.findByText('Parola este incorectă')).toBeInTheDocument();
@@ -342,7 +343,7 @@ describe('two-step verification on Profil', () => {
       }),
     );
     await waitFor(() => expect(screen.getAllByRole('button', { name: 'Dezactivează' })).toHaveLength(2));
-    await user.click(screen.getAllByRole('button', { name: 'Dezactivează' })[0]);
+    await user.click(screen.getAllByRole('button', { name: 'Dezactivează' })[1]);
     expect(screen.getByText(/Cealaltă metodă rămâne activă/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Dezactivează aplicația' }));
     expect(screen.getByText('Introduceți parola.')).toBeInTheDocument();
@@ -390,5 +391,92 @@ describe('two-step verification banner on Panou', () => {
       unmount();
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe('two-step verification chosen at registration', () => {
+  const REQUESTED_APP: MfaStatus = { ...OFF, requestedMethod: MfaMethod.App };
+
+  it('sends the chosen method with the registration', async () => {
+    const user = userEvent.setup();
+    let body: unknown = null;
+    renderApp('/?auth=register', {
+      ...signedOut,
+      'POST /auth/register': (init) => {
+        body = json(init);
+        return { status: 202, body: { status: 'pending' } };
+      },
+    });
+    expect(await screen.findByLabelText(/Nu acum/)).toBeChecked();
+    await user.type(screen.getByLabelText('Email'), 'ana@cabinet.ro');
+    await user.type(screen.getByLabelText('Parolă'), 'a-long-password');
+    await user.click(screen.getByLabelText(/Cod pe email/));
+    await user.click(screen.getByRole('button', { name: 'Trimite cererea' }));
+    expect(await screen.findByText(/La prima autentificare vă ghidăm/)).toHaveTextContent('(cod pe email)');
+    expect(body).toMatchObject({ email: 'ana@cabinet.ro', mfaMethod: MfaMethod.Email });
+  });
+
+  it('opens the setup on Profil at the first login', async () => {
+    const user = userEvent.setup();
+    const { router } = renderApp('/?next=%2Finvoices', {
+      ...profileApi(REQUESTED_APP),
+      ...signedOut,
+      'POST /auth/login': { status: 200, body: { ...ME, mfaSetup: MfaMethod.App } },
+    });
+    await enterPassword(user);
+    await waitFor(() => expect(router.state.location.pathname).toBe('/accountants/1/profile'));
+    expect(router.state.location.hash).toBe('#autentificare-2fa');
+    expect(await screen.findByText('Finalizați autentificarea în doi pași')).toBeInTheDocument();
+    expect(screen.getByText(/La înregistrare ați ales aplicația de autentificare/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Continuă configurarea' }));
+    expect(screen.getByLabelText('Parola, pentru confirmare')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continuă' })).toBeInTheDocument();
+  });
+
+  it('goes to the usual page when nothing was chosen', async () => {
+    const user = userEvent.setup();
+    const { router } = renderApp('/', {
+      ...signedOut,
+      'POST /auth/login': { status: 200, body: { ...ME, mfaSetup: null } },
+      'GET /accountants/1/mfa': { status: 200, body: OFF },
+    });
+    await enterPassword(user);
+    await waitFor(() => expect(router.state.location.pathname).toBe('/accountants/1'));
+  });
+
+  it('lets the user give up the chosen method', async () => {
+    const user = userEvent.setup();
+    let status = REQUESTED_APP;
+    const { calls } = renderApp(
+      '/accountants/1/profile',
+      profileApi(() => ({ status: 200, body: status }), {
+        'DELETE /accountants/1/mfa/request': () => {
+          status = OFF;
+          return { status: 204 };
+        },
+      }),
+    );
+    await screen.findByText('Finalizați autentificarea în doi pași');
+    await user.click(screen.getByRole('button', { name: 'Renunț' }));
+    await waitFor(() =>
+      expect(screen.queryByText('Finalizați autentificarea în doi pași')).not.toBeInTheDocument(),
+    );
+    expect(calls).toContain('DELETE /accountants/1/mfa/request');
+  });
+
+  it('points the Panou banner to the setup', async () => {
+    renderApp('/accountants/1', {
+      'GET /auth/me': { status: 200, body: ME },
+      'GET /accountants/1/companies': { status: 200, body: [] },
+      'GET /accountants/1/anaf/connections': { status: 200, body: [] },
+      'GET /accountants/1/mfa': { status: 200, body: { ...OFF, requestedMethod: MfaMethod.Email } },
+    });
+    expect(
+      await screen.findByText('Finalizați autentificarea în doi pași aleasă la înregistrare'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Continuă configurarea' })).toHaveAttribute(
+      'href',
+      '/accountants/1/profile#autentificare-2fa',
+    );
   });
 });

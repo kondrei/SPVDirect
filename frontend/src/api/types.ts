@@ -146,13 +146,18 @@ export interface MfaRequired {
   methods: MfaFactor[];
 }
 
-export type LoginResult = Accountant | MfaRequired;
+export interface LoginSuccess extends Accountant {
+  mfaSetup: MfaFactor | null;
+}
+
+export type LoginResult = LoginSuccess | MfaRequired;
 
 export interface MfaStatus {
   enabled: boolean;
   appEnabledAt: string | null;
   emailEnabledAt: string | null;
   recoveryCodeAvailable: boolean;
+  requestedMethod: MfaFactor | null;
 }
 
 export interface MfaEnabled {

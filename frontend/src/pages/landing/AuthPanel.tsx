@@ -8,8 +8,9 @@ import {
   useSendLoginEmailCode,
 } from '../../api/hooks/auth';
 import { MfaMethod } from '../../api/enums';
-import type { Accountant, MfaFactor } from '../../api/types';
+import type { Accountant, LoginSuccess, MfaFactor } from '../../api/types';
 import {
+  MFA_CARD_ID,
   MFA_CODE_PATTERN,
   MFA_FACTOR_LABELS,
   MFA_FACTORS,
@@ -32,10 +33,23 @@ export function authTab(value: string | null): AuthTab {
   return value === 'register' ? 'register' : 'login';
 }
 
+const MFA_SIGNUP_OPTIONS: { value: MfaFactor | null; label: string; hint: string }[] = [
+  { value: null, label: 'Nu acum', hint: 'O puteți activa oricând din Profil.' },
+  { value: MfaMethod.Email, label: 'Cod pe email', hint: 'Un cod de 6 cifre trimis la fiecare autentificare.' },
+  {
+    value: MfaMethod.App,
+    label: 'Aplicația de autentificare',
+    hint: 'Cod din Google Authenticator, Microsoft Authenticator etc. Cea mai sigură variantă.',
+  },
+];
+
 function useEnterApp() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  return (me: Accountant) => {
+  return (me: Accountant | LoginSuccess) => {
+    if ('mfaSetup' in me && me.mfaSetup) {
+      return navigate(accountantPath(me.id, `/profile#${MFA_CARD_ID}`), { replace: true });
+    }
     const next = params.get('next');
     return navigate(next ? safeNext(next) : accountantPath(me.id, ''), { replace: true });
   };
@@ -205,6 +219,7 @@ function RegisterForm({ onDone }: Readonly<{ onDone: () => void }>) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [mfaMethod, setMfaMethod] = useState<MfaFactor | null>(null);
   const [touched, setTouched] = useState(false);
   const tooShort = password.length > 0 && password.length < MIN_PASSWORD;
 
@@ -212,15 +227,26 @@ function RegisterForm({ onDone }: Readonly<{ onDone: () => void }>) {
     e.preventDefault();
     setTouched(true);
     if (password.length < MIN_PASSWORD) return;
-    register.mutate({ email: email.trim(), password, name: name.trim() || undefined });
+    register.mutate({
+      email: email.trim(),
+      password,
+      name: name.trim() || undefined,
+      mfaMethod: mfaMethod ?? undefined,
+    });
   };
 
   if (register.isSuccess) {
+    const chosen = MFA_SIGNUP_OPTIONS.find(
+      (option) => option.value && option.value === register.variables.mfaMethod,
+    );
     return (
       <div className="landing-auth-done">
         <Alert tone="success" title="Contul așteaptă aprobarea">
           Cererea pentru {register.variables.email} a fost înregistrată și așteaptă aprobarea
           administratorului. Veți primi un email când contul este aprobat.
+          {chosen
+            ? ` La prima autentificare vă ghidăm să activați autentificarea în doi pași (${chosen.label.toLowerCase()}).`
+            : null}
         </Alert>
         <Button onClick={onDone}>Înapoi la autentificare</Button>
       </div>
@@ -256,6 +282,23 @@ function RegisterForm({ onDone }: Readonly<{ onDone: () => void }>) {
             : undefined
         }
       />
+      <fieldset className="mfa-methods">
+        <legend className="spv-field-label">Autentificare în doi pași (opțional)</legend>
+        {MFA_SIGNUP_OPTIONS.map((option) => (
+          <label key={option.value ?? 'none'} className="check">
+            <input
+              type="radio"
+              name="register-mfa"
+              checked={mfaMethod === option.value}
+              onChange={() => setMfaMethod(option.value)}
+            />
+            <span>
+              {option.label}
+              <span className="muted small"> · {option.hint}</span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
       <Button type="submit" variant="primary" loading={register.isPending}>
         {register.isPending ? 'Se trimite…' : 'Trimite cererea'}
       </Button>

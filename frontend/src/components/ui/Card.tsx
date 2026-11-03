@@ -7,6 +7,7 @@ export interface CardProps {
   actions?: ReactNode;
   flush?: boolean;
   className?: string;
+  id?: string;
   children?: ReactNode;
 }
 
@@ -16,10 +17,11 @@ export function Card({
   actions,
   flush,
   className,
+  id,
   children,
 }: Readonly<CardProps>) {
   return (
-    <section className={cx('spv-card', flush && 'spv-card-flush', className)}>
+    <section id={id} className={cx('spv-card', flush && 'spv-card-flush', className)}>
       {title || actions ? (
         <header className="spv-card-head">
           <div>

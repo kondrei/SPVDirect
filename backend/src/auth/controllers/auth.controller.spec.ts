@@ -40,7 +40,7 @@ function build(methods: MfaMethod[] = []) {
     readMfaTrust: vi.fn().mockResolvedValue(null),
   };
   const mfa = {
-    factors: vi.fn().mockResolvedValue(methods),
+    loginState: vi.fn().mockResolvedValue({ methods, setup: null }),
     trustsDevice: vi.fn().mockReturnValue(false),
     verifyLogin: vi.fn().mockResolvedValue({ method: MfaMethod.App }),
     sendLoginEmailCode: vi
@@ -69,15 +69,27 @@ describe('AuthController.login', () => {
     await expect(controller.login(dto, req, res)).resolves.toMatchObject({
       id: 7,
       email: 'ana@example.ro',
+      mfaSetup: null,
     });
     expect(cookies.issue).toHaveBeenCalledWith(res, 7);
     expect(cookies.issueMfaPending).not.toHaveBeenCalled();
-    expect(mfa.factors).toHaveBeenCalledWith(7);
+    expect(mfa.loginState).toHaveBeenCalledWith(7);
     expect(mfa.trustsDevice).not.toHaveBeenCalled();
     expect(activity.record).toHaveBeenCalledWith(
       7,
       expect.objectContaining({ action: ActivityAction.LoggedIn }),
     );
+  });
+
+  it('signs in and points to the setup chosen at registration', async () => {
+    const { controller, cookies, mfa } = build();
+    mfa.loginState.mockResolvedValue({ methods: [], setup: MfaMethod.Email });
+    await expect(controller.login(dto, req, res)).resolves.toMatchObject({
+      id: 7,
+      mfaSetup: MfaMethod.Email,
+    });
+    expect(cookies.issue).toHaveBeenCalledWith(res, 7);
+    expect(cookies.issueMfaPending).not.toHaveBeenCalled();
   });
 
   it('asks for the code without a session when MFA is on', async () => {

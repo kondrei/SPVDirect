@@ -1,0 +1,10 @@
+$kind: http-request
+description: "Drops the two-step method chosen at registration (`requestedMethod`), so login and Panou stop pointing to its setup. Needs no password: it only removes the reminder. 204 also when nothing was chosen."
+url: "{{baseUrl}}/accountants/{{accountantId}}/mfa/request"
+method: DELETE
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status 204', () => pm.response.to.have.status(204));
+    language: text/javascript
+order: 12500

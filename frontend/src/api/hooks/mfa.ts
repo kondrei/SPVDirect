@@ -71,6 +71,15 @@ export function useRegenerateRecoveryCode() {
   });
 }
 
+export function useDismissMfaRequest() {
+  const path = useAccountantApiPath('/mfa/request');
+  const changed = useMfaChanged();
+  return useMutation({
+    mutationFn: () => api<void>(requirePath(path), { method: 'DELETE' }),
+    onSuccess: changed,
+  });
+}
+
 export function useDisableMfa(method: MfaFactor) {
   const path = useAccountantApiPath(`/mfa/${method}`);
   const changed = useMfaChanged();

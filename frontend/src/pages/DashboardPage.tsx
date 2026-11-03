@@ -5,6 +5,7 @@ import { useConnections, useConnectUrl } from '../api/hooks/connections';
 import { useInvoiceStats } from '../api/hooks/invoices';
 import { useMe } from '../api/hooks/auth';
 import { useMfaStatus } from '../api/hooks/mfa';
+import { MFA_CARD_ID } from '../common/constants';
 import type { AnafConnection, Company, InvoiceStats } from '../api/types';
 import { ActivityCard } from '../components/ActivityCard';
 import { EmptyState } from '../components/EmptyState';
@@ -81,13 +82,18 @@ function MfaAlert() {
   const appPath = useAppPath();
   const mfa = useMfaStatus();
   if (!mfa.data || mfa.data.enabled) return null;
+  const requested = Boolean(mfa.data.requestedMethod);
   return (
     <Alert
       tone="info"
-      title="Protejați contul cu autentificarea în doi pași"
+      title={
+        requested
+          ? 'Finalizați autentificarea în doi pași aleasă la înregistrare'
+          : 'Protejați contul cu autentificarea în doi pași'
+      }
       action={
-        <ButtonLink size="sm" to={appPath('/profile')}>
-          Activează din Profil
+        <ButtonLink size="sm" to={appPath(`/profile#${MFA_CARD_ID}`)}>
+          {requested ? 'Continuă configurarea' : 'Activează din Profil'}
         </ButtonLink>
       }
     >

@@ -24,6 +24,7 @@ import { EfacturaInvoices1792400000000 } from './1792400000000-EfacturaInvoices.
 import { ApiLogSystemJobs1792500000000 } from './1792500000000-ApiLogSystemJobs.js';
 import { AccountantMfa1792600000000 } from './1792600000000-AccountantMfa.js';
 import { AccountantMfaTable1792700000000 } from './1792700000000-AccountantMfaTable.js';
+import { AccountantMfaRequest1792800000000 } from './1792800000000-AccountantMfaRequest.js';
 
 export const migrations = [
   InitialSchema1790200000000,
@@ -52,4 +53,5 @@ export const migrations = [
   ApiLogSystemJobs1792500000000,
   AccountantMfa1792600000000,
   AccountantMfaTable1792700000000,
+  AccountantMfaRequest1792800000000,
 ];

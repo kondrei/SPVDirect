@@ -1,4 +1,5 @@
 import { MfaEvent, MfaMethod } from './auth.enums.js';
+import type { MfaFactor } from './auth.types.js';
 
 export const TOTP_ISSUER = 'SPVDirect';
 export const TOTP_DIGITS = 6;
@@ -12,6 +13,10 @@ export const MFA_CODE_PATTERN = /^(?:\d{5}|\d{6})$/;
 export const EMAIL_CODE_DIGITS = 6;
 export const MFA_EMAIL_CODE_TTL_MS = 10 * 60 * 1000;
 export const MFA_EMAIL_RESEND_MS = 60 * 1000;
+export const MFA_FACTORS: readonly MfaFactor[] = [
+  MfaMethod.App,
+  MfaMethod.Email,
+];
 export const MFA_METHOD_LABELS: Record<MfaMethod, string> = {
   [MfaMethod.App]: 'aplicația de autentificare',
   [MfaMethod.Email]: 'codul primit pe email',

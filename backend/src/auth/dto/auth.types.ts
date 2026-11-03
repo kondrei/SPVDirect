@@ -12,6 +12,14 @@ export type MfaFactorDates = Pick<
   'appEnabledAt' | 'emailEnabledAt'
 >;
 
+export type MfaLoginFactors = MfaFactorDates &
+  Pick<AccountantMfa, 'requestedMethod'>;
+
+export interface MfaLoginState {
+  methods: MfaFactor[];
+  setup: MfaFactor | null;
+}
+
 export type MfaState = Pick<
   AccountantMfa,
   | 'accountantId'
@@ -25,6 +33,7 @@ export type MfaState = Pick<
   | 'recoveryFailures'
   | 'emailCodeHash'
   | 'emailCodeExpiresAt'
+  | 'requestedMethod'
 > & { email: string };
 
 export type MfaTrustState = Pick<
@@ -44,6 +53,7 @@ export interface MfaStatus {
   appEnabledAt: Date | null;
   emailEnabledAt: Date | null;
   recoveryCodeAvailable: boolean;
+  requestedMethod: MfaFactor | null;
 }
 
 export interface MfaSetup {

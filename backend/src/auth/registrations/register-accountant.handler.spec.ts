@@ -18,6 +18,10 @@ import { AccountantRegisteredEvent } from './registration.events.js';
 import { hashApprovalToken } from './services/registrations.service.js';
 import { AccountantRepository } from '../../accountants/repositories/accountant.repository.js';
 import { BannedEmailRepository } from '../repositories/banned-email.repository.js';
+import { AccountantMfaRepository } from '../repositories/accountant-mfa.repository.js';
+import { AccountantMfa } from '../accountant-mfa.entity.js';
+import type { RegisterDto } from '../dto/auth.dto.js';
+import { MfaMethod } from '../dto/auth.enums.js';
 
 const dto = {
   email: 'new@example.com',
@@ -33,6 +37,7 @@ function setup() {
     existsBy: vi.fn().mockResolvedValue(false),
     create: vi.fn((_: unknown, data: object) => data),
     save: vi.fn((data: object) => Promise.resolve({ ...data, id: 7 })),
+    insert: vi.fn().mockResolvedValue(undefined),
   };
   const transaction = vi.fn((fn: (m: unknown) => unknown) => fn(manager));
   const handler = new RegisterAccountantHandler(
@@ -41,9 +46,10 @@ function setup() {
     { publish } as unknown as EventBus,
     new AccountantRepository({} as never),
     new BannedEmailRepository(),
+    new AccountantMfaRepository({} as never),
   );
-  const run = (ip?: string) =>
-    handler.execute(new RegisterAccountantCommand(dto, ip));
+  const run = (ip?: string, body: RegisterDto = dto) =>
+    handler.execute(new RegisterAccountantCommand(body, ip));
   return { run, verify, publish, manager, transaction };
 }
 
@@ -78,6 +84,21 @@ describe('RegisterAccountantHandler', () => {
       status: 'pending',
     });
     expect(await verifyPassword(dto.password, saved.passwordHash)).toBe(true);
+  });
+
+  it('stores no MFA choice when none was made', async () => {
+    const { run, manager } = setup();
+    await run();
+    expect(manager.insert).not.toHaveBeenCalled();
+  });
+
+  it('stores the MFA method chosen at registration in the same transaction', async () => {
+    const { run, manager } = setup();
+    await run(undefined, { ...dto, mfaMethod: MfaMethod.App });
+    expect(manager.insert).toHaveBeenCalledWith(AccountantMfa, {
+      accountantId: 7,
+      requestedMethod: MfaMethod.App,
+    });
   });
 
   it('publishes the event with the token whose hash was stored', async () => {

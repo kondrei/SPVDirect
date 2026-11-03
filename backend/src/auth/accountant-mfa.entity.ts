@@ -5,6 +5,7 @@ import {
   PrimaryColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import type { MfaFactor } from './dto/auth.types.js';
 
 @Entity('accountant_mfa')
 export class AccountantMfa {
@@ -61,6 +62,9 @@ export class AccountantMfa {
 
   @Column({ name: 'email_code_sent_at', type: 'timestamptz', nullable: true })
   emailCodeSentAt: Date | null;
+
+  @Column({ name: 'requested_method', type: 'text', nullable: true })
+  requestedMethod: MfaFactor | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
