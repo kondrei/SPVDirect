@@ -6,8 +6,8 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/verify-changes.sh\"",
-            "timeout": 300,
-            "statusMessage": "Verifying changes: tests, lint, SonarJS lint"
+            "timeout": 600,
+            "statusMessage": "Verifying changes: tests, typecheck, lint, SonarJS lint"
           }
         ]
       }
