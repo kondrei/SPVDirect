@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Stop hook: when backend or frontend code has uncommitted changes, require the
 # checks to pass before Claude finishes. Exit 2 sends stderr back to Claude to fix.
-# Backend: unit tests, oxlint, SonarJS lint. Frontend: oxlint, SonarJS lint.
+# Backend: unit tests, oxlint, SonarJS lint. Frontend: unit tests, typecheck, oxlint, SonarJS lint.
 # The SonarJS lint (eslint.config.mjs) only runs on the changed files.
 set -u
 
@@ -35,7 +35,7 @@ sonar_lint() {
   [ $rc -ne 0 ] && fail "$1: eslint (SonarJS) on changed files" "$rc" "$out"
 }
 
-if [ -n "$(git status --porcelain -- backend/src backend/test backend/package.json 2>/dev/null)" ]; then
+if [ -n "$(git status --porcelain -- backend/src backend/test backend/package.json backend/tsconfig.json backend/tsconfig.build.json backend/vitest.config.ts backend/.oxlintrc.json backend/eslint.config.mjs 2>/dev/null)" ]; then
   out="$(cd backend && npm test --silent 2>&1)"; rc=$?
   [ $rc -ne 0 ] && fail "backend: npm test" "$rc" "$out"
   out="$(cd backend && npm run lint --silent 2>&1)"; rc=$?
@@ -43,7 +43,11 @@ if [ -n "$(git status --porcelain -- backend/src backend/test backend/package.js
   sonar_lint backend
 fi
 
-if [ -n "$(git status --porcelain -- frontend/src frontend/package.json 2>/dev/null)" ]; then
+if [ -n "$(git status --porcelain -- frontend/src frontend/package.json frontend/tsconfig.json frontend/tsconfig.app.json frontend/tsconfig.node.json frontend/vite.config.ts frontend/.oxlintrc.json frontend/eslint.config.mjs 2>/dev/null)" ]; then
+  out="$(cd frontend && npm test --silent 2>&1)"; rc=$?
+  [ $rc -ne 0 ] && fail "frontend: npm test" "$rc" "$out"
+  out="$(cd frontend && npm run typecheck --silent 2>&1)"; rc=$?
+  [ $rc -ne 0 ] && fail "frontend: npm run typecheck" "$rc" "$out"
   out="$(cd frontend && npm run lint --silent 2>&1)"; rc=$?
   [ $rc -ne 0 ] && fail "frontend: npm run lint" "$rc" "$out"
   sonar_lint frontend
@@ -53,12 +57,12 @@ fi
 
 # Already blocked once this turn: don't loop forever, just warn the user.
 if printf '%s' "$input" | grep -q '"stop_hook_active"[[:space:]]*:[[:space:]]*true'; then
-  echo '{"systemMessage": "verify-changes: tests, lint or the SonarJS lint are still failing. Run npm test / npm run lint / npm run lint:sonar."}'
+  echo '{"systemMessage": "verify-changes: tests, typecheck, lint or the SonarJS lint are still failing. Run npm test / npm run typecheck / npm run lint / npm run lint:sonar."}'
   exit 0
 fi
 
 {
-  echo "Verification failed. Per CLAUDE.md, code review, unit tests and lint (including npm run lint:sonar) must pass before finishing."
+  echo "Verification failed. Per CLAUDE.md, code review, unit tests, typecheck and lint (including npm run lint:sonar) must pass before finishing."
   printf '%s' "$failures"
 } >&2
 exit 2

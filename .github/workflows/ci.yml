@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: backend/.nvmrc
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run test:e2e
+      - run: npm run lint
+      - run: npm run lint:sonar
+      - run: npm run build
+
+  migrations:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: spv
+          POSTGRES_PASSWORD: spv
+          POSTGRES_DB: spv_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U spv -d spv_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://spv:spv@localhost:5432/spv_ci
+      DATABASE_SSL: 'false'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: backend/.nvmrc
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - name: Run every migration on an empty database
+        run: npm run migration:run
+      - name: Show migrations and fail on any still pending
+        shell: bash
+        run: |
+          npm run --silent migration:show | tee migrations.txt
+          if grep -F '[ ]' migrations.txt; then
+            echo '::error::Migrations are still pending after migration:run'
+            exit 1
+          fi
+          expected=$(grep -cE '^\s+[A-Za-z][A-Za-z0-9_]*[0-9]{13},$' src/database/migrations/index.ts || true)
+          expected=${expected:-0}
+          applied=$(grep -c '\[X\]' migrations.txt || true)
+          files=$(find src/database/migrations -maxdepth 1 -name '[0-9]*-*.ts' ! -name '*.spec.ts' | wc -l)
+          echo "applied $applied, registered $expected, files $files"
+          if [ "$expected" -eq 0 ] || [ "$applied" -ne "$expected" ]; then
+            echo "::error::migration:show listed $applied applied migrations, migrations/index.ts has $expected"
+            exit 1
+          fi
+          if [ "$files" -ne "$expected" ]; then
+            echo "::error::migrations/ has $files migration files, migrations/index.ts registers $expected"
+            exit 1
+          fi
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run lint:sonar
+      - run: npm run build
