@@ -72,11 +72,17 @@ jobs:
             echo '::error::Migrations are still pending after migration:run'
             exit 1
           fi
-          expected=$(grep -cE '^\s+[A-Za-z]+[0-9]{13},$' src/database/migrations/index.ts || true)
-          applied=$(grep -c '^\[X\]' migrations.txt || true)
-          echo "applied $applied of $expected"
+          expected=$(grep -cE '^\s+[A-Za-z][A-Za-z0-9_]*[0-9]{13},$' src/database/migrations/index.ts || true)
+          expected=${expected:-0}
+          applied=$(grep -c '\[X\]' migrations.txt || true)
+          files=$(find src/database/migrations -maxdepth 1 -name '[0-9]*-*.ts' ! -name '*.spec.ts' | wc -l)
+          echo "applied $applied, registered $expected, files $files"
           if [ "$expected" -eq 0 ] || [ "$applied" -ne "$expected" ]; then
             echo "::error::migration:show listed $applied applied migrations, migrations/index.ts has $expected"
+            exit 1
+          fi
+          if [ "$files" -ne "$expected" ]; then
+            echo "::error::migrations/ has $files migration files, migrations/index.ts registers $expected"
             exit 1
           fi
 
